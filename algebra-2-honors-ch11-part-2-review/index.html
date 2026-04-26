@@ -1,0 +1,1261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 11 Part 2 Review: Rational Functions and Variation</title>
+  <style>
+    :root {
+      --ink: #172033;
+      --muted: #5c677d;
+      --line: #d9e0ea;
+      --paper: #ffffff;
+      --soft: #f4f7fb;
+      --soft-2: #eef7f2;
+      --brand: #2457a6;
+      --brand-2: #163b73;
+      --green: #207245;
+      --red: #b3261e;
+      --amber: #8a5a00;
+      --shadow: 0 14px 34px rgba(23, 32, 51, 0.12);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #eef3fa 0%, #f8fafc 45%, #ffffff 100%);
+      color: var(--ink);
+      font-size: 18px;
+      line-height: 1.45;
+    }
+
+    button, input, select, textarea { font: inherit; }
+
+    .app-shell {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px 18px 36px;
+    }
+
+    .topbar {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+
+    .title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      font-size: 1.55rem;
+      line-height: 1.18;
+      margin: 0 0 6px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      font-size: 1.25rem;
+      margin: 0 0 12px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      margin: 0 0 8px;
+      letter-spacing: 0;
+    }
+
+    .meta {
+      color: var(--muted);
+      margin: 0;
+      font-size: 0.98rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #e8f0fe;
+      color: var(--brand-2);
+      border: 1px solid #c9dafb;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 0.92rem;
+      white-space: nowrap;
+    }
+
+    .progress-wrap {
+      margin-top: 16px;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-bottom: 7px;
+    }
+
+    .progress-track {
+      height: 12px;
+      background: #e6ebf3;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--brand);
+      border-radius: 999px;
+      transition: width 160ms ease;
+    }
+
+    .page {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+      min-height: 520px;
+    }
+
+    .short-page {
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    label {
+      display: block;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"], input[type="date"], select, textarea {
+      width: 100%;
+      border: 1px solid #b8c3d4;
+      border-radius: 8px;
+      padding: 11px 12px;
+      background: #fff;
+      color: var(--ink);
+      min-height: 48px;
+    }
+
+    textarea {
+      min-height: 150px;
+      resize: vertical;
+    }
+
+    .note-band {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-left: 6px solid var(--brand);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+    }
+
+    .note-band ul, .walkthrough ol {
+      margin: 8px 0 0 22px;
+      padding: 0;
+    }
+
+    .topic-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #fff;
+    }
+
+    .walkthrough {
+      background: #fbfcff;
+    }
+
+    .you-try {
+      background: #fffdfa;
+    }
+
+    .formula {
+      display: inline-block;
+      font-weight: 700;
+      background: #f3f6fb;
+      border: 1px solid #dbe4f2;
+      border-radius: 6px;
+      padding: 3px 7px;
+      margin: 2px 0;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .field-grid.single {
+      grid-template-columns: 1fr;
+    }
+
+    .field-help {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 5px;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    .nav-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      margin-top: 16px;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 18px;
+      min-height: 48px;
+      cursor: pointer;
+      background: var(--brand);
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .btn:hover:not(:disabled) { background: var(--brand-2); }
+
+    .btn.secondary {
+      background: #edf2f8;
+      color: var(--ink);
+      border: 1px solid #cbd5e1;
+    }
+
+    .btn.secondary:hover:not(:disabled) { background: #e1e8f2; }
+
+    .btn.print {
+      background: var(--green);
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .feedback {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #f7f9fc;
+      color: var(--ink);
+    }
+
+    .feedback.correct {
+      background: #edf8f1;
+      border-color: #b8dfc5;
+      color: #155c34;
+    }
+
+    .feedback.hint {
+      background: #fff8e7;
+      border-color: #f0d28a;
+      color: var(--amber);
+    }
+
+    .feedback.locked {
+      background: #fff0ee;
+      border-color: #f1b8b3;
+      color: var(--red);
+    }
+
+    .feedback.review {
+      background: #edf8f1;
+      border-color: #b8dfc5;
+      color: #155c34;
+    }
+
+    .status-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .status-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .status-card strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .score-big {
+      font-size: 2.25rem;
+      font-weight: 800;
+      margin: 8px 0;
+    }
+
+    .review-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .small-note {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin: 8px 0 0;
+    }
+
+    #printReport { display: none; }
+
+    @media (max-width: 820px) {
+      body { font-size: 17px; }
+      .topic-grid, .info-grid, .review-grid, .status-list { grid-template-columns: 1fr; }
+      .field-grid { grid-template-columns: 1fr; }
+      .page { padding: 16px; }
+      .pill { white-space: normal; }
+    }
+
+    @media print {
+      body { background: #fff; color: #111; font-size: 12pt; }
+      .app-shell { display: none !important; }
+      #printReport { display: block !important; }
+      .print-page { padding: 0.35in; }
+      .print-page h1 { font-size: 18pt; margin-bottom: 8pt; }
+      .print-page h2 { font-size: 14pt; border-bottom: 1px solid #333; padding-bottom: 3pt; margin-top: 16pt; }
+      .print-page p, .print-page li, .print-page td, .print-page th { font-size: 11pt; line-height: 1.35; }
+      .print-page table { width: 100%; border-collapse: collapse; margin-top: 8pt; }
+      .print-page th, .print-page td { border: 1px solid #777; padding: 5pt; text-align: left; vertical-align: top; }
+      .print-page .summary-box { border: 1px solid #333; padding: 8pt; margin: 10pt 0; }
+      .no-break { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="title-row">
+        <div>
+          <h1>Chapter 11 Part 2 Review: Rational Functions and Variation</h1>
+          <p class="meta">Algebra 2 Honors - Lessons 11.6 through 11.9</p>
+        </div>
+        <div class="pill" id="versionPill">Version 1.0</div>
+      </div>
+      <div class="progress-wrap" aria-label="Assignment progress">
+        <div class="progress-label"><span id="pageLabel">Page 1</span><span id="completionLabel">0% complete</span></div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+    </header>
+
+    <section class="page" id="app" aria-live="polite"></section>
+
+    <nav class="nav-actions" aria-label="Page navigation">
+      <button class="btn secondary" id="backBtn" type="button">Back</button>
+      <button class="btn" id="nextBtn" type="button">Next</button>
+    </nav>
+  </main>
+
+  <section id="printReport" aria-hidden="true"></section>
+
+  <script>
+    // =========================
+    // Editable assignment data
+    // =========================
+    const ASSIGNMENT = {
+      course: "Algebra 2 Honors",
+      title: "Chapter 11 Part 2 Review: Rational Functions and Variation",
+      version: "1.0",
+      storageKey: "a2h-ch11-part2-review-v1",
+      autoPoints: 90,
+      teacherReviewPoints: 10
+    };
+
+    const TOPICS = [
+      {
+        id: "vertical-asymptotes",
+        title: "Vertical Asymptotes",
+        skill: "vertical asymptotes after simplification",
+        notes: [
+          "Vertical asymptotes come from x-values that make the simplified denominator equal zero.",
+          "Factor first. If a factor cancels from the numerator and denominator, that x-value is a hole, not a vertical asymptote.",
+          "Check the original denominator to notice every discontinuity before simplifying."
+        ],
+        walkthrough: {
+          problem: "Find the vertical asymptotes of f(x) = [(x - 3)(x + 2)] / [(x + 2)(x - 1)(x + 4)].",
+          steps: [
+            "The common factor (x + 2) cancels, so x = -2 is a hole.",
+            "The remaining denominator is (x - 1)(x + 4).",
+            "Set the remaining factors equal to zero: x = 1 and x = -4.",
+            "Vertical asymptotes: x = 1 and x = -4."
+          ]
+        },
+        question: {
+          id: "q1",
+          max: 10,
+          mode: "unorderedNumbers",
+          prompt: "You Try: For f(x) = [(x + 1)(x - 4)] / [(x - 4)(x + 5)(x - 2)], enter the two vertical asymptotes after simplification.",
+          fields: [
+            { key: "va1", label: "Vertical asymptote 1", kind: "number", placeholder: "x =" },
+            { key: "va2", label: "Vertical asymptote 2", kind: "number", placeholder: "x =" }
+          ],
+          answers: [-5, 2],
+          hint: "Factor first and cancel the common factor. The zero from the canceled factor is a hole, not a vertical asymptote.",
+          correctFeedback: "Correct. After canceling (x - 4), the remaining denominator gives x = -5 and x = 2.",
+          solution: "Cancel (x - 4). The remaining denominator is (x + 5)(x - 2), so the vertical asymptotes are x = -5 and x = 2."
+        }
+      },
+      {
+        id: "ha-leading-terms",
+        title: "Horizontal Asymptotes by Leading-Term Behavior",
+        skill: "horizontal asymptotes from leading terms",
+        notes: [
+          "For very large positive or negative x-values, the highest-degree terms control the end behavior.",
+          "Use only the leading term of the numerator and the leading term of the denominator.",
+          "If the leading-term ratio simplifies to a number, that number is the horizontal asymptote."
+        ],
+        walkthrough: {
+          problem: "Find the horizontal asymptote of h(x) = (8x^4 - 3x + 1) / (2x^4 + 5x^2 - 7).",
+          steps: [
+            "Keep only the leading terms: 8x^4 / 2x^4.",
+            "The x^4 terms divide out, leaving 8 / 2.",
+            "8 / 2 = 4, so the horizontal asymptote is y = 4."
+          ]
+        },
+        question: {
+          id: "q2",
+          max: 10,
+          mode: "fields",
+          prompt: "You Try: Find the horizontal asymptote of h(x) = (9x^3 - 4x + 1) / (3x^3 + 8). Enter the y-value.",
+          fields: [
+            { key: "ha", label: "Horizontal asymptote", kind: "number", answer: 3, placeholder: "y =" }
+          ],
+          hint: "Compare only the highest-degree terms: 9x^3 and 3x^3.",
+          correctFeedback: "Correct. The leading-term ratio is 9x^3 / 3x^3 = 3, so the horizontal asymptote is y = 3.",
+          solution: "Use the leading terms 9x^3 and 3x^3. Their ratio is 3, so the horizontal asymptote is y = 3."
+        }
+      },
+      {
+        id: "ha-degree-comparison",
+        title: "Horizontal Asymptotes by Degree Comparison",
+        skill: "horizontal asymptotes from degree comparison",
+        notes: [
+          "If the numerator degree is less than the denominator degree, the horizontal asymptote is y = 0.",
+          "If the degrees are equal, use the ratio of the leading coefficients.",
+          "If the numerator degree is greater than the denominator degree, there is no horizontal asymptote."
+        ],
+        walkthrough: {
+          problem: "Decide the horizontal asymptote for p(x) = (5x^4 - 1) / (x^2 + 6).",
+          steps: [
+            "The numerator degree is 4 and the denominator degree is 2.",
+            "The numerator degree is greater than the denominator degree.",
+            "This function has no horizontal asymptote."
+          ]
+        },
+        question: {
+          id: "q3",
+          max: 10,
+          mode: "fields",
+          prompt: "You Try: For r(x) = (4x^2 - 7) / (2x^3 + 1), choose the horizontal asymptote.",
+          fields: [
+            { key: "choice", label: "Horizontal asymptote", kind: "select", answer: "y = 0", options: ["", "y = 0", "y = 2", "y = 4", "No horizontal asymptote"] }
+          ],
+          hint: "Compare degrees first. The numerator degree is 2 and the denominator degree is 3.",
+          correctFeedback: "Correct. The denominator degree is larger, so the horizontal asymptote is y = 0.",
+          solution: "The numerator degree is less than the denominator degree, so the horizontal asymptote is y = 0."
+        }
+      },
+      {
+        id: "holes",
+        title: "Holes and Removable Discontinuities",
+        skill: "holes and removable discontinuities",
+        notes: [
+          "A hole happens when the same factor appears in the numerator and denominator and cancels.",
+          "The canceled factor gives the x-coordinate of the hole.",
+          "To find the y-coordinate, plug that x-value into the simplified function."
+        ],
+        walkthrough: {
+          problem: "Find the hole of f(x) = [(x + 1)(x - 4)] / [(x + 1)(x + 3)].",
+          steps: [
+            "The common factor (x + 1) cancels, so the hole has x = -1.",
+            "The simplified function is (x - 4) / (x + 3).",
+            "Evaluate at x = -1: (-1 - 4) / (-1 + 3) = -5 / 2.",
+            "The hole is (-1, -5/2)."
+          ]
+        },
+        question: {
+          id: "q4",
+          max: 10,
+          mode: "fields",
+          prompt: "You Try: Find the hole of f(x) = [(x - 3)(x + 2)] / [(x - 3)(x - 5)]. Enter the x- and y-values.",
+          fields: [
+            { key: "x", label: "Hole x-value", kind: "number", answer: 3, placeholder: "x =" },
+            { key: "y", label: "Hole y-value", kind: "number", answer: -2.5, placeholder: "y =" }
+          ],
+          hint: "The canceled factor gives the x-value. Then use the simplified function to find the y-value.",
+          correctFeedback: "Correct. The factor (x - 3) cancels, and the simplified function gives y = -5/2 at x = 3.",
+          solution: "The canceled factor is (x - 3), so x = 3. The simplified function is (x + 2) / (x - 5). At x = 3, y = 5 / -2 = -2.5."
+        }
+      },
+      {
+        id: "direct-variation",
+        title: "Direct Variation",
+        skill: "direct variation equations",
+        notes: [
+          "Direct variation has the form y = kx.",
+          "The constant of variation is k = y / x.",
+          "Direct variation graphs are straight lines through the origin; the variables increase or decrease together."
+        ],
+        walkthrough: {
+          problem: "If y varies directly with x and y = 10 when x = 4, write the equation.",
+          steps: [
+            "Use y = kx.",
+            "Substitute the point: 10 = k(4).",
+            "Divide: k = 10 / 4 = 2.5.",
+            "The equation is y = 2.5x."
+          ]
+        },
+        question: {
+          id: "q5",
+          max: 10,
+          mode: "fields",
+          prompt: "You Try: y varies directly with x. If y = 18 when x = 6, what is the constant of variation k?",
+          fields: [
+            { key: "k", label: "k", kind: "number", answer: 3, placeholder: "k =" }
+          ],
+          hint: "For direct variation, divide y by x to find k.",
+          correctFeedback: "Correct. k = 18 / 6 = 3, so the equation would be y = 3x.",
+          solution: "Direct variation uses k = y / x. Here k = 18 / 6 = 3, so y = 3x."
+        }
+      },
+      {
+        id: "inverse-variation",
+        title: "Inverse Variation",
+        skill: "inverse variation equations",
+        notes: [
+          "Inverse variation has the form y = k / x.",
+          "The constant of variation is k = xy.",
+          "As one variable increases, the other decreases. The graph is a hyperbola that does not touch the axes."
+        ],
+        walkthrough: {
+          problem: "If y varies inversely with x and y = 12 when x = 3, write the equation.",
+          steps: [
+            "Use y = k / x.",
+            "Substitute the point: 12 = k / 3.",
+            "Multiply: k = 36.",
+            "The equation is y = 36 / x."
+          ]
+        },
+        question: {
+          id: "q6",
+          max: 10,
+          mode: "fields",
+          prompt: "You Try: y varies inversely with x. If y = 7 when x = 5, what is the constant of variation k?",
+          fields: [
+            { key: "k", label: "k", kind: "number", answer: 35, placeholder: "k =" }
+          ],
+          hint: "For inverse variation, multiply x and y to find k.",
+          correctFeedback: "Correct. k = 5 times 7 = 35, so the equation would be y = 35 / x.",
+          solution: "Inverse variation uses k = xy. Here k = 5 times 7 = 35, so y = 35 / x."
+        }
+      },
+      {
+        id: "parent-one-over-x",
+        title: "Parent Function f(x) = 1/x",
+        skill: "features of f(x) = 1/x",
+        notes: [
+          "The parent function f(x) = 1/x has a vertical asymptote at x = 0 and a horizontal asymptote at y = 0.",
+          "Its domain excludes x = 0 because division by zero is undefined.",
+          "Its range excludes y = 0 because the graph approaches the x-axis but never reaches it."
+        ],
+        walkthrough: {
+          problem: "Describe the parent function f(x) = 1/x.",
+          steps: [
+            "The denominator is x, so x = 0 is not allowed and becomes the vertical asymptote.",
+            "As x gets very large, 1/x gets close to 0, so y = 0 is the horizontal asymptote.",
+            "Domain: all real x except 0. Range: all real y except 0."
+          ]
+        },
+        question: {
+          id: "q7",
+          max: 10,
+          mode: "fields",
+          prompt: "You Try: Complete the key features of f(x) = 1/x.",
+          fields: [
+            { key: "va", label: "Vertical asymptote x =", kind: "number", answer: 0, placeholder: "x =" },
+            { key: "ha", label: "Horizontal asymptote y =", kind: "number", answer: 0, placeholder: "y =" },
+            { key: "domain", label: "Domain excludes x =", kind: "number", answer: 0, placeholder: "x =" },
+            { key: "range", label: "Range excludes y =", kind: "number", answer: 0, placeholder: "y =" }
+          ],
+          hint: "Both asymptotes are the axes for the parent function f(x) = 1/x.",
+          correctFeedback: "Correct. The graph has VA x = 0, HA y = 0, domain x not equal to 0, and range y not equal to 0.",
+          solution: "For f(x) = 1/x, x = 0 is not allowed and y = 0 is approached but never reached."
+        }
+      },
+      {
+        id: "parent-one-over-x-squared",
+        title: "Parent Function f(x) = 1/x^2",
+        skill: "features of f(x) = 1/x^2",
+        notes: [
+          "The parent function f(x) = 1/x^2 also has a vertical asymptote at x = 0 and a horizontal asymptote at y = 0.",
+          "The domain excludes x = 0.",
+          "Because 1/x^2 is always positive, the range is y > 0."
+        ],
+        walkthrough: {
+          problem: "Describe the parent function f(x) = 1/x^2.",
+          steps: [
+            "The denominator is x^2, so x = 0 is not allowed and becomes the vertical asymptote.",
+            "As x gets very large in either direction, 1/x^2 gets close to 0, so y = 0 is the horizontal asymptote.",
+            "The output is always positive, so the range is y > 0."
+          ]
+        },
+        question: {
+          id: "q8",
+          max: 10,
+          mode: "fields",
+          prompt: "You Try: Complete the key features of f(x) = 1/x^2.",
+          fields: [
+            { key: "va", label: "Vertical asymptote x =", kind: "number", answer: 0, placeholder: "x =" },
+            { key: "ha", label: "Horizontal asymptote y =", kind: "number", answer: 0, placeholder: "y =" },
+            { key: "domain", label: "Domain excludes x =", kind: "number", answer: 0, placeholder: "x =" },
+            { key: "range", label: "Range", kind: "select", answer: "y > 0", options: ["", "y > 0", "y < 0", "all real numbers", "all real numbers except 0"] }
+          ],
+          hint: "The squared denominator makes all output values positive, but x = 0 is still not allowed.",
+          correctFeedback: "Correct. f(x) = 1/x^2 has VA x = 0, HA y = 0, domain x not equal to 0, and range y > 0.",
+          solution: "The denominator cannot be 0, and 1/x^2 is positive for every allowed x, so the range is y > 0."
+        }
+      },
+      {
+        id: "transformations",
+        title: "Transformations of Rational Parent Functions",
+        skill: "transformations of rational functions",
+        notes: [
+          "For g(x) = a / (x - h) + k, the vertical asymptote is x = h and the horizontal asymptote is y = k.",
+          "For g(x) = a / (x - h)^2 + k, the same asymptote shifts apply: x = h and y = k.",
+          "The value of a affects stretch, compression, and reflection, but h and k locate the asymptotes."
+        ],
+        walkthrough: {
+          problem: "Find the asymptotes of g(x) = 2 / (x + 3) - 1.",
+          steps: [
+            "Rewrite x + 3 as x - (-3), so h = -3.",
+            "The vertical asymptote is x = -3.",
+            "The value added outside the fraction is k = -1, so the horizontal asymptote is y = -1."
+          ]
+        },
+        question: {
+          id: "q9",
+          max: 10,
+          mode: "fields",
+          prompt: "You Try: Find the asymptotes of g(x) = -3 / (x - 4) + 2.",
+          fields: [
+            { key: "va", label: "Vertical asymptote x =", kind: "number", answer: 4, placeholder: "x =" },
+            { key: "ha", label: "Horizontal asymptote y =", kind: "number", answer: 2, placeholder: "y =" }
+          ],
+          hint: "Use the form a / (x - h) + k. The denominator gives h and the outside shift gives k.",
+          correctFeedback: "Correct. The denominator x - 4 gives VA x = 4, and the outside shift +2 gives HA y = 2.",
+          solution: "For g(x) = -3 / (x - 4) + 2, h = 4 and k = 2, so the asymptotes are x = 4 and y = 2."
+        }
+      }
+    ];
+
+    const REFLECTION = {
+      id: "reflection",
+      prompt: "Explain how factoring helps you decide whether an x-value is a hole or a vertical asymptote.",
+      minLength: 20
+    };
+
+    const PAGES = [
+      { type: "student" },
+      ...TOPICS.map((topic, index) => ({ type: "topic", topicIndex: index })),
+      { type: "reflection" },
+      { type: "review" }
+    ];
+
+    let state = loadState();
+
+    function defaultState() {
+      return {
+        page: 0,
+        student: { name: "", period: "", date: todayIso() },
+        answers: {},
+        teacherReview: { reflection: "" },
+        pdfCreated: false
+      };
+    }
+
+    function loadState() {
+      try {
+        const saved = localStorage.getItem(ASSIGNMENT.storageKey);
+        if (!saved) return defaultState();
+        const parsed = JSON.parse(saved);
+        return {
+          ...defaultState(),
+          ...parsed,
+          student: { ...defaultState().student, ...(parsed.student || {}) },
+          answers: parsed.answers || {},
+          teacherReview: { reflection: "", ...(parsed.teacherReview || {}) }
+        };
+      } catch (error) {
+        return defaultState();
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(ASSIGNMENT.storageKey, JSON.stringify(state));
+    }
+
+    function todayIso() {
+      const today = new Date();
+      const offset = today.getTimezoneOffset();
+      const local = new Date(today.getTime() - offset * 60000);
+      return local.toISOString().slice(0, 10);
+    }
+
+    function formatDate(isoDate) {
+      if (!isoDate) return "";
+      const parts = isoDate.split("-").map(Number);
+      if (parts.length !== 3) return isoDate;
+      return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, "&#96;");
+    }
+
+    function renderApp() {
+      if (state.page < 0 || state.page >= PAGES.length) state.page = 0;
+      const page = PAGES[state.page];
+      const app = document.getElementById("app");
+
+      if (page.type === "student") app.innerHTML = renderStudentPage();
+      if (page.type === "topic") app.innerHTML = renderTopicPage(TOPICS[page.topicIndex], page.topicIndex);
+      if (page.type === "reflection") app.innerHTML = renderReflectionPage();
+      if (page.type === "review") app.innerHTML = renderReviewPage();
+
+      renderNav();
+      if (page.type === "reflection") updateTeacherStatus();
+    }
+
+    function renderStudentPage() {
+      return `
+        <div class="short-page">
+          <h2>Student Information</h2>
+          <p class="meta">Enter your information first. Your work saves automatically in this browser.</p>
+          <div class="info-grid">
+            <div>
+              <label for="studentName">Student name</label>
+              <input id="studentName" type="text" autocomplete="name" value="${escapeAttr(state.student.name)}" oninput="updateStudent('name', this.value)">
+            </div>
+            <div>
+              <label for="classPeriod">Class period</label>
+              <input id="classPeriod" type="text" value="${escapeAttr(state.student.period)}" oninput="updateStudent('period', this.value)">
+            </div>
+            <div>
+              <label for="studentDate">Date</label>
+              <input id="studentDate" type="date" value="${escapeAttr(state.student.date)}" oninput="updateStudent('date', this.value)">
+            </div>
+          </div>
+          <div class="note-band" style="margin-top:18px;">
+            <h3>What You Will Review</h3>
+            <ul>
+              <li>Vertical and horizontal asymptotes of rational functions</li>
+              <li>Holes and removable discontinuities</li>
+              <li>Direct and inverse variation equations</li>
+              <li>Parent functions f(x) = 1/x and f(x) = 1/x^2</li>
+              <li>Transformations of rational parent functions</li>
+            </ul>
+          </div>
+          <p class="small-note">The Save as PDF button appears only after every required part is complete.</p>
+        </div>
+      `;
+    }
+
+    function renderTopicPage(topic, index) {
+      const q = topic.question;
+      const rec = getQuestionRecord(q);
+      return `
+        <article>
+          <div class="note-band">
+            <h2>${index + 1}. ${escapeHtml(topic.title)}</h2>
+            <ul>${topic.notes.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul>
+          </div>
+          <div class="topic-grid">
+            <section class="panel walkthrough">
+              <h3>Walkthrough</h3>
+              <p><span class="formula">${escapeHtml(topic.walkthrough.problem)}</span></p>
+              <ol>${topic.walkthrough.steps.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
+            </section>
+            <section class="panel you-try">
+              <h3>You Try</h3>
+              <p>${escapeHtml(q.prompt)}</p>
+              ${renderQuestionFields(q, rec)}
+              <div class="actions">
+                <div class="small-note">Attempts used: ${rec.attempts} of 2</div>
+                ${rec.locked ? "" : `<button class="btn" type="button" onclick="checkQuestion('${q.id}')">Check Answer</button>`}
+              </div>
+              ${rec.feedback ? `<div class="feedback ${rec.feedbackType}">${rec.feedback}</div>` : ""}
+            </section>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderQuestionFields(q, rec) {
+      const single = q.fields.length === 1 ? " single" : "";
+      return `<div class="field-grid${single}">${q.fields.map((field, index) => renderField(q, field, index, rec)).join("")}</div>`;
+    }
+
+    function renderField(q, field, index, rec) {
+      const key = field.key || `field${index}`;
+      const value = rec.values[key] || "";
+      const disabled = rec.locked ? "disabled" : "";
+      const label = escapeHtml(field.label);
+      if (field.kind === "select") {
+        return `
+          <div>
+            <label for="${q.id}-${key}">${label}</label>
+            <select id="${q.id}-${key}" ${disabled} onchange="setQuestionValue('${q.id}', '${key}', this.value)">
+              ${field.options.map(option => `<option value="${escapeAttr(option)}" ${option === value ? "selected" : ""}>${option ? escapeHtml(option) : "Choose one"}</option>`).join("")}
+            </select>
+          </div>
+        `;
+      }
+      return `
+        <div>
+          <label for="${q.id}-${key}">${label}</label>
+          <input id="${q.id}-${key}" type="text" inputmode="decimal" ${disabled} value="${escapeAttr(value)}" placeholder="${escapeAttr(field.placeholder || "")}" oninput="setQuestionValue('${q.id}', '${key}', this.value)">
+          <div class="field-help">Fractions like -5/2 or decimals like -2.5 are both accepted.</div>
+        </div>
+      `;
+    }
+
+    function renderReflectionPage() {
+      return `
+        <div class="short-page">
+          <h2>Final Reflection</h2>
+          <p>${escapeHtml(REFLECTION.prompt)}</p>
+          <label for="reflectionText">Teacher-review response</label>
+          <textarea id="reflectionText" oninput="updateTeacherReview(this.value)">${escapeHtml(state.teacherReview.reflection)}</textarea>
+          <div id="teacherStatus" class="feedback hint">Please write a complete response before continuing.</div>
+          <p class="small-note">This is not auto-graded as right or wrong. It is included in the PDF for teacher review.</p>
+        </div>
+      `;
+    }
+
+    function renderReviewPage() {
+      const scores = calculateScores();
+      const isComplete = allComplete();
+      return `
+        <div>
+          <h2>Final Review</h2>
+          <p class="meta">Review your score and make sure your information is correct before saving as PDF.</p>
+          <div class="review-grid">
+            <section class="panel">
+              <h3>Current Score</h3>
+              <div class="score-big">${scores.finalScore}/100</div>
+              <p>Auto-graded: ${formatPoints(scores.autoEarned)} / ${ASSIGNMENT.autoPoints}</p>
+              <p>Teacher-review completion: ${scores.teacherEarned} / ${ASSIGNMENT.teacherReviewPoints}</p>
+            </section>
+            <section class="panel">
+              <h3>Student</h3>
+              <p><strong>Name:</strong> ${escapeHtml(state.student.name || "Not entered")}</p>
+              <p><strong>Period:</strong> ${escapeHtml(state.student.period || "Not entered")}</p>
+              <p><strong>Date:</strong> ${escapeHtml(formatDate(state.student.date) || "Not entered")}</p>
+            </section>
+          </div>
+          <div class="status-list">
+            ${scores.sections.map(section => `
+              <div class="status-card">
+                <strong>${escapeHtml(section.title)}</strong>
+                <span>${formatPoints(section.earned)} / ${section.max}</span>
+              </div>
+            `).join("")}
+          </div>
+          <div class="note-band" style="margin-top:16px;">
+            <h3>Study Summary</h3>
+            <p>${escapeHtml(studySummary(scores.missedSkills))}</p>
+          </div>
+          <div class="actions">
+            <p class="small-note">${isComplete ? "Ready for PDF. Choose Save as PDF, then use the browser print window to save." : "Complete every required page before saving as PDF."}</p>
+            ${isComplete ? `<button class="btn print" type="button" onclick="saveAsPdf()">Save as PDF</button>` : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    function getQuestionRecord(q) {
+      if (!state.answers[q.id]) {
+        state.answers[q.id] = {
+          values: {},
+          attempts: 0,
+          locked: false,
+          correct: false,
+          score: 0,
+          feedback: "",
+          feedbackType: ""
+        };
+      }
+      return state.answers[q.id];
+    }
+
+    function updateStudent(field, value) {
+      state.student[field] = value;
+      saveState();
+      renderNav();
+    }
+
+    function setQuestionValue(qid, key, value) {
+      const q = findQuestion(qid);
+      const rec = getQuestionRecord(q);
+      if (rec.locked) return;
+      rec.values[key] = value;
+      saveState();
+      renderNav();
+    }
+
+    function checkQuestion(qid) {
+      const q = findQuestion(qid);
+      const rec = getQuestionRecord(q);
+      if (rec.locked) return;
+
+      if (!allFieldsFilled(q, rec.values)) {
+        rec.feedback = "Complete each blank before checking your answer.";
+        rec.feedbackType = "hint";
+        saveState();
+        renderApp();
+        return;
+      }
+
+      const grade = gradeQuestion(q, rec.values);
+      rec.attempts += 1;
+
+      if (grade.full) {
+        rec.locked = true;
+        rec.correct = true;
+        rec.score = q.max;
+        rec.feedback = q.correctFeedback;
+        rec.feedbackType = "correct";
+      } else if (rec.attempts < 2) {
+        rec.feedback = grade.correctCount > 0 ? `Some of your work is on track. Hint: ${q.hint}` : q.hint;
+        rec.feedbackType = "hint";
+      } else {
+        rec.locked = true;
+        rec.correct = false;
+        rec.score = roundPoints(q.max * grade.ratio);
+        rec.feedback = `Not quite. ${q.solution}`;
+        rec.feedbackType = "locked";
+      }
+
+      saveState();
+      renderApp();
+    }
+
+    function findQuestion(qid) {
+      const topic = TOPICS.find(item => item.question.id === qid);
+      if (!topic) throw new Error("Question not found: " + qid);
+      return topic.question;
+    }
+
+    function allFieldsFilled(q, values) {
+      return q.fields.every((field, index) => {
+        const key = field.key || `field${index}`;
+        return String(values[key] || "").trim().length > 0;
+      });
+    }
+
+    function parseMathNumber(value) {
+      let text = String(value || "").trim().toLowerCase();
+      text = text.replace(/\s+/g, "").replace(/[−–—]/g, "-");
+      text = text.replace(/^[xyk]=/, "");
+      if (/^-?\d+(\.\d+)?\/-?\d+(\.\d+)?$/.test(text)) {
+        const parts = text.split("/").map(Number);
+        if (parts[1] !== 0) return parts[0] / parts[1];
+      }
+      const number = Number(text);
+      return Number.isFinite(number) ? number : NaN;
+    }
+
+    function nearlyEqual(a, b, tolerance = 0.02) {
+      return Number.isFinite(a) && Math.abs(a - b) <= tolerance;
+    }
+
+    function gradeQuestion(q, values) {
+      if (q.mode === "unorderedNumbers") {
+        const studentNumbers = q.fields.map((field, index) => parseMathNumber(values[field.key || `field${index}`]));
+        const used = new Array(q.answers.length).fill(false);
+        let correctCount = 0;
+        studentNumbers.forEach(num => {
+          const matchIndex = q.answers.findIndex((answer, index) => !used[index] && nearlyEqual(num, answer));
+          if (matchIndex >= 0) {
+            used[matchIndex] = true;
+            correctCount += 1;
+          }
+        });
+        return { correctCount, total: q.answers.length, ratio: correctCount / q.answers.length, full: correctCount === q.answers.length };
+      }
+
+      let correctCount = 0;
+      q.fields.forEach((field, index) => {
+        const key = field.key || `field${index}`;
+        const value = values[key];
+        if (field.kind === "number" && nearlyEqual(parseMathNumber(value), field.answer)) correctCount += 1;
+        if (field.kind === "select" && value === field.answer) correctCount += 1;
+      });
+      return { correctCount, total: q.fields.length, ratio: correctCount / q.fields.length, full: correctCount === q.fields.length };
+    }
+
+    function updateTeacherReview(value) {
+      state.teacherReview.reflection = value;
+      saveState();
+      updateTeacherStatus();
+      renderNav();
+    }
+
+    function updateTeacherStatus() {
+      const box = document.getElementById("teacherStatus");
+      if (!box) return;
+      if (teacherReviewComplete()) {
+        box.className = "feedback review";
+        box.textContent = "Teacher review needed. This response will be included in the PDF.";
+      } else {
+        box.className = "feedback hint";
+        box.textContent = "Please write a complete response before continuing.";
+      }
+    }
+
+    function teacherReviewComplete() {
+      return String(state.teacherReview.reflection || "").trim().length >= REFLECTION.minLength;
+    }
+
+    function questionComplete(topic) {
+      const rec = getQuestionRecord(topic.question);
+      return rec.locked && (rec.correct || rec.attempts >= 2);
+    }
+
+    function studentInfoComplete() {
+      return Boolean(String(state.student.name || "").trim() && String(state.student.period || "").trim() && String(state.student.date || "").trim());
+    }
+
+    function allComplete() {
+      return studentInfoComplete() && TOPICS.every(questionComplete) && teacherReviewComplete();
+    }
+
+    function canAdvance() {
+      const page = PAGES[state.page];
+      if (page.type === "student") return studentInfoComplete();
+      if (page.type === "topic") return questionComplete(TOPICS[page.topicIndex]);
+      if (page.type === "reflection") return teacherReviewComplete();
+      return false;
+    }
+
+    function renderNav() {
+      const backBtn = document.getElementById("backBtn");
+      const nextBtn = document.getElementById("nextBtn");
+      const pageLabel = document.getElementById("pageLabel");
+      const completionLabel = document.getElementById("completionLabel");
+      const progressFill = document.getElementById("progressFill");
+      const progress = Math.round((state.page / (PAGES.length - 1)) * 100);
+
+      pageLabel.textContent = `Page ${state.page + 1} of ${PAGES.length}`;
+      completionLabel.textContent = `${progress}% complete`;
+      progressFill.style.width = `${progress}%`;
+      backBtn.disabled = state.page === 0;
+      nextBtn.style.visibility = PAGES[state.page].type === "review" ? "hidden" : "visible";
+      nextBtn.disabled = !canAdvance();
+    }
+
+    function goBack() {
+      if (state.page > 0) {
+        state.page -= 1;
+        saveState();
+        renderApp();
+      }
+    }
+
+    function goNext() {
+      if (!canAdvance()) return;
+      if (state.page < PAGES.length - 1) {
+        state.page += 1;
+        saveState();
+        renderApp();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+
+    function calculateScores() {
+      const sections = TOPICS.map(topic => {
+        const rec = getQuestionRecord(topic.question);
+        return {
+          title: topic.title,
+          skill: topic.skill,
+          earned: Number(rec.score || 0),
+          max: topic.question.max,
+          complete: questionComplete(topic)
+        };
+      });
+      const autoEarned = roundPoints(sections.reduce((sum, section) => sum + section.earned, 0));
+      const teacherEarned = teacherReviewComplete() ? ASSIGNMENT.teacherReviewPoints : 0;
+      const finalScore = Math.round(autoEarned + teacherEarned);
+      const missedSkills = sections.filter(section => section.earned < section.max).map(section => section.skill);
+      return { sections, autoEarned, teacherEarned, finalScore, missedSkills };
+    }
+
+    function roundPoints(value) {
+      return Math.round(value * 10) / 10;
+    }
+
+    function formatPoints(value) {
+      return Number.isInteger(value) ? String(value) : value.toFixed(1);
+    }
+
+    function studySummary(missedSkills) {
+      if (!missedSkills.length) {
+        return "This student is showing strong readiness across rational functions, asymptotes, holes, parent functions, transformations, and variation equations.";
+      }
+      return `This student should review ${joinList(missedSkills)}. A helpful next step is to redo those walkthroughs, check factoring before choosing asymptotes, and show the setup for variation equations before calculating k.`;
+    }
+
+    function joinList(items) {
+      if (items.length === 0) return "";
+      if (items.length === 1) return items[0];
+      if (items.length === 2) return `${items[0]} and ${items[1]}`;
+      return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+    }
+
+    function studentAnswerText(q) {
+      const rec = getQuestionRecord(q);
+      if (q.mode === "unorderedNumbers") {
+        return q.fields.map((field, index) => {
+          const key = field.key || `field${index}`;
+          return `${field.label}: ${rec.values[key] || "blank"}`;
+        }).join("; ");
+      }
+      return q.fields.map((field, index) => {
+        const key = field.key || `field${index}`;
+        return `${field.label}: ${rec.values[key] || "blank"}`;
+      }).join("; ");
+    }
+
+    function correctAnswerText(q) {
+      if (q.mode === "unorderedNumbers") return q.answers.map(answer => `x = ${answer}`).join(" and ");
+      return q.fields.map(field => `${field.label} ${field.kind === "select" ? "" : ""}${field.answer}`).join("; ");
+    }
+
+    function saveAsPdf() {
+      if (!allComplete()) return;
+      buildPrintReport();
+      state.pdfCreated = true;
+      saveState();
+      setTimeout(() => window.print(), 100);
+    }
+
+    function buildPrintReport() {
+      const scores = calculateScores();
+      const missedRows = TOPICS.filter(topic => getQuestionRecord(topic.question).score < topic.question.max);
+      const report = document.getElementById("printReport");
+      report.innerHTML = `
+        <div class="print-page">
+          <h1>${escapeHtml(ASSIGNMENT.title)}</h1>
+          <p><strong>Course:</strong> ${escapeHtml(ASSIGNMENT.course)}</p>
+          <p><strong>Student:</strong> ${escapeHtml(state.student.name)} &nbsp; <strong>Period:</strong> ${escapeHtml(state.student.period)} &nbsp; <strong>Date:</strong> ${escapeHtml(formatDate(state.student.date))}</p>
+          <p><strong>Version:</strong> ${escapeHtml(ASSIGNMENT.version)} &nbsp; <strong>Final Score:</strong> ${scores.finalScore}/100</p>
+          <div class="summary-box"><strong>Study Summary:</strong> ${escapeHtml(studySummary(scores.missedSkills))}</div>
+
+          <h2>Score Breakdown</h2>
+          <table>
+            <thead><tr><th>Section</th><th>Score</th><th>Skill</th></tr></thead>
+            <tbody>
+              ${scores.sections.map(section => `<tr><td>${escapeHtml(section.title)}</td><td>${formatPoints(section.earned)} / ${section.max}</td><td>${escapeHtml(section.skill)}</td></tr>`).join("")}
+              <tr><td>Teacher-Review Reflection</td><td>${scores.teacherEarned} / ${ASSIGNMENT.teacherReviewPoints}</td><td>mathematical explanation</td></tr>
+            </tbody>
+          </table>
+
+          <h2>Missed Skills</h2>
+          <p>${scores.missedSkills.length ? escapeHtml(joinList(scores.missedSkills)) : "No missed auto-graded skills."}</p>
+
+          <h2>Independent Answers</h2>
+          <table>
+            <thead><tr><th>Topic</th><th>Student Answer</th><th>Score</th><th>Correct Answer When Needed</th></tr></thead>
+            <tbody>
+              ${TOPICS.map(topic => {
+                const rec = getQuestionRecord(topic.question);
+                const needsAnswer = rec.score < topic.question.max;
+                return `<tr><td>${escapeHtml(topic.title)}</td><td>${escapeHtml(studentAnswerText(topic.question))}</td><td>${formatPoints(rec.score)} / ${topic.question.max}</td><td>${needsAnswer ? escapeHtml(correctAnswerText(topic.question)) : "Correct"}</td></tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+
+          <h2>Guided Work</h2>
+          ${TOPICS.map(topic => `
+            <div class="no-break">
+              <p><strong>${escapeHtml(topic.title)}:</strong> ${escapeHtml(topic.walkthrough.problem)}</p>
+              <ol>${topic.walkthrough.steps.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
+            </div>
+          `).join("")}
+
+          <h2>Teacher-Review Response</h2>
+          <p><strong>Prompt:</strong> ${escapeHtml(REFLECTION.prompt)}</p>
+          <p>${escapeHtml(state.teacherReview.reflection)}</p>
+        </div>
+      `;
+      report.setAttribute("aria-hidden", "false");
+    }
+
+    document.getElementById("backBtn").addEventListener("click", goBack);
+    document.getElementById("nextBtn").addEventListener("click", goNext);
+    document.getElementById("versionPill").textContent = `Version ${ASSIGNMENT.version}`;
+    renderApp();
+  </script>
+</body>
+</html>
