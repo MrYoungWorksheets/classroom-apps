@@ -331,7 +331,7 @@
                     <span>Due: ${escapeHtml(formatDate(assignment.dueDate))}</span>
                     <span class="status ${status.className}">${status.label}</span>
                   </div>
-                  <a class="launch-link" href="${escapeHtml(assignment.link)}">Launch Assignment</a>
+                  <a class="launch-link" href="${escapeHtml(assignment.link)}" target="_blank" rel="noopener noreferrer">Launch Assignment</a>
                 </article>
               `;
             }).join('')
@@ -348,7 +348,7 @@
 
     function renderUsefulLinks() {
       document.getElementById('usefulLinks').innerHTML = usefulLinks.map(item => (
-        `<a class="useful-link" href="${escapeHtml(item.link)}">${escapeHtml(item.title)}</a>`
+        `<a class="useful-link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>`
       )).join('');
     }
 
@@ -378,7 +378,7 @@
         </div>
         <div class="header-info" aria-label="Teacher contact and date">
           <span id="todayText">Today</span>
-          <a href="mailto:ryoung@rfisd.us">ryoung@rfisd.us</a>
+          <a href="mailto:ryoung@rfisd.us" target="_blank" rel="noopener noreferrer">ryoung@rfisd.us</a>
         </div>
       </div>
     </header>
