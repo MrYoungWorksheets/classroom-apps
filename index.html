@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mr. Young Classroom Apps</title>
+  <style>
+    :root {
+      --bg: #eef4fa;
+      --paper: #ffffff;
+      --ink: #17202a;
+      --muted: #5f6f7f;
+      --blue: #2457a6;
+      --blue-dark: #173e78;
+      --line: #d5e1ed;
+      --shadow: 0 12px 28px rgba(24, 44, 68, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+      font-size: 18px;
+      line-height: 1.45;
+    }
+
+    main {
+      width: min(900px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 28px 0;
+    }
+
+    .hero,
+    .menu-card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      padding: 24px;
+      margin-bottom: 18px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(1.7rem, 3vw, 2.4rem);
+      letter-spacing: 0;
+      line-height: 1.15;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .section-title {
+      font-size: 1.35rem;
+      margin: 0 0 12px;
+    }
+
+    .menu-card {
+      padding: 20px;
+    }
+
+    .assignment-link {
+      display: grid;
+      gap: 6px;
+      padding: 18px;
+      min-height: 92px;
+      border-radius: 8px;
+      border: 1px solid #b9cef0;
+      background: #f5f9ff;
+      color: var(--ink);
+      text-decoration: none;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+
+    .assignment-link:hover,
+    .assignment-link:focus {
+      transform: translateY(-1px);
+      border-color: var(--blue);
+      background: #eaf2ff;
+      outline: none;
+    }
+
+    .assignment-name {
+      color: var(--blue-dark);
+      font-weight: 700;
+      font-size: 1.15rem;
+    }
+
+    .assignment-note {
+      color: var(--muted);
+      font-size: 0.96rem;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        font-size: 17px;
+      }
+
+      main {
+        padding: 18px 0;
+      }
+
+      .hero,
+      .menu-card {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero" aria-labelledby="page-title">
+      <h1 id="page-title">Mr. Young Classroom Apps</h1>
+      <p class="subtitle">Choose an assignment to begin.</p>
+    </section>
+
+    <section class="menu-card" aria-labelledby="assignments-title">
+      <h2 class="section-title" id="assignments-title">Assignments</h2>
+      <a class="assignment-link" href="/chapter-11-assignment/">
+        <span class="assignment-name">Chapter 11 Housing Assignment</span>
+        <span class="assignment-note">Open the Chromebook-friendly assignment app.</span>
+      </a>
+    </section>
+  </main>
+</body>
+</html>
