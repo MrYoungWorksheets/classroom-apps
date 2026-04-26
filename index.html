@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mr. Young Classroom Apps</title>
+  <title>Mr. Young&rsquo;s Classroom Apps</title>
   <style>
     :root {
       --bg: #eef4fa;
@@ -12,7 +12,11 @@
       --muted: #5f6f7f;
       --blue: #2457a6;
       --blue-dark: #173e78;
+      --green: #1f7a55;
+      --gold: #8a6400;
+      --red: #a33d3d;
       --line: #d5e1ed;
+      --soft: #f6f9fc;
       --shadow: 0 12px 28px rgba(24, 44, 68, 0.12);
     }
 
@@ -31,13 +35,14 @@
     }
 
     main {
-      width: min(900px, calc(100% - 28px));
+      width: min(1180px, calc(100% - 28px));
       margin: 0 auto;
       padding: 28px 0;
     }
 
     .hero,
-    .menu-card {
+    .course-column,
+    .links-panel {
       background: var(--paper);
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -47,6 +52,16 @@
     .hero {
       padding: 24px;
       margin-bottom: 18px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+      align-items: flex-start;
     }
 
     h1,
@@ -57,55 +72,164 @@
     }
 
     h1 {
-      font-size: clamp(1.7rem, 3vw, 2.4rem);
+      font-size: clamp(1.7rem, 3vw, 2.45rem);
       letter-spacing: 0;
       line-height: 1.15;
     }
 
-    .subtitle {
+    h2 {
+      font-size: 1.35rem;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+    }
+
+    .subtitle,
+    .muted {
       color: var(--muted);
+    }
+
+    .subtitle {
       margin-top: 8px;
     }
 
+    .header-info {
+      display: grid;
+      gap: 6px;
+      min-width: 240px;
+      color: var(--muted);
+      font-size: 0.96rem;
+    }
+
+    .header-info a {
+      color: var(--blue-dark);
+      font-weight: 700;
+    }
+
+    .section-block {
+      margin-top: 18px;
+    }
+
     .section-title {
-      font-size: 1.35rem;
       margin: 0 0 12px;
     }
 
-    .menu-card {
-      padding: 20px;
-    }
-
-    .assignment-link {
+    .course-grid {
       display: grid;
-      gap: 6px;
-      padding: 18px;
-      min-height: 92px;
-      border-radius: 8px;
-      border: 1px solid #b9cef0;
-      background: #f5f9ff;
-      color: var(--ink);
-      text-decoration: none;
-      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
     }
 
-    .assignment-link:hover,
-    .assignment-link:focus {
-      transform: translateY(-1px);
-      border-color: var(--blue);
-      background: #eaf2ff;
+    .course-column {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .assignment-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .assignment-card {
+      border: 1px solid #c7d8ea;
+      background: var(--soft);
+      border-radius: 8px;
+      padding: 15px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .card-meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      min-height: 28px;
+      padding: 4px 10px;
+      font-size: 0.84rem;
+      font-weight: 700;
+      background: #e8eef6;
+      color: #33475b;
+    }
+
+    .status.upcoming {
+      background: #e7f0ff;
+      color: var(--blue-dark);
+    }
+
+    .status.due-today {
+      background: #fff0c2;
+      color: var(--gold);
+    }
+
+    .status.past-due {
+      background: #ffe0e0;
+      color: var(--red);
+    }
+
+    .launch-link,
+    .useful-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      border-radius: 7px;
+      padding: 10px 14px;
+      color: #ffffff;
+      background: var(--blue);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .launch-link:hover,
+    .launch-link:focus,
+    .useful-link:hover,
+    .useful-link:focus {
+      background: var(--blue-dark);
       outline: none;
     }
 
-    .assignment-name {
-      color: var(--blue-dark);
-      font-weight: 700;
-      font-size: 1.15rem;
+    .empty-note {
+      border: 1px dashed #c5d4e4;
+      color: var(--muted);
+      background: #fafcff;
+      border-radius: 8px;
+      padding: 14px;
     }
 
-    .assignment-note {
-      color: var(--muted);
-      font-size: 0.96rem;
+    .links-panel {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .links-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .useful-link {
+      background: #526170;
+      text-align: center;
+    }
+
+    @media (max-width: 920px) {
+      .course-grid,
+      .links-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     @media (max-width: 640px) {
@@ -118,25 +242,158 @@
       }
 
       .hero,
-      .menu-card {
+      .course-column,
+      .links-panel {
         padding: 16px;
       }
     }
   </style>
+  <script>
+    // ===== EDIT ASSIGNMENT DATA HERE =====
+    // Financial Math assignments
+    const financialMathAssignments = [
+      {
+        title: 'Chapter 11 Housing Assignment',
+        description: 'Renting, home buying, leases, mortgages, cost of living, and housing decisions.',
+        link: '/classroom-apps/chapter-11-assignment/',
+        dueDate: '2026-04-27'
+      }
+    ];
+
+    // Algebra 2 Regular assignments
+    const algebra2RegularAssignments = [];
+
+    // Algebra 2 Honors assignments
+    const algebra2HonorsAssignments = [];
+
+    const courseSections = [
+      { title: 'Financial Math', assignments: financialMathAssignments },
+      { title: 'Algebra 2 Regular', assignments: algebra2RegularAssignments },
+      { title: 'Algebra 2 Honors', assignments: algebra2HonorsAssignments }
+    ];
+
+    const usefulLinks = [
+      { title: 'Desmos', link: 'https://www.desmos.com/calculator' },
+      { title: 'DeltaMath', link: 'https://www.deltamath.com/' },
+      { title: 'ClassLink', link: '#' },
+      { title: 'Google Classroom', link: 'https://classroom.google.com/' },
+      { title: 'Calculator tools', link: '#' }
+    ];
+    // ===== END EDITABLE DATA =====
+
+    function localDateFromInput(dateText) {
+      const parts = dateText.split('-').map(Number);
+      return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+
+    function startOfToday() {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    function formatDate(dateText) {
+      return localDateFromInput(dateText).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+
+    function assignmentStatus(dueDate) {
+      const today = startOfToday().getTime();
+      const due = localDateFromInput(dueDate).getTime();
+      if (due > today) return { label: 'Upcoming', className: 'upcoming' };
+      if (due === today) return { label: 'Due Today', className: 'due-today' };
+      return { label: 'Past Due', className: 'past-due' };
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[character]));
+    }
+
+    function renderAssignments() {
+      const container = document.getElementById('assignmentColumns');
+      container.innerHTML = courseSections.map(section => {
+        const cards = section.assignments.length
+          ? section.assignments.map(assignment => {
+              const status = assignmentStatus(assignment.dueDate);
+              return `
+                <article class="assignment-card">
+                  <h3>${escapeHtml(assignment.title)}</h3>
+                  <p class="muted">${escapeHtml(assignment.description)}</p>
+                  <div class="card-meta">
+                    <span>Due: ${escapeHtml(formatDate(assignment.dueDate))}</span>
+                    <span class="status ${status.className}">${status.label}</span>
+                  </div>
+                  <a class="launch-link" href="${escapeHtml(assignment.link)}">Launch Assignment</a>
+                </article>
+              `;
+            }).join('')
+          : '<p class="empty-note">No assignments posted yet.</p>';
+
+        return `
+          <section class="course-column" aria-label="${escapeHtml(section.title)} assignments">
+            <h3>${escapeHtml(section.title)}</h3>
+            <div class="assignment-list">${cards}</div>
+          </section>
+        `;
+      }).join('');
+    }
+
+    function renderUsefulLinks() {
+      document.getElementById('usefulLinks').innerHTML = usefulLinks.map(item => (
+        `<a class="useful-link" href="${escapeHtml(item.link)}">${escapeHtml(item.title)}</a>`
+      )).join('');
+    }
+
+    function renderToday() {
+      const today = new Date();
+      document.getElementById('todayText').textContent = 'Today: ' + today.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderToday();
+      renderAssignments();
+      renderUsefulLinks();
+    });
+  </script>
 </head>
 <body>
   <main>
-    <section class="hero" aria-labelledby="page-title">
-      <h1 id="page-title">Mr. Young Classroom Apps</h1>
-      <p class="subtitle">Choose an assignment to begin.</p>
+    <header class="hero" aria-labelledby="page-title">
+      <div class="hero-top">
+        <div>
+          <h1 id="page-title">Mr. Young&rsquo;s Classroom Apps</h1>
+          <p class="subtitle">Choose your class and launch the assignment you need.</p>
+        </div>
+        <div class="header-info" aria-label="Teacher contact and date">
+          <span id="todayText">Today</span>
+          <a href="mailto:ryoung@rfisd.us">ryoung@rfisd.us</a>
+        </div>
+      </div>
+    </header>
+
+    <section class="section-block" aria-labelledby="assignments-title">
+      <h2 class="section-title" id="assignments-title">Assignments</h2>
+      <div class="course-grid" id="assignmentColumns"></div>
     </section>
 
-    <section class="menu-card" aria-labelledby="assignments-title">
-      <h2 class="section-title" id="assignments-title">Assignments</h2>
-      <a class="assignment-link" href="/chapter-11-assignment/">
-        <span class="assignment-name">Chapter 11 Housing Assignment</span>
-        <span class="assignment-note">Open the Chromebook-friendly assignment app.</span>
-      </a>
+    <section class="section-block links-panel" aria-labelledby="links-title">
+      <div>
+        <h2 class="section-title" id="links-title">Useful Links</h2>
+        <p class="muted">Quick tools for classwork and practice.</p>
+      </div>
+      <div class="links-grid" id="usefulLinks"></div>
     </section>
   </main>
 </body>
