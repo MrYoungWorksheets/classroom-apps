@@ -7,15 +7,15 @@
   <style>
     :root {
       --ink: #172033;
-      --muted: #5c677d;
-      --line: #d9e0ea;
+      --muted: #5b6577;
+      --line: #d8e0ec;
       --paper: #ffffff;
-      --soft: #f4f7fb;
+      --soft: #f3f7fc;
       --brand: #2457a6;
-      --brand-2: #163b73;
+      --brand-dark: #163b73;
       --green: #207245;
       --red: #b3261e;
-      --amber: #8a5a00;
+      --amber: #805600;
       --shadow: 0 14px 34px rgba(23, 32, 51, 0.12);
       font-family: Arial, Helvetica, sans-serif;
     }
@@ -24,7 +24,7 @@
 
     body {
       margin: 0;
-      background: linear-gradient(180deg, #eef3fa 0%, #f8fafc 46%, #ffffff 100%);
+      background: linear-gradient(180deg, #eef3fa 0%, #f8fafc 50%, #ffffff 100%);
       color: var(--ink);
       font-size: 18px;
       line-height: 1.45;
@@ -60,8 +60,8 @@
 
     .header-tools {
       display: flex;
-      justify-content: flex-end;
       align-items: center;
+      justify-content: flex-end;
       gap: 10px;
       flex-wrap: wrap;
     }
@@ -97,7 +97,7 @@
       display: inline-flex;
       align-items: center;
       background: #e8f0fe;
-      color: var(--brand-2);
+      color: var(--brand-dark);
       border: 1px solid #c9dafb;
       border-radius: 999px;
       padding: 8px 12px;
@@ -141,13 +141,17 @@
       margin: 0 auto;
     }
 
-    .info-grid, .field-grid, .status-list, .review-grid {
+    .info-grid, .field-grid, .review-grid, .status-list {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
     }
 
-    .info-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 18px; }
+    .info-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 18px;
+    }
+
     .field-grid { margin-top: 14px; }
     .field-grid.single { grid-template-columns: 1fr; }
 
@@ -213,7 +217,7 @@
       border: 1px solid #c7dcf6;
       border-radius: 7px;
       padding: 10px 12px;
-      color: var(--brand-2);
+      color: var(--brand-dark);
       font-weight: 700;
       margin: 12px 0;
     }
@@ -262,7 +266,7 @@
       font-weight: 700;
     }
 
-    .btn:hover:not(:disabled) { background: var(--brand-2); }
+    .btn:hover:not(:disabled) { background: var(--brand-dark); }
 
     .btn.secondary {
       background: #edf2f8;
@@ -385,7 +389,7 @@
       <div class='title-row'>
         <div>
           <h1>Logarithms Full Review</h1>
-          <p class='meta'>Algebra 2 Regular - Exponential and logarithmic equations, expressions, tables, domain, and range</p>
+          <p class='meta'>Algebra 2 Regular - exponential equations, logarithmic equations, equivalent expressions, and graph features</p>
         </div>
         <div class='header-tools'>
           <div class='pill' id='versionPill'>Version 1.0</div>
@@ -409,6 +413,7 @@
   <section id='printReport' aria-hidden='true'></section>
 
   <script>
+    // Assignment data is intentionally kept in one section so a teacher can edit future versions.
     const ASSIGNMENT = {
       course: 'Algebra 2 Regular',
       title: 'Logarithms Full Review',
@@ -427,8 +432,8 @@
         skill: 'solving basic exponential equations',
         notes: [
           'If both sides can be written with the same base, rewrite them and set the exponents equal.',
-          'If the right side is not a clean power, use a logarithm and round as directed.',
-          'For common log problems, remember that log means base 10.'
+          'If the answer is not a clean power, use a logarithm and round as directed.',
+          'For common log problems, log means base 10.'
         ],
         walkthrough: `
           <p><span class='formula'>Solve 2<sup>x</sup> = 16.</span></p>
@@ -444,12 +449,12 @@
           prompt: 'Solve each basic exponential equation.',
           format: 'Answer format: x = 4 or x &asymp; 2.35',
           fields: [
-            { key: 'a', label: '4<sup>x</sup> = 64', kind: 'number', answer: 3, tolerance: 0.001, answerText: 'x = 3' },
+            { key: 'a', label: '3<sup>x</sup> = 81', kind: 'number', answer: 4, tolerance: 0.001, answerText: 'x = 4' },
             { key: 'b', label: '10<sup>x</sup> = 51', kind: 'number', answer: 1.71, tolerance: 0.01, answerText: 'x &asymp; 1.71' }
           ],
-          hint: 'For 4<sup>x</sup> = 64, rewrite 64 as a power of 4. For 10<sup>x</sup> = 51, use log(51) and round to the nearest hundredth.',
+          hint: 'For 3<sup>x</sup> = 81, rewrite 81 as a power of 3. For 10<sup>x</sup> = 51, use log(51) and round to the nearest hundredth.',
           correctFeedback: 'Correct. You rewrote the clean power and used a logarithm for the decimal answer.',
-          solution: '4<sup>x</sup> = 64 gives x = 3 because 4<sup>3</sup> = 64. For 10<sup>x</sup> = 51, x = log(51) &asymp; 1.71.'
+          solution: '3<sup>x</sup> = 81 gives x = 4 because 3<sup>4</sup> = 81. For 10<sup>x</sup> = 51, x = log(51) &asymp; 1.71.'
         }
       },
       {
@@ -481,7 +486,7 @@
           ],
           hint: 'Divide by the coefficient first. Then use a logarithm if the result is not an easy power.',
           correctFeedback: 'Correct. You isolated the exponential expression before using logs.',
-          solution: 'For 16 &middot; 10<sup>x</sup> = 80, divide by 16 to get 10<sup>x</sup> = 5, so x = log(5) &asymp; 0.70. For 45 &middot; 3<sup>x</sup> = 54, divide by 45 to get 3<sup>x</sup> = 1.2, so x = <span class="frac"><span>log(1.2)</span><span class="bar"></span><span>log(3)</span></span> &asymp; 0.17.'
+          solution: 'For 16 &middot; 10<sup>x</sup> = 80, divide by 16 to get 10<sup>x</sup> = 5, so x = log(5) &asymp; 0.70. For 45 &middot; 3<sup>x</sup> = 54, divide by 45 to get 3<sup>x</sup> = 1.2, so x = <span class=&#39;frac&#39;><span>log(1.2)</span><span class=&#39;bar&#39;></span><span>log(3)</span></span> &asymp; 0.17.'
         }
       },
       {
@@ -641,12 +646,12 @@
     }
 
     function escapeHtml(value) {
-      return String(value ?? '').replace(/[&<>']/g, character => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '\'': '&#39;'
-      }[character]));
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll(String.fromCharCode(34), '&quot;')
+        .replaceAll(String.fromCharCode(39), '&#39;');
     }
 
     function escapeAttr(value) {
@@ -737,7 +742,7 @@
     }
 
     function renderGraphPreview(kind) {
-      const title = kind === 'try' ? 'Coordinate preview for y = log base 4 of x minus 2' : 'Coordinate preview for y = log base 4 of x minus 3';
+      const title = kind === 'try' ? 'Coordinate preview for y equals log base 4 of x minus 2' : 'Coordinate preview for y equals log base 4 of x minus 3';
       const asymptoteX = kind === 'try' ? 82 : 98;
       const points = kind === 'try'
         ? [{ x: 112, y: 150, label: '(3, 0)' }, { x: 178, y: 112, label: '(6, 1)' }, { x: 386, y: 74, label: '(18, 2)' }]
@@ -914,7 +919,7 @@
 
     function parseMathNumber(value) {
       let text = String(value || '').trim().toLowerCase();
-      text = text.replaceAll(' ', '').replaceAll('−', '-').replaceAll('–', '-').replaceAll(',', '');
+      text = text.replaceAll(' ', '').replaceAll('−', '-').replaceAll('–', '-').replaceAll(',', '').replaceAll('≈', '');
       ['x=', 'y=', 'k='].forEach(prefix => {
         if (text.startsWith(prefix)) text = text.slice(prefix.length);
       });
