@@ -201,13 +201,71 @@
     .you-try { background: #fffdfa; }
 
     .formula {
-      display: inline-block;
+      display: block;
       font-weight: 700;
       background: #f3f6fb;
       border: 1px solid #dbe4f2;
       border-radius: 6px;
-      padding: 3px 7px;
-      margin: 2px 0;
+      padding: 10px 12px;
+      margin: 8px 0;
+      overflow-x: auto;
+    }
+
+    .math-expression {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      max-width: 100%;
+      vertical-align: middle;
+      line-height: 1.15;
+      margin: 0.1rem 0.05rem;
+    }
+
+    .math-expression.block {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      margin: 0.35rem 0;
+    }
+
+    .math-inline {
+      font-size: 0.98em;
+    }
+
+    .function-name,
+    .outside-shift {
+      white-space: nowrap;
+    }
+
+    .fraction {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: center;
+      text-align: center;
+      min-width: 2.4rem;
+      max-width: 100%;
+      vertical-align: middle;
+    }
+
+    .numerator,
+    .denominator {
+      display: block;
+      padding: 0.08rem 0.45rem;
+      white-space: nowrap;
+    }
+
+    .frac-line {
+      display: block;
+      border-top: 2px solid currentColor;
+      margin: 0.1rem 0;
+      min-width: 100%;
+    }
+
+    sup {
+      font-size: 0.72em;
+      line-height: 0;
     }
 
     .field-grid {
@@ -357,6 +415,8 @@
       .page { padding: 16px; }
       .pill { white-space: normal; }
       .header-tools { justify-content: flex-start; }
+      .math-expression.block { justify-content: flex-start; }
+      .formula .math-expression.block { justify-content: center; }
     }
 
     @media print {
@@ -370,6 +430,7 @@
       .print-page table { width: 100%; border-collapse: collapse; margin-top: 8pt; }
       .print-page th, .print-page td { border: 1px solid #777; padding: 5pt; text-align: left; vertical-align: top; }
       .print-page .summary-box { border: 1px solid #333; padding: 8pt; margin: 10pt 0; }
+      .math-expression.block { justify-content: flex-start; }
       .no-break { break-inside: avoid; }
     }
   </style>
@@ -794,6 +855,64 @@
       return escapeHtml(value).replace(/`/g, "&#96;");
     }
 
+    function mathText(value) {
+      return superscriptMath(escapeHtml(value));
+    }
+
+    function superscriptMath(html) {
+      return html.replace(/x\^([0-9]+)/g, "x<sup>$1</sup>");
+    }
+
+    function inlineFracHtml(numerator, denominator) {
+      return `<span class="math-expression math-inline"><span class="fraction"><span class="numerator">${mathText(numerator)}</span><span class="frac-line"></span><span class="denominator">${mathText(denominator)}</span></span></span>`;
+    }
+
+    function fracHtml(functionName, numerator, denominator, outsideShift = "") {
+      return `<span class="math-expression block">${functionName ? `<span class="function-name">${mathText(functionName)}</span>` : ""}<span class="fraction"><span class="numerator">${mathText(numerator)}</span><span class="frac-line"></span><span class="denominator">${mathText(denominator)}</span></span>${outsideShift ? `<span class="outside-shift">${mathText(outsideShift)}</span>` : ""}</span>`;
+    }
+
+    function mathReplacements() {
+      return [
+        { text: "f(x) = [(x - 3)(x + 2)] / [(x + 2)(x - 1)(x + 4)]", html: fracHtml("f(x) =", "(x - 3)(x + 2)", "(x + 2)(x - 1)(x + 4)") },
+        { text: "f(x) = [(x + 1)(x - 4)] / [(x - 4)(x + 5)(x - 2)]", html: fracHtml("f(x) =", "(x + 1)(x - 4)", "(x - 4)(x + 5)(x - 2)") },
+        { text: "h(x) = (8x^4 - 3x + 1) / (2x^4 + 5x^2 - 7)", html: fracHtml("h(x) =", "8x^4 - 3x + 1", "2x^4 + 5x^2 - 7") },
+        { text: "h(x) = (9x^3 - 4x + 1) / (3x^3 + 8)", html: fracHtml("h(x) =", "9x^3 - 4x + 1", "3x^3 + 8") },
+        { text: "r(x) = (4x^2 - 7) / (2x^3 + 1)", html: fracHtml("r(x) =", "4x^2 - 7", "2x^3 + 1") },
+        { text: "p(x) = (5x^4 - 1) / (x^2 + 6)", html: fracHtml("p(x) =", "5x^4 - 1", "x^2 + 6") },
+        { text: "f(x) = [(x + 1)(x - 4)] / [(x + 1)(x + 3)]", html: fracHtml("f(x) =", "(x + 1)(x - 4)", "(x + 1)(x + 3)") },
+        { text: "f(x) = [(x - 3)(x + 2)] / [(x - 3)(x - 5)]", html: fracHtml("f(x) =", "(x - 3)(x + 2)", "(x - 3)(x - 5)") },
+        { text: "g(x) = -3 / (x - 4) + 2", html: fracHtml("g(x) =", "-3", "(x - 4)", "+ 2") },
+        { text: "g(x) = 2 / (x + 3) - 1", html: fracHtml("g(x) =", "2", "(x + 3)", "- 1") },
+        { text: "g(x) = a / (x - h)^2 + k", html: fracHtml("g(x) =", "a", "(x - h)^2", "+ k") },
+        { text: "g(x) = a / (x - h) + k", html: fracHtml("g(x) =", "a", "(x - h)", "+ k") },
+        { text: "a / (x - h)^2 + k", html: fracHtml("", "a", "(x - h)^2", "+ k") },
+        { text: "a / (x - h) + k", html: fracHtml("", "a", "(x - h)", "+ k") },
+        { text: "f(x) = 1/x^2", html: fracHtml("f(x) =", "1", "x^2") },
+        { text: "f(x) = 1/x", html: fracHtml("f(x) =", "1", "x") },
+        { text: "8x^4 / 2x^4", html: inlineFracHtml("8x^4", "2x^4") },
+        { text: "9x^3 / 3x^3", html: inlineFracHtml("9x^3", "3x^3") },
+        { text: "1/x^2", html: inlineFracHtml("1", "x^2") },
+        { text: "1/x", html: inlineFracHtml("1", "x") },
+        { text: "-5 / 2", html: inlineFracHtml("-5", "2") },
+        { text: "5 / -2", html: inlineFracHtml("5", "-2") },
+        { text: "10 / 4", html: inlineFracHtml("10", "4") },
+        { text: "18 / 6", html: inlineFracHtml("18", "6") },
+        { text: "k / 3", html: inlineFracHtml("k", "3") },
+        { text: "36 / x", html: inlineFracHtml("36", "x") },
+        { text: "35 / x", html: inlineFracHtml("35", "x") },
+        { text: "k / x", html: inlineFracHtml("k", "x") },
+        { text: "y / x", html: inlineFracHtml("y", "x") }
+      ].sort((a, b) => b.text.length - a.text.length);
+    }
+
+    function formatMath(value) {
+      let html = escapeHtml(value);
+      mathReplacements().forEach(item => {
+        html = html.split(escapeHtml(item.text)).join(item.html);
+      });
+      return superscriptMath(html);
+    }
+
     function renderApp() {
       if (state.page < 0 || state.page >= PAGES.length) state.page = 0;
       const page = PAGES[state.page];
@@ -833,7 +952,7 @@
               <li>Vertical and horizontal asymptotes of rational functions</li>
               <li>Holes and removable discontinuities</li>
               <li>Direct and inverse variation equations</li>
-              <li>Parent functions f(x) = 1/x and f(x) = 1/x^2</li>
+              <li>${formatMath("Parent functions f(x) = 1/x and f(x) = 1/x^2")}</li>
               <li>Transformations of rational parent functions</li>
             </ul>
           </div>
@@ -848,24 +967,24 @@
       return `
         <article>
           <div class="note-band">
-            <h2>${index + 1}. ${escapeHtml(topic.title)}</h2>
-            <ul>${topic.notes.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul>
+            <h2>${index + 1}. ${formatMath(topic.title)}</h2>
+            <ul>${topic.notes.map(note => `<li>${formatMath(note)}</li>`).join("")}</ul>
           </div>
           <div class="topic-grid">
             <section class="panel walkthrough">
               <h3>Walkthrough</h3>
-              <p><span class="formula">${escapeHtml(topic.walkthrough.problem)}</span></p>
-              <ol>${topic.walkthrough.steps.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
+              <p><span class="formula">${formatMath(topic.walkthrough.problem)}</span></p>
+              <ol>${topic.walkthrough.steps.map(step => `<li>${formatMath(step)}</li>`).join("")}</ol>
             </section>
             <section class="panel you-try">
               <h3>You Try</h3>
-              <p>${escapeHtml(q.prompt)}</p>
+              <p>${formatMath(q.prompt)}</p>
               ${renderQuestionFields(q, rec)}
               <div class="actions">
                 <div class="small-note">Attempts used: ${rec.attempts} of 2</div>
                 ${rec.locked ? "" : `<button class="btn" type="button" onclick="checkQuestion('${q.id}')">Check Answer</button>`}
               </div>
-              ${rec.feedback ? `<div class="feedback ${rec.feedbackType}">${rec.feedback}</div>` : ""}
+              ${rec.feedback ? `<div class="feedback ${rec.feedbackType}">${formatMath(rec.feedback)}</div>` : ""}
             </section>
           </div>
         </article>
@@ -881,13 +1000,13 @@
       const key = field.key || `field${index}`;
       const value = rec.values[key] || "";
       const disabled = rec.locked ? "disabled" : "";
-      const label = escapeHtml(field.label);
+      const label = formatMath(field.label);
       if (field.kind === "select") {
         return `
           <div>
             <label for="${q.id}-${key}">${label}</label>
             <select id="${q.id}-${key}" ${disabled} onchange="setQuestionValue('${q.id}', '${key}', this.value)">
-              ${field.options.map(option => `<option value="${escapeAttr(option)}" ${option === value ? "selected" : ""}>${option ? escapeHtml(option) : "Choose one"}</option>`).join("")}
+              ${field.options.map(option => `<option value="${escapeAttr(option)}" ${option === value ? "selected" : ""}>${option ? formatMath(option) : "Choose one"}</option>`).join("")}
             </select>
           </div>
         `;
@@ -896,7 +1015,7 @@
         <div>
           <label for="${q.id}-${key}">${label}</label>
           <input id="${q.id}-${key}" type="text" inputmode="decimal" ${disabled} value="${escapeAttr(value)}" placeholder="${escapeAttr(field.placeholder || "")}" oninput="setQuestionValue('${q.id}', '${key}', this.value)">
-          <div class="field-help">Fractions like -5/2 or decimals like -2.5 are both accepted.</div>
+          <div class="field-help">Fractions like ${inlineFracHtml("-5", "2")} or decimals like -2.5 are both accepted.</div>
         </div>
       `;
     }
@@ -905,7 +1024,7 @@
       return `
         <div class="short-page">
           <h2>Final Reflection</h2>
-          <p>${escapeHtml(REFLECTION.prompt)}</p>
+          <p>${formatMath(REFLECTION.prompt)}</p>
           <label for="reflectionText">Teacher-review response</label>
           <textarea id="reflectionText" oninput="updateTeacherReview(this.value)">${escapeHtml(state.teacherReview.reflection)}</textarea>
           <div id="teacherStatus" class="feedback hint">Please write a complete response before continuing.</div>
@@ -938,7 +1057,7 @@
           <div class="status-list">
             ${scores.sections.map(section => `
               <div class="status-card">
-                <strong>${escapeHtml(section.title)}</strong>
+                <strong>${formatMath(section.title)}</strong>
                 <span>${formatPoints(section.earned)} / ${section.max}</span>
               </div>
             `).join("")}
@@ -1236,7 +1355,7 @@
           <table>
             <thead><tr><th>Section</th><th>Score</th><th>Skill</th></tr></thead>
             <tbody>
-              ${scores.sections.map(section => `<tr><td>${escapeHtml(section.title)}</td><td>${formatPoints(section.earned)} / ${section.max}</td><td>${escapeHtml(section.skill)}</td></tr>`).join("")}
+              ${scores.sections.map(section => `<tr><td>${formatMath(section.title)}</td><td>${formatPoints(section.earned)} / ${section.max}</td><td>${escapeHtml(section.skill)}</td></tr>`).join("")}
               <tr><td>Teacher-Review Reflection</td><td>${scores.teacherEarned} / ${ASSIGNMENT.teacherReviewPoints}</td><td>mathematical explanation</td></tr>
             </tbody>
           </table>
@@ -1251,7 +1370,7 @@
               ${TOPICS.map(topic => {
                 const rec = getQuestionRecord(topic.question);
                 const needsAnswer = rec.score < topic.question.max;
-                return `<tr><td>${escapeHtml(topic.title)}</td><td>${escapeHtml(studentAnswerText(topic.question))}</td><td>${formatPoints(rec.score)} / ${topic.question.max}</td><td>${needsAnswer ? escapeHtml(correctAnswerText(topic.question)) : "Correct"}</td></tr>`;
+                return `<tr><td>${formatMath(topic.title)}</td><td>${escapeHtml(studentAnswerText(topic.question))}</td><td>${formatPoints(rec.score)} / ${topic.question.max}</td><td>${needsAnswer ? escapeHtml(correctAnswerText(topic.question)) : "Correct"}</td></tr>`;
               }).join("")}
             </tbody>
           </table>
@@ -1259,8 +1378,8 @@
           <h2>Guided Work</h2>
           ${TOPICS.map(topic => `
             <div class="no-break">
-              <p><strong>${escapeHtml(topic.title)}:</strong> ${escapeHtml(topic.walkthrough.problem)}</p>
-              <ol>${topic.walkthrough.steps.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
+              <p><strong>${formatMath(topic.title)}:</strong> ${formatMath(topic.walkthrough.problem)}</p>
+              <ol>${topic.walkthrough.steps.map(step => `<li>${formatMath(step)}</li>`).join("")}</ol>
             </div>
           `).join("")}
 
