@@ -11,7 +11,6 @@
       --line: #d9e0ea;
       --paper: #ffffff;
       --soft: #f4f7fb;
-      --soft-2: #eef7f2;
       --brand: #2457a6;
       --brand-2: #163b73;
       --green: #207245;
@@ -56,6 +55,14 @@
       flex-wrap: wrap;
     }
 
+    .header-tools {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     h1 {
       font-size: 1.55rem;
       line-height: 1.18;
@@ -94,9 +101,7 @@
       white-space: nowrap;
     }
 
-    .progress-wrap {
-      margin-top: 16px;
-    }
+    .progress-wrap { margin-top: 16px; }
 
     .progress-label {
       display: flex;
@@ -192,13 +197,8 @@
       background: #fff;
     }
 
-    .walkthrough {
-      background: #fbfcff;
-    }
-
-    .you-try {
-      background: #fffdfa;
-    }
+    .walkthrough { background: #fbfcff; }
+    .you-try { background: #fffdfa; }
 
     .formula {
       display: inline-block;
@@ -217,9 +217,7 @@
       margin-top: 14px;
     }
 
-    .field-grid.single {
-      grid-template-columns: 1fr;
-    }
+    .field-grid.single { grid-template-columns: 1fr; }
 
     .field-help {
       color: var(--muted);
@@ -264,9 +262,15 @@
 
     .btn.secondary:hover:not(:disabled) { background: #e1e8f2; }
 
-    .btn.print {
-      background: var(--green);
+    .btn.print { background: var(--green); }
+
+    .btn.reset {
+      background: #fff0ee;
+      color: var(--red);
+      border: 1px solid #f1b8b3;
     }
+
+    .btn.reset:hover:not(:disabled) { background: #ffe2df; }
 
     .btn:disabled {
       opacity: 0.45;
@@ -352,6 +356,7 @@
       .field-grid { grid-template-columns: 1fr; }
       .page { padding: 16px; }
       .pill { white-space: normal; }
+      .header-tools { justify-content: flex-start; }
     }
 
     @media print {
@@ -377,7 +382,10 @@
           <h1>Chapter 11 Part 2 Review: Rational Functions and Variation</h1>
           <p class="meta">Algebra 2 Honors - Lessons 11.6 through 11.9</p>
         </div>
-        <div class="pill" id="versionPill">Version 1.0</div>
+        <div class="header-tools">
+          <div class="pill" id="versionPill">Version 1.0</div>
+          <button class="btn reset" id="resetBtn" type="button">Start Completely Over</button>
+        </div>
       </div>
       <div class="progress-wrap" aria-label="Assignment progress">
         <div class="progress-label"><span id="pageLabel">Page 1</span><span id="completionLabel">0% complete</span></div>
@@ -741,6 +749,19 @@
       localStorage.setItem(ASSIGNMENT.storageKey, JSON.stringify(state));
     }
 
+    function startCompletelyOver() {
+      const confirmed = window.confirm("Start completely over? This will delete all entered work for this assignment from this browser and return to the first page.");
+      if (!confirmed) return;
+      localStorage.removeItem(ASSIGNMENT.storageKey);
+      state = defaultState();
+      saveState();
+      const report = document.getElementById("printReport");
+      report.innerHTML = "";
+      report.setAttribute("aria-hidden", "true");
+      renderApp();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
     function todayIso() {
       const today = new Date();
       const offset = today.getTimezoneOffset();
@@ -1016,7 +1037,7 @@
 
     function parseMathNumber(value) {
       let text = String(value || "").trim().toLowerCase();
-      text = text.replace(/\s+/g, "").replace(/[−–—]/g, "-");
+      text = text.replace(/\s+/g, "").replace(/[\u2212\u2013\u2014]/g, "-");
       text = text.replace(/^[xyk]=/, "");
       if (/^-?\d+(\.\d+)?\/-?\d+(\.\d+)?$/.test(text)) {
         const parts = text.split("/").map(Number);
@@ -1189,7 +1210,7 @@
 
     function correctAnswerText(q) {
       if (q.mode === "unorderedNumbers") return q.answers.map(answer => `x = ${answer}`).join(" and ");
-      return q.fields.map(field => `${field.label} ${field.kind === "select" ? "" : ""}${field.answer}`).join("; ");
+      return q.fields.map(field => `${field.label} ${field.answer}`).join("; ");
     }
 
     function saveAsPdf() {
@@ -1202,7 +1223,6 @@
 
     function buildPrintReport() {
       const scores = calculateScores();
-      const missedRows = TOPICS.filter(topic => getQuestionRecord(topic.question).score < topic.question.max);
       const report = document.getElementById("printReport");
       report.innerHTML = `
         <div class="print-page">
@@ -1254,6 +1274,7 @@
 
     document.getElementById("backBtn").addEventListener("click", goBack);
     document.getElementById("nextBtn").addEventListener("click", goNext);
+    document.getElementById("resetBtn").addEventListener("click", startCompletelyOver);
     document.getElementById("versionPill").textContent = `Version ${ASSIGNMENT.version}`;
     renderApp();
   </script>
