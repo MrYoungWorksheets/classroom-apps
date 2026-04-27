@@ -264,7 +264,14 @@
     const algebra2RegularAssignments = [];
 
     // Algebra 2 Honors assignments
-    const algebra2HonorsAssignments = [];
+    const algebra2HonorsAssignments = [
+      {
+        title: 'Chapter 11 Part 2 Review',
+        description: 'Rational functions, asymptotes, holes, variation, parent functions, and transformations.',
+        link: 'algebra-2-honors-ch11-part-2-review/',
+        dueDate: '2026-04-28'
+      }
+    ];
 
     const courseSections = [
       { title: 'Financial Math', assignments: financialMathAssignments },
@@ -323,9 +330,10 @@
         const cards = section.assignments.length
           ? section.assignments.map(assignment => {
               const status = assignmentStatus(assignment.dueDate);
+              const pastDueTitle = status.className === 'past-due' ? ' (Past Due!)' : '';
               return `
                 <article class="assignment-card">
-                  <h3>${escapeHtml(assignment.title)}</h3>
+                  <h3>${escapeHtml(assignment.title)}${pastDueTitle}</h3>
                   <p class="muted">${escapeHtml(assignment.description)}</p>
                   <div class="card-meta">
                     <span>Due: ${escapeHtml(formatDate(assignment.dueDate))}</span>
