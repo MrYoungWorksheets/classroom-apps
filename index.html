@@ -17,7 +17,7 @@
       --red: #a33d3d;
       --line: #d5e1ed;
       --soft: #f6f9fc;
-      --shadow: 0 12px 28px rgba(24, 44, 68, 0.12);
+      --shadow: 0 12px 28px rgba(24, 44, 68, 0.18);
     }
 
     * {
@@ -29,24 +29,42 @@
       min-height: 100vh;
       font-family: Arial, Helvetica, sans-serif;
       color: var(--ink);
-      background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+      background-color: #101820;
+      background-image: url('assets/bg-main.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      background-repeat: no-repeat;
       font-size: 18px;
       line-height: 1.45;
+      position: relative;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background: rgba(0, 0, 0, 0.62);
     }
 
     main {
       width: min(1180px, calc(100% - 28px));
       margin: 0 auto;
       padding: 28px 0;
+      position: relative;
+      z-index: 1;
     }
 
     .hero,
     .course-column,
     .links-panel {
-      background: var(--paper);
-      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid rgba(213, 225, 237, 0.9);
       border-radius: 8px;
       box-shadow: var(--shadow);
+      backdrop-filter: blur(2px);
     }
 
     .hero {
@@ -115,6 +133,11 @@
       margin: 0 0 12px;
     }
 
+    .section-block > .section-title {
+      color: #ffffff;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+    }
+
     .course-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -126,6 +149,22 @@
       display: grid;
       gap: 14px;
       align-content: start;
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.94)),
+        url('assets/bg-main.jpg') center / cover no-repeat;
+    }
+
+    .course-column:nth-child(1) {
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.93), rgba(255, 255, 255, 0.93)),
+        url('assets/bg-finance.jpg') center / cover no-repeat;
+    }
+
+    .course-column:nth-child(2),
+    .course-column:nth-child(3) {
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.93), rgba(255, 255, 255, 0.93)),
+        url('assets/bg-alg2.jpg') center / cover no-repeat;
     }
 
     .assignment-list {
@@ -135,7 +174,7 @@
 
     .assignment-card {
       border: 1px solid #c7d8ea;
-      background: var(--soft);
+      background: rgba(246, 249, 252, 0.97);
       border-radius: 8px;
       padding: 15px;
       display: grid;
@@ -203,7 +242,7 @@
     .empty-note {
       border: 1px dashed #c5d4e4;
       color: var(--muted);
-      background: #fafcff;
+      background: rgba(250, 252, 255, 0.96);
       border-radius: 8px;
       padding: 14px;
     }
