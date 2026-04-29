@@ -6,60 +6,44 @@
   <title>Audio Math Visualizer</title>
   <style>
     :root {
-      --panel-bg: rgba(10, 14, 30, 0.78);
-      --panel-border: rgba(149, 198, 255, 0.18);
-      --text-main: #eef4ff;
-      --text-soft: #adc3ea;
-      --accent: #7ee7ff;
-      --accent-strong: #7c8dff;
-      --shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+      --panel-bg: rgba(8, 12, 30, 0.86);
+      --panel-border: rgba(126, 231, 255, 0.24);
+      --text-main: #f4fbff;
+      --text-soft: #b8cbef;
+      --accent: #7effec;
+      --accent-hot: #ff4fd8;
+      --shadow: 0 18px 45px rgba(0, 0, 0, 0.42);
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     html,
     body {
       margin: 0;
       min-height: 100%;
       background:
-        radial-gradient(circle at top, rgba(56, 86, 180, 0.18), transparent 40%),
-        radial-gradient(circle at bottom right, rgba(10, 175, 214, 0.14), transparent 36%),
-        linear-gradient(180deg, #03060f 0%, #050817 45%, #02040b 100%);
+        radial-gradient(circle at top left, rgba(0, 255, 236, 0.16), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(255, 79, 216, 0.14), transparent 38%),
+        linear-gradient(180deg, #01030a 0%, #050817 48%, #01020a 100%);
       color: var(--text-main);
       font-family: "Trebuchet MS", "Segoe UI", sans-serif;
       overflow: hidden;
     }
 
-    body {
-      position: relative;
-    }
-
-    #app {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    #visualizerCanvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
+    #app { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+    #visualizerCanvas { display: block; width: 100%; height: 100%; }
 
     .overlay {
       position: absolute;
       inset: 0 auto auto 0;
-      width: min(440px, calc(100% - 24px));
+      width: min(450px, calc(100% - 24px));
       max-height: calc(100vh - 24px);
       overflow: auto;
       margin: 12px;
       padding: 14px 16px 16px;
       border: 1px solid var(--panel-border);
       border-radius: 18px;
-      background: linear-gradient(180deg, rgba(17, 23, 47, 0.92), rgba(7, 10, 24, 0.9));
+      background: linear-gradient(180deg, rgba(15, 22, 48, 0.94), rgba(5, 8, 22, 0.92));
       box-shadow: var(--shadow);
       backdrop-filter: blur(10px);
       z-index: 2;
@@ -77,28 +61,10 @@
       color: var(--text-main);
     }
 
-    .overlay summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .summary-note {
-      font-size: 0.82rem;
-      font-weight: 500;
-      color: var(--text-soft);
-    }
-
-    .panel-content {
-      margin-top: 14px;
-      display: grid;
-      gap: 12px;
-    }
-
-    .subtitle {
-      margin: 0;
-      font-size: 0.92rem;
-      line-height: 1.4;
-      color: var(--text-soft);
-    }
+    .overlay summary::-webkit-details-marker { display: none; }
+    .summary-note { font-size: 0.82rem; font-weight: 500; color: var(--text-soft); }
+    .panel-content { margin-top: 14px; display: grid; gap: 12px; }
+    .subtitle { margin: 0; font-size: 0.92rem; line-height: 1.4; color: var(--text-soft); }
 
     .file-row,
     .button-row,
@@ -110,14 +76,12 @@
       align-items: center;
     }
 
-    .button-row button,
+    button,
     .file-label,
-    .select-input,
-    .tiny-button,
-    .info-button {
-      border: 1px solid rgba(126, 231, 255, 0.22);
+    .select-input {
+      border: 1px solid rgba(126, 255, 236, 0.24);
       border-radius: 12px;
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.065);
       color: var(--text-main);
       font: inherit;
     }
@@ -128,43 +92,30 @@
       padding: 10px 14px;
     }
 
+    button,
     .file-label {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
       cursor: pointer;
-      transition: transform 0.15s ease, background 0.15s ease;
+      transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
     }
 
+    button:hover,
     .file-label:hover,
-    .button-row button:hover,
-    .select-input:hover,
-    .tiny-button:hover,
-    .info-button:hover {
-      background: rgba(255, 255, 255, 0.1);
+    .select-input:hover {
+      background: rgba(126, 255, 236, 0.13);
+      border-color: rgba(126, 255, 236, 0.42);
       transform: translateY(-1px);
     }
 
-    .button-row button,
-    .tiny-button,
-    .info-button {
-      cursor: pointer;
-      transition: transform 0.15s ease, background 0.15s ease;
-    }
-
-    .button-row button:disabled,
-    .tiny-button:disabled {
+    button:disabled {
       cursor: not-allowed;
-      opacity: 0.55;
+      opacity: 0.5;
       transform: none;
     }
 
-    .tiny-button {
-      min-height: 34px;
-      padding: 8px 10px;
-      border-radius: 10px;
-    }
+    .file-label { display: inline-flex; align-items: center; justify-content: center; }
+    input[type="file"] { display: none; }
 
+    .tiny-button { min-height: 34px; padding: 8px 10px; border-radius: 10px; }
     .info-button {
       width: 24px;
       height: 24px;
@@ -177,29 +128,25 @@
       font-weight: 700;
     }
 
-    input[type="file"] {
-      display: none;
-    }
-
     .status-box,
     .storage-note,
+    .now-playing,
     .library-section,
     .help-popup {
       border-radius: 12px;
-      border: 1px solid rgba(126, 231, 255, 0.15);
+      border: 1px solid rgba(126, 255, 236, 0.16);
     }
 
     .status-box {
       padding: 10px 12px;
-      background: rgba(111, 144, 255, 0.09);
+      background: rgba(126, 255, 236, 0.07);
       font-size: 0.9rem;
       line-height: 1.45;
       color: var(--text-soft);
     }
 
-    .status-box strong {
-      color: var(--text-main);
-    }
+    .status-box strong,
+    .now-playing strong { color: var(--text-main); }
 
     .storage-note,
     .library-note,
@@ -211,22 +158,21 @@
       color: var(--text-soft);
     }
 
-    .storage-note {
-      padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.05);
-    }
+    .storage-note { padding: 10px 12px; background: rgba(255, 255, 255, 0.05); }
 
-    .control-grid {
-      display: grid;
-      grid-template-columns: 1fr;
+    .now-playing {
+      display: flex;
+      justify-content: space-between;
       gap: 10px;
+      padding: 9px 11px;
+      background: rgba(255, 79, 216, 0.075);
+      color: var(--text-soft);
+      font-size: 0.88rem;
+      line-height: 1.35;
     }
 
-    .control-block {
-      display: grid;
-      gap: 6px;
-    }
-
+    .control-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .control-block { display: grid; gap: 6px; }
     .control-block label {
       display: flex;
       justify-content: space-between;
@@ -235,71 +181,37 @@
       color: var(--text-soft);
     }
 
-    .setting-label {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    input[type="range"] {
-      width: 100%;
-      accent-color: var(--accent);
-    }
+    .setting-label { display: inline-flex; align-items: center; gap: 6px; }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
 
     .select-input {
       min-height: 40px;
       width: 100%;
       padding: 9px 12px;
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(7, 14, 34, 0.98);
       color: var(--text-main);
       -webkit-text-fill-color: var(--text-main);
       appearance: none;
     }
 
-    .select-input option {
-      color: #08111f;
-      background: #d9ebff;
-    }
-
-    .select-input:focus {
-      outline: 2px solid rgba(126, 231, 255, 0.45);
-      outline-offset: 2px;
-    }
+    .select-input option { color: #f4fbff; background: #06111f; }
+    .select-input:focus { outline: 2px solid rgba(126, 255, 236, 0.48); outline-offset: 2px; }
 
     .help-popup {
       padding: 8px 10px;
-      background: rgba(4, 8, 20, 0.92);
+      background: rgba(4, 8, 20, 0.94);
       color: var(--text-soft);
       font-size: 0.8rem;
       line-height: 1.4;
     }
 
     .help-popup[hidden],
-    .library-section[hidden] {
-      display: none;
-    }
+    .library-section[hidden] { display: none; }
 
-    .library-section {
-      display: grid;
-      gap: 10px;
-      padding: 12px;
-      background: rgba(255, 255, 255, 0.04);
-    }
-
-    .library-header {
-      justify-content: space-between;
-    }
-
-    .library-title {
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: var(--text-main);
-    }
-
-    .song-list {
-      display: grid;
-      gap: 8px;
-    }
+    .library-section { display: grid; gap: 10px; padding: 12px; background: rgba(255, 255, 255, 0.04); }
+    .library-header { justify-content: space-between; }
+    .library-title { font-size: 0.95rem; font-weight: 700; color: var(--text-main); }
+    .song-list { display: grid; gap: 8px; }
 
     .song-row {
       display: flex;
@@ -312,18 +224,8 @@
       border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
-    .song-info {
-      display: grid;
-      gap: 2px;
-      min-width: 0;
-    }
-
-    .song-name {
-      font-size: 0.9rem;
-      font-weight: 700;
-      color: var(--text-main);
-      word-break: break-word;
-    }
+    .song-info { display: grid; gap: 2px; min-width: 0; }
+    .song-name { font-size: 0.9rem; font-weight: 700; color: var(--text-main); word-break: break-word; }
 
     .hud {
       position: absolute;
@@ -331,46 +233,25 @@
       bottom: 16px;
       display: grid;
       gap: 6px;
-      min-width: 170px;
+      min-width: 180px;
+      max-width: min(360px, calc(100vw - 32px));
       padding: 12px 14px;
       border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      background: rgba(7, 10, 24, 0.52);
+      border: 1px solid rgba(126, 255, 236, 0.16);
+      background: rgba(5, 9, 24, 0.58);
       color: var(--text-main);
       box-shadow: var(--shadow);
       z-index: 1;
       backdrop-filter: blur(8px);
     }
 
-    .hud-line {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      font-size: 0.84rem;
-    }
-
-    .hud-line span:last-child {
-      color: var(--accent);
-    }
+    .hud-line { display: flex; justify-content: space-between; gap: 10px; font-size: 0.84rem; }
+    .hud-line span:last-child { color: var(--accent); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     @media (max-width: 700px) {
-      .overlay {
-        width: calc(100% - 16px);
-        max-height: calc(100vh - 16px);
-        margin: 8px;
-        padding: 12px;
-      }
-
-      .hud {
-        right: 8px;
-        left: 8px;
-        bottom: 8px;
-        min-width: 0;
-      }
-
-      .song-row {
-        align-items: flex-start;
-      }
+      .overlay { width: calc(100% - 16px); max-height: calc(100vh - 16px); margin: 8px; padding: 12px; }
+      .hud { right: 8px; left: 8px; bottom: 8px; min-width: 0; }
+      .song-row { align-items: flex-start; }
     }
   </style>
 </head>
@@ -395,7 +276,13 @@
 
         <p class="storage-note">Uploaded songs are temporary unless saved locally in this browser. This page cannot upload songs to GitHub automatically.</p>
 
+        <div class="now-playing">
+          <span><strong>Now Playing:</strong></span>
+          <span id="nowPlayingText">No song selected</span>
+        </div>
+
         <div class="button-row">
+          <button id="randomSongButton" type="button">Random Song</button>
           <button id="playButton" type="button">Play</button>
           <button id="pauseButton" type="button" disabled>Pause</button>
           <button id="stopButton" type="button" disabled>Stop</button>
@@ -427,30 +314,38 @@
           <div class="control-block">
             <label for="sensitivitySlider">
               <span class="setting-label">Sensitivity <button type="button" class="info-button" data-help-target="sensitivityHelp" aria-label="About sensitivity">?</button></span>
-              <span id="sensitivityValue">1.20</span>
+              <span id="sensitivityValue">1.45</span>
             </label>
             <div class="help-popup" id="sensitivityHelp" hidden>Controls how strongly the visuals react to the music.</div>
-            <input id="sensitivitySlider" type="range" min="0.6" max="2.5" step="0.05" value="1.2" />
+            <input id="sensitivitySlider" type="range" min="0.35" max="3.5" step="0.05" value="1.45" />
           </div>
 
           <div class="control-block">
             <label for="colorSlider">
               <span class="setting-label">Color intensity <button type="button" class="info-button" data-help-target="colorHelp" aria-label="About color intensity">?</button></span>
-              <span id="colorValue">1.10</span>
+              <span id="colorValue">1.45</span>
             </label>
             <div class="help-popup" id="colorHelp" hidden>Controls how bright and saturated the colors become.</div>
-            <input id="colorSlider" type="range" min="0.5" max="2.2" step="0.05" value="1.1" />
+            <input id="colorSlider" type="range" min="0.35" max="3" step="0.05" value="1.45" />
           </div>
 
           <div class="control-block">
             <label for="densitySlider">
               <span class="setting-label">Shape density <button type="button" class="info-button" data-help-target="densityHelp" aria-label="About shape density">?</button></span>
-              <span id="densityValue">0.95</span>
+              <span id="densityValue">1.05</span>
             </label>
             <div class="help-popup" id="densityHelp" hidden>Controls how many shapes and particles appear.</div>
-            <input id="densitySlider" type="range" min="0.4" max="1.8" step="0.05" value="0.95" />
+            <input id="densitySlider" type="range" min="0.25" max="2.5" step="0.05" value="1.05" />
           </div>
         </div>
+
+        <section id="teacherLibrarySection" class="library-section" aria-labelledby="teacherLibraryTitle" hidden>
+          <div class="library-header">
+            <span class="library-title" id="teacherLibraryTitle">Teacher Audio Library</span>
+          </div>
+          <p class="library-note">Permanent audio files managed in assets/audio. Only the selected song is loaded.</p>
+          <div id="teacherSongsList" class="song-list"></div>
+        </section>
 
         <section class="library-section" aria-labelledby="savedSongsTitle">
           <div class="library-header">
@@ -458,63 +353,62 @@
             <button id="clearSavedSongsButton" type="button" class="tiny-button">Clear Saved Songs</button>
           </div>
           <p class="library-note">Browser-only storage on this device. Saved songs are not uploaded online or shared across devices.</p>
-          <div id="savedSongsList" class="song-list">
-            <div class="empty-library">No saved songs yet.</div>
-          </div>
-        </section>
-
-        <section id="teacherLibrarySection" class="library-section" aria-labelledby="teacherLibraryTitle" hidden>
-          <div class="library-header">
-            <span class="library-title" id="teacherLibraryTitle">Teacher Audio Library</span>
-          </div>
-          <p class="library-note">These are permanent files managed by the teacher in this site folder. Add them through the array in the code.</p>
-          <div id="teacherSongsList" class="song-list"></div>
+          <div id="savedSongsList" class="song-list"><div class="empty-library">No saved songs yet.</div></div>
         </section>
       </div>
     </details>
 
     <div class="hud" aria-live="polite">
-      <div class="hud-line"><span>File</span><span id="hudFile">None</span></div>
+      <div class="hud-line"><span>Now Playing</span><span id="hudFile">None</span></div>
       <div class="hud-line"><span>Bass</span><span id="hudBass">0%</span></div>
       <div class="hud-line"><span>Mids</span><span id="hudMids">0%</span></div>
       <div class="hud-line"><span>Treble</span><span id="hudTreble">0%</span></div>
       <div class="hud-line"><span>Volume</span><span id="hudVolume">0%</span></div>
     </div>
 
-    <audio id="audioElement" preload="metadata"></audio>
+    <audio id="audioElement" preload="none"></audio>
   </div>
 
   <script>
-    const app = document.getElementById("app");
-    const canvas = document.getElementById("visualizerCanvas");
+    // Teacher-managed permanent audio files belong here after they are committed to assets/audio/.
+    // This main branch currently exposes only assets/audio/.gitkeep, so no MP3/WAV filenames are listed yet.
+    const teacherAudioLibrary = [
+      // { title: "Villain Arc", file: "assets/audio/villain-arc.wav" }
+    ];
+
+    const $ = (id) => document.getElementById(id);
+    const app = $("app");
+    const canvas = $("visualizerCanvas");
     const ctx = canvas.getContext("2d");
-    const audioFileInput = document.getElementById("audioFile");
-    const audioElement = document.getElementById("audioElement");
-    const saveSongButton = document.getElementById("saveSongButton");
-    const playButton = document.getElementById("playButton");
-    const pauseButton = document.getElementById("pauseButton");
-    const stopButton = document.getElementById("stopButton");
-    const restartButton = document.getElementById("restartButton");
-    const fullscreenButton = document.getElementById("fullscreenButton");
-    const clearSavedSongsButton = document.getElementById("clearSavedSongsButton");
-    const savedSongsList = document.getElementById("savedSongsList");
-    const teacherLibrarySection = document.getElementById("teacherLibrarySection");
-    const teacherSongsList = document.getElementById("teacherSongsList");
-    const statusTitle = document.getElementById("statusTitle");
-    const statusText = document.getElementById("statusText");
-    const modeSelect = document.getElementById("modeSelect");
-    const sensitivitySlider = document.getElementById("sensitivitySlider");
-    const colorSlider = document.getElementById("colorSlider");
-    const densitySlider = document.getElementById("densitySlider");
-    const sensitivityValue = document.getElementById("sensitivityValue");
-    const colorValue = document.getElementById("colorValue");
-    const densityValue = document.getElementById("densityValue");
-    const modeValue = document.getElementById("modeValue");
-    const hudFile = document.getElementById("hudFile");
-    const hudBass = document.getElementById("hudBass");
-    const hudMids = document.getElementById("hudMids");
-    const hudTreble = document.getElementById("hudTreble");
-    const hudVolume = document.getElementById("hudVolume");
+    const audioElement = $("audioElement");
+    const audioFileInput = $("audioFile");
+    const saveSongButton = $("saveSongButton");
+    const randomSongButton = $("randomSongButton");
+    const playButton = $("playButton");
+    const pauseButton = $("pauseButton");
+    const stopButton = $("stopButton");
+    const restartButton = $("restartButton");
+    const fullscreenButton = $("fullscreenButton");
+    const clearSavedSongsButton = $("clearSavedSongsButton");
+    const teacherLibrarySection = $("teacherLibrarySection");
+    const teacherSongsList = $("teacherSongsList");
+    const savedSongsList = $("savedSongsList");
+    const nowPlayingText = $("nowPlayingText");
+    const statusTitle = $("statusTitle");
+    const statusText = $("statusText");
+    const modeSelect = $("modeSelect");
+    const sensitivitySlider = $("sensitivitySlider");
+    const colorSlider = $("colorSlider");
+    const densitySlider = $("densitySlider");
+    const sensitivityValue = $("sensitivityValue");
+    const colorValue = $("colorValue");
+    const densityValue = $("densityValue");
+    const modeValue = $("modeValue");
+    const hudFile = $("hudFile");
+    const hudBass = $("hudBass");
+    const hudMids = $("hudMids");
+    const hudTreble = $("hudTreble");
+    const hudVolume = $("hudVolume");
 
     let audioContext = null;
     let analyser = null;
@@ -525,28 +419,24 @@
     let loadedFileName = "";
     let currentObjectUrl = "";
     let currentAudioBlob = null;
+    let currentTeacherTrackIndex = -1;
+    let hasShownAnalysisError = false;
     let savedSongs = [];
     let smoothedBass = 0;
     let smoothedMids = 0;
     let smoothedTreble = 0;
     let smoothedVolume = 0;
-    let analysisErrorShown = false;
 
-    const teacherAudioLibrary = [
-      // { title: "Villain Arc", file: "assets/audio/villain-arc.wav" }
-    ];
-
-    const SONG_LIBRARY_DB = "audioMathVisualizerLibrary";
-    const SONG_LIBRARY_STORE = "songs";
-    let songsDbPromise = null;
+    const DB_NAME = "audioMathVisualizerLibrary";
+    const STORE_NAME = "songs";
+    let dbPromise = null;
 
     const particles = [];
-    const starCount = 120;
-    const stars = Array.from({ length: starCount }, () => ({
+    const stars = Array.from({ length: 130 }, () => ({
       x: Math.random(),
       y: Math.random(),
-      size: Math.random() * 1.5 + 0.4,
-      drift: Math.random() * 0.15 + 0.04
+      size: Math.random() * 1.7 + 0.35,
+      drift: Math.random() * 0.17 + 0.04
     }));
 
     function escapeHtml(value) {
@@ -554,7 +444,7 @@
         "&": "&amp;",
         "<": "&lt;",
         ">": "&gt;",
-        '"': "&quot;",
+        "\"": "&quot;",
         "'": "&#39;"
       }[character]));
     }
@@ -564,11 +454,18 @@
       statusText.textContent = " " + message;
     }
 
+    function updateNowPlaying(name) {
+      const displayName = name || "No song selected";
+      nowPlayingText.textContent = displayName;
+      hudFile.textContent = displayName === "No song selected" ? "None" : displayName;
+    }
+
     function updateButtonStates(isLoaded, isPlaying) {
       playButton.disabled = !isLoaded || isPlaying;
       pauseButton.disabled = !isLoaded || !isPlaying;
       stopButton.disabled = !isLoaded;
       restartButton.disabled = !isLoaded;
+      randomSongButton.disabled = teacherAudioLibrary.length === 0;
     }
 
     function updateSliderLabels() {
@@ -586,11 +483,19 @@
       updateHud({ bass: 0, mids: 0, treble: 0, volume: 0 });
     }
 
-    function updateHud(levels) {
-      hudBass.textContent = Math.round(levels.bass * 100) + "%";
-      hudMids.textContent = Math.round(levels.mids * 100) + "%";
-      hudTreble.textContent = Math.round(levels.treble * 100) + "%";
-      hudVolume.textContent = Math.round(levels.volume * 100) + "%";
+    function safelyRestartFromBeginning() {
+      try {
+        audioElement.currentTime = 0;
+      } catch (error) {
+        // Lazy-loaded teacher tracks may not know their duration yet.
+      }
+    }
+
+    function stopForSongSwitch() {
+      audioElement.pause();
+      safelyRestartFromBeginning();
+      resetAudioLevels();
+      updateButtonStates(false, false);
     }
 
     function revokeCurrentObjectUrl() {
@@ -611,54 +516,22 @@
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     }
 
-    function createParticles() {
-      const density = Number(densitySlider.value);
-      const desiredCount = Math.max(18, Math.floor(50 * density));
-      if (particles.length > desiredCount) {
-        particles.length = desiredCount;
-      }
-      while (particles.length < desiredCount) {
-        particles.push({
-          angle: Math.random() * Math.PI * 2,
-          distance: Math.random() * 220 + 30,
-          speed: Math.random() * 0.008 + 0.003,
-          size: Math.random() * 2.6 + 0.8,
-          hueOffset: Math.random() * 120
-        });
-      }
-    }
-
-    function averageRange(data, startRatio, endRatio) {
-      if (!data || !data.length) {
-        return 0;
-      }
-      const start = Math.floor(data.length * startRatio);
-      const end = Math.max(start + 1, Math.floor(data.length * endRatio));
-      let total = 0;
-      for (let i = start; i < end; i += 1) {
-        total += data[i];
-      }
-      return total / (end - start) / 255;
-    }
-
     function openSongsDb() {
-      if (!("indexedDB" in window)) {
-        return Promise.resolve(null);
-      }
-      if (!songsDbPromise) {
-        songsDbPromise = new Promise((resolve, reject) => {
-          const request = window.indexedDB.open(SONG_LIBRARY_DB, 1);
+      if (!("indexedDB" in window)) return Promise.resolve(null);
+      if (!dbPromise) {
+        dbPromise = new Promise((resolve, reject) => {
+          const request = indexedDB.open(DB_NAME, 1);
           request.onupgradeneeded = () => {
             const db = request.result;
-            if (!db.objectStoreNames.contains(SONG_LIBRARY_STORE)) {
-              db.createObjectStore(SONG_LIBRARY_STORE, { keyPath: "id" });
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+              db.createObjectStore(STORE_NAME, { keyPath: "id" });
             }
           };
           request.onsuccess = () => resolve(request.result);
           request.onerror = () => reject(request.error);
         }).catch(() => null);
       }
-      return songsDbPromise;
+      return dbPromise;
     }
 
     function requestToPromise(request) {
@@ -683,35 +556,24 @@
         renderSavedSongs();
         return;
       }
-      const transaction = db.transaction(SONG_LIBRARY_STORE, "readonly");
-      const songs = await requestToPromise(transaction.objectStore(SONG_LIBRARY_STORE).getAll());
+      const transaction = db.transaction(STORE_NAME, "readonly");
+      const songs = await requestToPromise(transaction.objectStore(STORE_NAME).getAll());
       savedSongs = songs.sort((a, b) => (b.savedAt || "").localeCompare(a.savedAt || ""));
       renderSavedSongs();
     }
 
-    function formatSavedDate(isoText) {
-      if (!isoText) {
-        return "";
-      }
-      return new Date(isoText).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric"
-      });
-    }
-
     async function storeSongLocally() {
       if (!currentAudioBlob) {
-        updateStatus("Load an uploaded MP3 or WAV file first, then save it to this browser if you want it later.", "Nothing to save yet.");
+        updateStatus("Load an uploaded MP3 or WAV file first, then save it locally if you want it later.", "Nothing to save yet.");
         return;
       }
       const db = await openSongsDb();
       if (!db) {
-        updateStatus("This browser does not support local saved songs here. You can still play uploaded files temporarily.", "Local saving unavailable.");
+        updateStatus("This browser does not support local saved songs here. You can still upload and play files temporarily.", "Local saving unavailable.");
         return;
       }
-      const transaction = db.transaction(SONG_LIBRARY_STORE, "readwrite");
-      transaction.objectStore(SONG_LIBRARY_STORE).put({
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      transaction.objectStore(STORE_NAME).put({
         id: String(Date.now()) + "-" + Math.random().toString(16).slice(2),
         name: loadedFileName,
         blob: currentAudioBlob,
@@ -719,16 +581,14 @@
       });
       await transactionToPromise(transaction);
       await loadSavedSongsFromDb();
-      updateStatus("This song is now saved only in this browser on this device.", "Song saved locally.");
+      updateStatus("This song is saved only in this browser on this device.", "Song saved locally.");
     }
 
     async function deleteSavedSong(songId) {
       const db = await openSongsDb();
-      if (!db) {
-        return;
-      }
-      const transaction = db.transaction(SONG_LIBRARY_STORE, "readwrite");
-      transaction.objectStore(SONG_LIBRARY_STORE).delete(songId);
+      if (!db) return;
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      transaction.objectStore(STORE_NAME).delete(songId);
       await transactionToPromise(transaction);
       await loadSavedSongsFromDb();
       updateStatus("The saved song was removed from this browser.", "Saved song deleted.");
@@ -736,148 +596,143 @@
 
     async function clearSavedSongs() {
       const db = await openSongsDb();
-      if (!db) {
-        return;
-      }
-      const transaction = db.transaction(SONG_LIBRARY_STORE, "readwrite");
-      transaction.objectStore(SONG_LIBRARY_STORE).clear();
+      if (!db) return;
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      transaction.objectStore(STORE_NAME).clear();
       await transactionToPromise(transaction);
       await loadSavedSongsFromDb();
       updateStatus("All browser-only saved songs were cleared from this device.", "Saved songs cleared.");
     }
 
+    function formatDate(isoText) {
+      if (!isoText) return "";
+      return new Date(isoText).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    }
+
     function renderSavedSongs() {
       saveSongButton.disabled = !currentAudioBlob;
       if (!("indexedDB" in window)) {
-        saveSongButton.disabled = true;
         clearSavedSongsButton.disabled = true;
-        savedSongsList.innerHTML = '<div class="empty-library">Local saved songs are not available in this browser.</div>';
+        savedSongsList.innerHTML = "<div class=\"empty-library\">Local saved songs are not available in this browser.</div>";
         return;
       }
       clearSavedSongsButton.disabled = savedSongs.length === 0;
       if (!savedSongs.length) {
-        savedSongsList.innerHTML = '<div class="empty-library">No saved songs yet.</div>';
+        savedSongsList.innerHTML = "<div class=\"empty-library\">No saved songs yet.</div>";
         return;
       }
       savedSongsList.innerHTML = savedSongs.map((song) => (
-        '<div class="song-row">' +
-          '<div class="song-info">' +
-            '<div class="song-name">' + escapeHtml(song.name) + '</div>' +
-            '<div class="song-meta">Saved ' + escapeHtml(formatSavedDate(song.savedAt)) + ' in this browser</div>' +
-          '</div>' +
-          '<div class="song-actions">' +
-            '<button type="button" class="tiny-button" data-play-saved="' + escapeHtml(song.id) + '">Play</button>' +
-            '<button type="button" class="tiny-button" data-delete-saved="' + escapeHtml(song.id) + '">Delete</button>' +
-          '</div>' +
-        '</div>'
+        "<div class=\"song-row\">" +
+          "<div class=\"song-info\">" +
+            "<div class=\"song-name\">" + escapeHtml(song.name) + "</div>" +
+            "<div class=\"song-meta\">Saved " + escapeHtml(formatDate(song.savedAt)) + " in this browser</div>" +
+          "</div>" +
+          "<div class=\"song-actions\">" +
+            "<button type=\"button\" class=\"tiny-button\" data-load-saved=\"" + escapeHtml(song.id) + "\">Play</button>" +
+            "<button type=\"button\" class=\"tiny-button\" data-delete-saved=\"" + escapeHtml(song.id) + "\">Delete</button>" +
+          "</div>" +
+        "</div>"
       )).join("");
-
-      savedSongsList.querySelectorAll("[data-play-saved]").forEach((button) => {
+      savedSongsList.querySelectorAll("[data-load-saved]").forEach((button) => {
         button.addEventListener("click", () => {
-          const song = savedSongs.find((entry) => entry.id === button.dataset.playSaved);
-          if (song) {
-            loadAudioBlob(song.blob, song.name, "Saved song ready.");
-          }
+          const song = savedSongs.find((entry) => entry.id === button.dataset.loadSaved);
+          if (song) loadAudioBlob(song.blob, song.name, "Saved song ready. Press Play when you are ready.");
         });
       });
-
       savedSongsList.querySelectorAll("[data-delete-saved]").forEach((button) => {
-        button.addEventListener("click", () => {
-          deleteSavedSong(button.dataset.deleteSaved).catch(() => {
-            updateStatus("The saved song could not be deleted right now.", "Delete failed.");
-          });
-        });
+        button.addEventListener("click", () => deleteSavedSong(button.dataset.deleteSaved).catch(() => {
+          updateStatus("The saved song could not be deleted right now.", "Delete failed.");
+        }));
       });
     }
 
     function renderTeacherLibrary() {
       if (!teacherAudioLibrary.length) {
         teacherLibrarySection.hidden = true;
+        randomSongButton.disabled = true;
         return;
       }
       teacherLibrarySection.hidden = false;
       teacherSongsList.innerHTML = teacherAudioLibrary.map((song, index) => (
-        '<div class="song-row">' +
-          '<div class="song-info">' +
-            '<div class="song-name">' + escapeHtml(song.title) + '</div>' +
-            '<div class="song-meta">' + escapeHtml(song.file) + '</div>' +
-          '</div>' +
-          '<div class="song-actions">' +
-            '<button type="button" class="tiny-button" data-play-teacher="' + index + '">Play</button>' +
-          '</div>' +
-        '</div>'
+        "<div class=\"song-row\">" +
+          "<div class=\"song-info\">" +
+            "<div class=\"song-name\">" + escapeHtml(song.title) + "</div>" +
+            "<div class=\"song-meta\">" + escapeHtml(song.file) + "</div>" +
+          "</div>" +
+          "<div class=\"song-actions\">" +
+            "<button type=\"button\" class=\"tiny-button\" data-load-teacher=\"" + index + "\">Load</button>" +
+          "</div>" +
+        "</div>"
       )).join("");
-
-      teacherSongsList.querySelectorAll("[data-play-teacher]").forEach((button) => {
-        button.addEventListener("click", () => {
-          const song = teacherAudioLibrary[Number(button.dataset.playTeacher)];
-          if (song) {
-            loadTeacherTrack(song);
-          }
-        });
+      teacherSongsList.querySelectorAll("[data-load-teacher]").forEach((button) => {
+        button.addEventListener("click", () => loadTeacherTrack(teacherAudioLibrary[Number(button.dataset.loadTeacher)], Number(button.dataset.loadTeacher)));
       });
     }
 
     function bindHelpButtons() {
       const buttons = Array.from(document.querySelectorAll("[data-help-target]"));
-      function closeAllHelp() {
+      function closeAll(exceptId) {
         buttons.forEach((button) => {
-          button.setAttribute("aria-expanded", "false");
-          document.getElementById(button.dataset.helpTarget).hidden = true;
+          const popup = $(button.dataset.helpTarget);
+          const keepOpen = exceptId && button.dataset.helpTarget === exceptId;
+          if (popup) popup.hidden = !keepOpen;
+          button.setAttribute("aria-expanded", keepOpen ? "true" : "false");
         });
       }
       buttons.forEach((button) => {
         button.setAttribute("aria-expanded", "false");
         button.addEventListener("click", (event) => {
           event.stopPropagation();
-          const popup = document.getElementById(button.dataset.helpTarget);
-          const shouldOpen = popup.hidden;
-          closeAllHelp();
-          popup.hidden = !shouldOpen;
-          button.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+          const popup = $(button.dataset.helpTarget);
+          closeAll(popup && popup.hidden ? button.dataset.helpTarget : "");
         });
       });
       document.addEventListener("click", (event) => {
-        if (!event.target.closest("[data-help-target]") && !event.target.closest(".help-popup")) {
-          closeAllHelp();
-        }
+        if (!event.target.closest("[data-help-target]") && !event.target.closest(".help-popup")) closeAll("");
       });
     }
 
     function loadAudioBlob(blob, fileName, messageText) {
+      stopForSongSwitch();
       revokeCurrentObjectUrl();
+      currentTeacherTrackIndex = -1;
       currentAudioBlob = blob;
       currentObjectUrl = URL.createObjectURL(blob);
       audioElement.src = currentObjectUrl;
-      audioElement.load();
       loadedFileName = fileName;
-      hudFile.textContent = loadedFileName;
-      analysisErrorShown = false;
-      resetAudioLevels();
+      hasShownAnalysisError = false;
+      updateNowPlaying(loadedFileName);
       updateButtonStates(true, false);
       updateStatus(messageText || "Press Play to start the visualizer.", "Loaded: " + loadedFileName);
       renderSavedSongs();
     }
 
-    function loadTeacherTrack(track) {
+    function loadTeacherTrack(track, index, messageText) {
+      if (!track) return;
+      stopForSongSwitch();
       revokeCurrentObjectUrl();
+      currentTeacherTrackIndex = typeof index === "number" ? index : teacherAudioLibrary.indexOf(track);
       currentAudioBlob = null;
       audioElement.src = track.file;
-      audioElement.load();
       loadedFileName = track.title;
-      hudFile.textContent = loadedFileName;
-      analysisErrorShown = false;
-      resetAudioLevels();
+      hasShownAnalysisError = false;
+      updateNowPlaying(loadedFileName);
       updateButtonStates(true, false);
-      updateStatus("Press Play to load the teacher-managed track from this site.", "Loaded: " + loadedFileName);
+      updateStatus(messageText || "Press Play to load this teacher-managed track from this site.", "Loaded: " + loadedFileName);
       renderSavedSongs();
     }
 
-    function loadAudioFile(file) {
-      if (!file) {
+    function selectRandomTeacherTrack() {
+      if (!teacherAudioLibrary.length) {
+        updateStatus("Teacher audio files are not committed in assets/audio yet. Upload an MP3 or WAV file to use the visualizer.", "No teacher songs available.");
+        updateButtonStates(Boolean(audioElement.src), !audioElement.paused);
         return;
       }
-      loadAudioBlob(file, file.name, "Press Play to start the visualizer.");
+      let nextIndex = Math.floor(Math.random() * teacherAudioLibrary.length);
+      if (teacherAudioLibrary.length > 1) {
+        while (nextIndex === currentTeacherTrackIndex) nextIndex = Math.floor(Math.random() * teacherAudioLibrary.length);
+      }
+      loadTeacherTrack(teacherAudioLibrary[nextIndex], nextIndex, "Random song selected. Press Play when you are ready.");
     }
 
     async function ensureAudioSetup() {
@@ -885,43 +740,48 @@
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
-        analyser.smoothingTimeConstant = 0.85;
+        analyser.smoothingTimeConstant = 0.72;
         frequencyData = new Uint8Array(analyser.frequencyBinCount);
         waveformData = new Uint8Array(analyser.fftSize);
         sourceNode = audioContext.createMediaElementSource(audioElement);
         sourceNode.connect(analyser);
         analyser.connect(audioContext.destination);
       }
-      if (audioContext.state === "suspended") {
-        await audioContext.resume();
-      }
+      if (audioContext.state === "suspended") await audioContext.resume();
+    }
+
+    function averageRange(data, startRatio, endRatio) {
+      if (!data || data.length === 0) return 0;
+      const start = Math.floor(data.length * startRatio);
+      const end = Math.max(start + 1, Math.floor(data.length * endRatio));
+      let total = 0;
+      for (let i = start; i < end; i += 1) total += data[i];
+      return total / (end - start) / 255;
     }
 
     function updateAudioData() {
-      if (!analyser || !frequencyData || !waveformData) {
-        return { bass: 0, mids: 0, treble: 0, volume: 0 };
-      }
+      if (!analyser || !frequencyData || !waveformData) return { bass: 0, mids: 0, treble: 0, volume: 0 };
       try {
         analyser.getByteFrequencyData(frequencyData);
         analyser.getByteTimeDomainData(waveformData);
-        analysisErrorShown = false;
+        hasShownAnalysisError = false;
       } catch (error) {
-        if (!analysisErrorShown) {
+        if (!hasShownAnalysisError) {
           updateStatus("The music is playing, but audio analysis could not start. Try pressing Stop, then Play again.", "Audio analysis error.");
-          analysisErrorShown = true;
+          hasShownAnalysisError = true;
         }
         return { bass: 0, mids: 0, treble: 0, volume: 0 };
       }
-      const bass = averageRange(frequencyData, 0.0, 0.12);
-      const mids = averageRange(frequencyData, 0.12, 0.45);
-      const treble = averageRange(frequencyData, 0.45, 1.0);
+      const bass = Math.min(1, Math.pow(averageRange(frequencyData, 0.0, 0.12) * 2.45, 0.72));
+      const mids = Math.min(1, Math.pow(averageRange(frequencyData, 0.12, 0.45) * 2.15, 0.78));
+      const treble = Math.min(1, Math.pow(averageRange(frequencyData, 0.45, 1.0) * 2.75, 0.7));
       let rmsTotal = 0;
       for (let i = 0; i < waveformData.length; i += 1) {
         const centered = (waveformData[i] - 128) / 128;
         rmsTotal += centered * centered;
       }
-      const volume = Math.min(1, Math.sqrt(rmsTotal / waveformData.length) * 2.4);
-      const easing = 0.18;
+      const volume = Math.min(1, Math.sqrt(rmsTotal / waveformData.length) * 3.4);
+      const easing = 0.28;
       smoothedBass += (bass - smoothedBass) * easing;
       smoothedMids += (mids - smoothedMids) * easing;
       smoothedTreble += (treble - smoothedTreble) * easing;
@@ -929,24 +789,52 @@
       return { bass: smoothedBass, mids: smoothedMids, treble: smoothedTreble, volume: smoothedVolume };
     }
 
+    function updateHud(levels) {
+      hudBass.textContent = Math.round(levels.bass * 100) + "%";
+      hudMids.textContent = Math.round(levels.mids * 100) + "%";
+      hudTreble.textContent = Math.round(levels.treble * 100) + "%";
+      hudVolume.textContent = Math.round(levels.volume * 100) + "%";
+    }
+
+    function controlValues() {
+      return {
+        sensitivity: Number(sensitivitySlider.value),
+        intensity: Number(colorSlider.value),
+        density: Number(densitySlider.value)
+      };
+    }
+
+    function createParticles() {
+      const desiredCount = Math.max(8, Math.floor(72 * Number(densitySlider.value)));
+      if (particles.length > desiredCount) particles.length = desiredCount;
+      while (particles.length < desiredCount) {
+        particles.push({
+          angle: Math.random() * Math.PI * 2,
+          distance: Math.random() * 220 + 30,
+          speed: Math.random() * 0.014 + 0.004,
+          size: Math.random() * 3.4 + 0.8,
+          hueOffset: Math.random() * 120
+        });
+      }
+    }
+
     function clearBackground(time, levels) {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
-      const intensity = Number(colorSlider.value);
-      const baseHue = (time * 0.018 + levels.mids * 150) % 360;
-      const pulseAlpha = 0.05 + levels.volume * 0.14 * intensity;
+      const { intensity } = controlValues();
+      const hue = (time * 0.03 + levels.mids * 210 + levels.treble * 80) % 360;
       ctx.clearRect(0, 0, width, height);
-      const bgGradient = ctx.createRadialGradient(width * 0.5, height * 0.5, width * 0.08, width * 0.5, height * 0.5, width * 0.7);
-      bgGradient.addColorStop(0, "hsla(" + baseHue + ", 90%, 15%, " + (0.24 + pulseAlpha) + ")");
-      bgGradient.addColorStop(0.4, "hsla(" + ((baseHue + 70) % 360) + ", 85%, 11%, 0.18)");
-      bgGradient.addColorStop(1, "rgba(2, 5, 14, 0.96)");
-      ctx.fillStyle = bgGradient;
+      const bg = ctx.createRadialGradient(width * 0.5, height * 0.5, width * 0.08, width * 0.5, height * 0.5, width * 0.72);
+      bg.addColorStop(0, "hsla(" + hue + ", 100%, " + (12 + levels.volume * 18 * intensity) + "%, " + (0.34 + levels.volume * 0.28 * intensity) + ")");
+      bg.addColorStop(0.42, "hsla(" + ((hue + 80) % 360) + ", 100%, 12%, " + (0.22 + levels.bass * 0.18) + ")");
+      bg.addColorStop(1, "rgba(1, 3, 10, 0.98)");
+      ctx.fillStyle = bg;
       ctx.fillRect(0, 0, width, height);
-      const mistGradient = ctx.createLinearGradient(0, 0, width, height);
-      mistGradient.addColorStop(0, "hsla(" + ((baseHue + 160) % 360) + ", 70%, 50%, 0.06)");
-      mistGradient.addColorStop(0.5, "hsla(" + ((baseHue + 280) % 360) + ", 80%, 45%, 0.02)");
-      mistGradient.addColorStop(1, "hsla(" + ((baseHue + 40) % 360) + ", 75%, 50%, 0.05)");
-      ctx.fillStyle = mistGradient;
+      const mist = ctx.createLinearGradient(0, 0, width, height);
+      mist.addColorStop(0, "hsla(" + ((hue + 150) % 360) + ", 100%, 55%, " + (0.05 + 0.08 * intensity * levels.mids) + ")");
+      mist.addColorStop(0.5, "hsla(" + ((hue + 285) % 360) + ", 100%, 48%, " + (0.03 + 0.06 * levels.treble * intensity) + ")");
+      mist.addColorStop(1, "hsla(" + ((hue + 35) % 360) + ", 100%, 55%, " + (0.05 + 0.08 * levels.bass * intensity) + ")");
+      ctx.fillStyle = mist;
       ctx.fillRect(0, 0, width, height);
     }
 
@@ -957,9 +845,9 @@
       for (const star of stars) {
         const x = star.x * width;
         const y = (star.y * height + time * star.drift) % height;
-        const glow = star.size + levels.treble * 4;
+        const glow = star.size + levels.treble * 7 + levels.volume * 2;
         ctx.beginPath();
-        ctx.fillStyle = "rgba(255, 255, 255, " + (0.16 + levels.treble * 0.5) + ")";
+        ctx.fillStyle = "rgba(255, 255, 255, " + Math.min(0.92, 0.18 + levels.treble * 0.72 + levels.volume * 0.2) + ")";
         ctx.arc(x, y, glow, 0, Math.PI * 2);
         ctx.fill();
       }
@@ -969,22 +857,21 @@
     function drawNebula(time, levels) {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
-      const sensitivity = Number(sensitivitySlider.value);
-      const intensity = Number(colorSlider.value);
+      const { sensitivity, intensity, density } = controlValues();
       const centerX = width / 2;
       const centerY = height / 2;
-      const pulse = 1 + levels.bass * 1.7 * sensitivity;
+      const pulse = 1 + levels.bass * 2.8 * sensitivity + levels.volume * 0.55;
       ctx.save();
       ctx.globalCompositeOperation = "screen";
-      for (let i = 0; i < 5; i += 1) {
-        const radius = (140 + i * 70) * pulse;
-        const angle = time * 0.00022 * (i + 1) + levels.mids * 2.8;
-        const x = centerX + Math.cos(angle) * radius * 0.2;
-        const y = centerY + Math.sin(angle * 1.3) * radius * 0.16;
+      for (let i = 0; i < Math.max(3, Math.floor(6 * density)); i += 1) {
+        const radius = (120 + i * 62) * pulse;
+        const angle = time * 0.00034 * (i + 1) * (0.6 + sensitivity * 0.25) + levels.mids * 4.2;
+        const x = centerX + Math.cos(angle) * radius * (0.22 + levels.mids * 0.12);
+        const y = centerY + Math.sin(angle * 1.35) * radius * (0.18 + levels.treble * 0.1);
+        const hue = (185 + i * 34 + time * 0.025 + levels.treble * 180) % 360;
         const gradient = ctx.createRadialGradient(x, y, radius * 0.08, x, y, radius);
-        const hue = (220 + i * 28 + time * 0.01 + levels.treble * 120) % 360;
-        gradient.addColorStop(0, "hsla(" + hue + ", 95%, 66%, " + (0.14 * intensity) + ")");
-        gradient.addColorStop(0.45, "hsla(" + ((hue + 45) % 360) + ", 90%, 50%, 0.08)");
+        gradient.addColorStop(0, "hsla(" + hue + ", 100%, 70%, " + Math.min(0.55, 0.12 * intensity + levels.volume * 0.18) + ")");
+        gradient.addColorStop(0.42, "hsla(" + ((hue + 48) % 360) + ", 100%, 50%, " + Math.min(0.28, 0.08 * intensity + levels.bass * 0.1) + ")");
         gradient.addColorStop(1, "hsla(" + ((hue + 120) % 360) + ", 90%, 40%, 0)");
         ctx.fillStyle = gradient;
         ctx.beginPath();
@@ -997,21 +884,22 @@
     function drawGrid(levels, time) {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
-      const spacing = Math.max(28, 52 - levels.bass * 18);
+      const { sensitivity, intensity, density } = controlValues();
+      const spacing = Math.max(18, 58 - levels.bass * 30 - density * 9);
       ctx.save();
-      ctx.globalAlpha = 0.12 + levels.volume * 0.14;
-      ctx.strokeStyle = "rgba(126, 231, 255, 0.35)";
-      ctx.lineWidth = 1;
+      ctx.globalAlpha = Math.min(0.55, 0.1 + levels.volume * 0.24 + intensity * 0.05);
+      ctx.strokeStyle = "rgba(126, 255, 236, 0.46)";
+      ctx.lineWidth = 1 + levels.bass * 1.4;
       for (let x = 0; x < width + spacing; x += spacing) {
         ctx.beginPath();
-        ctx.moveTo(x + Math.sin(time * 0.001 + x * 0.01) * levels.mids * 8, 0);
-        ctx.lineTo(x, height);
+        ctx.moveTo(x + Math.sin(time * 0.0016 + x * 0.01) * levels.mids * 22 * sensitivity, 0);
+        ctx.lineTo(x - Math.cos(time * 0.001 + x * 0.01) * levels.treble * 18 * sensitivity, height);
         ctx.stroke();
       }
       for (let y = 0; y < height + spacing; y += spacing) {
         ctx.beginPath();
-        ctx.moveTo(0, y + Math.cos(time * 0.0012 + y * 0.01) * levels.mids * 8);
-        ctx.lineTo(width, y);
+        ctx.moveTo(0, y + Math.cos(time * 0.0018 + y * 0.01) * levels.mids * 20 * sensitivity);
+        ctx.lineTo(width, y - Math.sin(time * 0.001 + y * 0.01) * levels.bass * 22 * sensitivity);
         ctx.stroke();
       }
       ctx.restore();
@@ -1020,45 +908,42 @@
     function drawGeometry(time, levels) {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
+      const { sensitivity, intensity, density } = controlValues();
       const centerX = width / 2;
       const centerY = height / 2;
-      const density = Number(densitySlider.value);
-      const sensitivity = Number(sensitivitySlider.value);
-      const layers = Math.max(4, Math.floor(7 * density));
+      const layers = Math.max(3, Math.floor(10 * density));
       ctx.save();
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 1.4 + levels.volume * 2.2 * sensitivity;
       ctx.globalCompositeOperation = "lighter";
       for (let i = 0; i < layers; i += 1) {
         const sides = 3 + (i % 6);
-        const rotation = time * 0.00025 * (i + 1) + levels.mids * (i + 1) * 0.5;
-        const radius = 60 + i * 26 + levels.bass * 150 * sensitivity;
-        const hue = (180 + i * 24 + levels.treble * 140) % 360;
+        const rotation = time * 0.00036 * (i + 1) * sensitivity + levels.mids * (i + 1) * 0.85;
+        const radius = 42 + i * 24 + levels.bass * 230 * sensitivity + Math.sin(time * 0.003 + i) * levels.volume * 25;
+        const hue = (165 + i * 30 + levels.treble * 210 + time * 0.012) % 360;
         ctx.beginPath();
         for (let point = 0; point <= sides; point += 1) {
           const angle = rotation + (Math.PI * 2 * point) / sides;
-          const wavePush = Math.sin(time * 0.002 + point + i) * levels.mids * 22;
+          const wavePush = Math.sin(time * 0.0032 + point + i) * levels.mids * 46 * sensitivity;
           const x = centerX + Math.cos(angle) * (radius + wavePush);
           const y = centerY + Math.sin(angle) * (radius + wavePush);
           if (point === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
-        ctx.strokeStyle = "hsla(" + hue + ", 95%, 70%, " + (0.22 + levels.volume * 0.45) + ")";
-        ctx.shadowBlur = 18;
-        ctx.shadowColor = "hsla(" + hue + ", 100%, 70%, 0.55)";
+        ctx.strokeStyle = "hsla(" + hue + ", 100%, " + Math.min(82, 54 + intensity * 12) + "%, " + Math.min(0.95, 0.2 + levels.volume * 0.7 + intensity * 0.08) + ")";
+        ctx.shadowBlur = 14 + 22 * intensity + levels.bass * 24;
+        ctx.shadowColor = "hsla(" + hue + ", 100%, 70%, 0.82)";
         ctx.stroke();
       }
       ctx.restore();
       drawGrid(levels, time);
     }
 
-    function drawWaveform(time, levels) {
+    function drawWaveform(levels, time) {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
+      const { sensitivity, intensity, density } = controlValues();
       const centerY = height / 2;
-      const sensitivity = Number(sensitivitySlider.value);
-      const intensity = Number(colorSlider.value);
-      const density = Number(densitySlider.value);
-      const lineCount = Math.max(2, Math.floor(4 * density));
+      const lineCount = Math.max(1, Math.floor(5 * density));
       const samples = waveformData || [];
       const sampleCount = samples.length || 180;
       ctx.save();
@@ -1068,18 +953,18 @@
         for (let i = 0; i < sampleCount; i += 1) {
           const x = (i / (sampleCount - 1)) * width;
           const sample = samples.length ? (samples[i] - 128) / 128 : Math.sin((i / sampleCount) * Math.PI * 4 + layer * 0.8) * 0.14;
-          const offset = (layer - (lineCount - 1) / 2) * 28;
-          const amplitude = 80 + levels.bass * 140 * sensitivity + layer * 16;
-          const sineCurve = Math.sin((i / sampleCount) * Math.PI * 6 + time * 0.0012) * (levels.mids * 26 + 6);
+          const offset = (layer - (lineCount - 1) / 2) * (22 + levels.volume * 22);
+          const amplitude = 52 + levels.bass * 240 * sensitivity + levels.volume * 90 + layer * 20;
+          const sineCurve = Math.sin((i / sampleCount) * Math.PI * (6 + levels.treble * 8) + time * 0.004 * sensitivity) * (levels.mids * 58 * sensitivity + 8);
           const y = centerY + sample * amplitude + offset + sineCurve;
           if (i === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
-        const hue = (200 + layer * 34 + levels.treble * 160) % 360;
-        ctx.strokeStyle = "hsla(" + hue + ", 100%, 72%, " + (0.25 + 0.18 * intensity) + ")";
-        ctx.lineWidth = 1.8 + layer * 0.6;
-        ctx.shadowBlur = 16;
-        ctx.shadowColor = "hsla(" + hue + ", 100%, 70%, 0.55)";
+        const hue = (175 + layer * 42 + levels.treble * 220 + time * 0.018) % 360;
+        ctx.strokeStyle = "hsla(" + hue + ", 100%, " + Math.min(84, 58 + intensity * 10) + "%, " + Math.min(0.95, 0.3 + 0.22 * intensity + levels.volume * 0.35) + ")";
+        ctx.lineWidth = 1.8 + layer * 0.7 + levels.treble * 3.2;
+        ctx.shadowBlur = 18 + intensity * 16 + levels.treble * 20;
+        ctx.shadowColor = "hsla(" + hue + ", 100%, 70%, 0.85)";
         ctx.stroke();
       }
       ctx.restore();
@@ -1088,30 +973,29 @@
     function drawSpiral(time, levels) {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
+      const { sensitivity, intensity, density } = controlValues();
       const centerX = width / 2;
       const centerY = height / 2;
-      const density = Number(densitySlider.value);
-      const sensitivity = Number(sensitivitySlider.value);
-      const loops = Math.max(180, Math.floor(320 * density));
+      const loops = Math.max(120, Math.floor(380 * density));
       ctx.save();
       ctx.globalCompositeOperation = "screen";
-      ctx.lineWidth = 1.3;
+      ctx.lineWidth = 1.5 + levels.volume * 2.2;
       for (let arm = 0; arm < 3; arm += 1) {
         ctx.beginPath();
         for (let i = 0; i < loops; i += 1) {
           const t = i / loops;
-          const angle = t * Math.PI * 10 + arm * ((Math.PI * 2) / 3) + time * 0.0005 * (1 + levels.mids);
-          const radius = 40 + t * Math.min(width, height) * 0.34 * (1 + levels.bass * sensitivity);
-          const ripple = Math.sin(t * 22 - time * 0.003 + arm) * levels.treble * 18;
+          const angle = t * Math.PI * (10 + levels.treble * 8) + arm * ((Math.PI * 2) / 3) + time * 0.00072 * (0.8 + sensitivity + levels.mids * 1.6);
+          const radius = 28 + t * Math.min(width, height) * 0.38 * (1 + levels.bass * 1.8 * sensitivity + levels.volume * 0.35);
+          const ripple = Math.sin(t * 28 - time * 0.005 * sensitivity + arm) * levels.treble * 38 * sensitivity;
           const x = centerX + Math.cos(angle) * (radius + ripple);
           const y = centerY + Math.sin(angle) * (radius + ripple);
           if (i === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
-        const hue = (250 + arm * 55 + levels.volume * 120) % 360;
-        ctx.strokeStyle = "hsla(" + hue + ", 95%, 68%, " + (0.22 + levels.mids * 0.45) + ")";
-        ctx.shadowBlur = 18;
-        ctx.shadowColor = "hsla(" + hue + ", 100%, 68%, 0.6)";
+        const hue = (245 + arm * 65 + levels.volume * 180 + time * 0.016) % 360;
+        ctx.strokeStyle = "hsla(" + hue + ", 100%, " + Math.min(82, 56 + intensity * 12) + "%, " + Math.min(0.9, 0.2 + levels.mids * 0.55 + intensity * 0.08) + ")";
+        ctx.shadowBlur = 20 + intensity * 16 + levels.bass * 26;
+        ctx.shadowColor = "hsla(" + hue + ", 100%, 68%, 0.85)";
         ctx.stroke();
       }
       ctx.restore();
@@ -1120,30 +1004,32 @@
     function drawParticles(time, levels) {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
+      const { sensitivity, intensity } = controlValues();
       const centerX = width / 2;
       const centerY = height / 2;
-      const sensitivity = Number(sensitivitySlider.value);
-      const intensity = Number(colorSlider.value);
       createParticles();
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       for (const particle of particles) {
-        particle.angle += particle.speed + levels.mids * 0.01 * sensitivity;
-        const radius = particle.distance + Math.sin(time * 0.002 + particle.distance) * levels.bass * 30;
+        particle.angle += particle.speed * (0.8 + sensitivity * 0.45) + levels.mids * 0.025 * sensitivity;
+        const burst = levels.treble * 95 * sensitivity + levels.volume * 35;
+        const radius = particle.distance + Math.sin(time * 0.003 + particle.distance) * levels.bass * 60 * sensitivity + burst;
         const x = centerX + Math.cos(particle.angle) * radius;
-        const y = centerY + Math.sin(particle.angle * 1.1) * radius * 0.7;
-        const size = particle.size + levels.treble * 3.2;
-        const hue = (190 + particle.hueOffset + levels.treble * 120 + time * 0.02) % 360;
+        const y = centerY + Math.sin(particle.angle * 1.08) * radius * (0.66 + levels.mids * 0.16);
+        const size = particle.size + levels.treble * 6.8 + levels.volume * 3.2;
+        const hue = (170 + particle.hueOffset + levels.treble * 210 + time * 0.035) % 360;
         ctx.beginPath();
-        ctx.fillStyle = "hsla(" + hue + ", 100%, 68%, " + (0.18 + 0.25 * intensity) + ")";
+        ctx.fillStyle = "hsla(" + hue + ", 100%, " + Math.min(86, 58 + intensity * 12) + "%, " + Math.min(0.9, 0.16 + 0.18 * intensity + levels.treble * 0.35) + ")";
+        ctx.shadowBlur = 10 + intensity * 12 + levels.treble * 18;
+        ctx.shadowColor = "hsla(" + hue + ", 100%, 70%, 0.8)";
         ctx.arc(x, y, size, 0, Math.PI * 2);
         ctx.fill();
-        if (levels.treble > 0.16) {
-          ctx.strokeStyle = "hsla(" + hue + ", 100%, 75%, 0.18)";
-          ctx.lineWidth = 1;
+        if (levels.treble > 0.1) {
+          ctx.strokeStyle = "hsla(" + hue + ", 100%, 75%, " + Math.min(0.65, levels.treble * 0.9) + ")";
+          ctx.lineWidth = 1 + levels.treble * 2;
           ctx.beginPath();
           ctx.moveTo(x, y);
-          ctx.lineTo(x + Math.cos(particle.angle) * (10 + levels.treble * 24), y + Math.sin(particle.angle) * (10 + levels.treble * 24));
+          ctx.lineTo(x + Math.cos(particle.angle) * (14 + levels.treble * 58 * sensitivity), y + Math.sin(particle.angle) * (14 + levels.treble * 58 * sensitivity));
           ctx.stroke();
         }
       }
@@ -1153,22 +1039,21 @@
     function drawCenterCircle(time, levels) {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
+      const { sensitivity, intensity } = controlValues();
       const centerX = width / 2;
       const centerY = height / 2;
-      const sensitivity = Number(sensitivitySlider.value);
-      const intensity = Number(colorSlider.value);
-      const radius = 48 + levels.bass * 90 * sensitivity;
-      const hue = (210 + time * 0.02 + levels.mids * 140) % 360;
+      const radius = 34 + levels.bass * 160 * sensitivity + levels.volume * 42;
+      const hue = (190 + time * 0.035 + levels.mids * 210 + levels.treble * 80) % 360;
       ctx.save();
       ctx.globalCompositeOperation = "screen";
       ctx.beginPath();
       ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      ctx.fillStyle = "hsla(" + hue + ", 100%, 72%, " + (0.08 + levels.volume * 0.18 * intensity) + ")";
+      ctx.fillStyle = "hsla(" + hue + ", 100%, 72%, " + Math.min(0.48, 0.08 + levels.volume * 0.28 * intensity) + ")";
       ctx.fill();
-      ctx.lineWidth = 2.2;
-      ctx.strokeStyle = "hsla(" + ((hue + 55) % 360) + ", 100%, 78%, " + (0.25 + levels.bass * 0.4) + ")";
-      ctx.shadowBlur = 18;
-      ctx.shadowColor = "hsla(" + hue + ", 100%, 74%, 0.55)";
+      ctx.lineWidth = 2.5 + levels.bass * 4;
+      ctx.strokeStyle = "hsla(" + ((hue + 55) % 360) + ", 100%, 78%, " + Math.min(0.95, 0.25 + levels.bass * 0.65 + intensity * 0.08) + ")";
+      ctx.shadowBlur = 22 + intensity * 18 + levels.bass * 28;
+      ctx.shadowColor = "hsla(" + hue + ", 100%, 74%, 0.9)";
       ctx.stroke();
       ctx.restore();
     }
@@ -1178,22 +1063,22 @@
       clearBackground(time, levels);
       drawStars(time, levels);
       drawNebula(time, levels);
-      const selectedMode = modeSelect.value;
-      if (selectedMode === "nebula") {
+      const mode = modeSelect.value;
+      if (mode === "nebula") {
         drawParticles(time, levels);
         drawCenterCircle(time, levels);
-      } else if (selectedMode === "geometry") {
+      } else if (mode === "geometry") {
         drawGeometry(time, levels);
         drawParticles(time, levels);
-      } else if (selectedMode === "waveform") {
-        drawWaveform(time, levels);
+      } else if (mode === "waveform") {
+        drawWaveform(levels, time);
         drawCenterCircle(time, levels);
-      } else if (selectedMode === "spiral") {
+      } else if (mode === "spiral") {
         drawSpiral(time, levels);
         drawParticles(time, levels);
       } else {
         drawGeometry(time, levels);
-        drawWaveform(time, levels);
+        drawWaveform(levels, time);
         drawSpiral(time, levels);
         drawParticles(time, levels);
         drawCenterCircle(time, levels);
@@ -1203,9 +1088,7 @@
     }
 
     function startAnimation() {
-      if (!animationFrameId) {
-        animationFrameId = requestAnimationFrame(drawFrame);
-      }
+      if (!animationFrameId) animationFrameId = requestAnimationFrame(drawFrame);
     }
 
     async function playAudio() {
@@ -1232,7 +1115,7 @@
 
     function stopAudio() {
       audioElement.pause();
-      audioElement.currentTime = 0;
+      safelyRestartFromBeginning();
       resetAudioLevels();
       updateButtonStates(Boolean(audioElement.src), false);
       updateStatus("Playback has stopped. Press Play to start again.", "Stopped: " + loadedFileName);
@@ -1243,43 +1126,34 @@
         updateStatus("Choose an audio file first.", "No audio loaded.");
         return;
       }
-      audioElement.currentTime = 0;
+      safelyRestartFromBeginning();
       playAudio();
     }
 
     async function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        await app.requestFullscreen();
-      } else {
-        await document.exitFullscreen();
-      }
+      if (!document.fullscreenElement) await app.requestFullscreen();
+      else await document.exitFullscreen();
     }
 
     audioFileInput.addEventListener("change", (event) => {
       const file = event.target.files[0];
-      loadAudioFile(file);
+      if (file) loadAudioBlob(file, file.name, "Uploaded file ready. Press Play when you are ready.");
     });
 
-    saveSongButton.addEventListener("click", () => {
-      storeSongLocally().catch(() => {
-        updateStatus("This song could not be saved locally in the browser right now.", "Save failed.");
-      });
-    });
-
+    saveSongButton.addEventListener("click", () => storeSongLocally().catch(() => {
+      updateStatus("This song could not be saved locally in the browser right now.", "Save failed.");
+    }));
+    randomSongButton.addEventListener("click", selectRandomTeacherTrack);
     playButton.addEventListener("click", playAudio);
     pauseButton.addEventListener("click", pauseAudio);
     stopButton.addEventListener("click", stopAudio);
     restartButton.addEventListener("click", restartAudio);
-    clearSavedSongsButton.addEventListener("click", () => {
-      clearSavedSongs().catch(() => {
-        updateStatus("The saved songs could not be cleared right now.", "Clear failed.");
-      });
-    });
-    fullscreenButton.addEventListener("click", () => {
-      toggleFullscreen().catch(() => {
-        updateStatus("Fullscreen is not available right now.", "Fullscreen unavailable.");
-      });
-    });
+    clearSavedSongsButton.addEventListener("click", () => clearSavedSongs().catch(() => {
+      updateStatus("The saved songs could not be cleared right now.", "Clear failed.");
+    }));
+    fullscreenButton.addEventListener("click", () => toggleFullscreen().catch(() => {
+      updateStatus("Fullscreen is not available right now.", "Fullscreen unavailable.");
+    }));
 
     modeSelect.addEventListener("change", updateSliderLabels);
     sensitivitySlider.addEventListener("input", updateSliderLabels);
@@ -1289,21 +1163,11 @@
       updateSliderLabels();
     });
 
-    audioElement.addEventListener("play", () => {
-      startAnimation();
-      updateButtonStates(Boolean(audioElement.src), true);
-    });
-
+    audioElement.addEventListener("play", () => updateButtonStates(Boolean(audioElement.src), true));
     audioElement.addEventListener("pause", () => {
-      if (audioElement.currentTime > 0 && !audioElement.ended) {
-        updateButtonStates(Boolean(audioElement.src), false);
-      }
+      if (audioElement.currentTime > 0 && !audioElement.ended) updateButtonStates(Boolean(audioElement.src), false);
     });
-
-    audioElement.addEventListener("error", () => {
-      updateStatus("This audio file could not be loaded for playback or analysis.", "Audio load error.");
-    });
-
+    audioElement.addEventListener("error", () => updateStatus("This audio file could not be loaded for playback or analysis.", "Audio load error."));
     audioElement.addEventListener("ended", () => {
       updateButtonStates(Boolean(audioElement.src), false);
       updateStatus("Playback finished. Press Restart or Play to hear it again.", "Finished: " + loadedFileName);
@@ -1318,9 +1182,14 @@
     updateButtonStates(false, false);
     bindHelpButtons();
     renderTeacherLibrary();
-    loadSavedSongsFromDb().catch(() => {
-      renderSavedSongs();
-    });
+    if (teacherAudioLibrary.length) {
+      selectRandomTeacherTrack();
+    } else {
+      randomSongButton.disabled = true;
+      updateNowPlaying("");
+      updateStatus("Upload an MP3 or WAV file to begin. Add teacher tracks to assets/audio and list them in teacherAudioLibrary to enable Random Song.", "No teacher songs available.");
+    }
+    loadSavedSongsFromDb().catch(renderSavedSongs);
     startAnimation();
   </script>
 </body>
