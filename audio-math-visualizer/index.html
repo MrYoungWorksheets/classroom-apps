@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audio Math Visualizer</title>
+  <style>
+    :root {
+      --panel-bg: rgba(10, 14, 30, 0.78);
+      --panel-border: rgba(149, 198, 255, 0.18);
+      --text-main: #eef4ff;
+      --text-soft: #adc3ea;
+      --accent: #7ee7ff;
+      --accent-strong: #7c8dff;
+      --shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top, rgba(56, 86, 180, 0.18), transparent 40%),
+        radial-gradient(circle at bottom right, rgba(10, 175, 214, 0.14), transparent 36%),
+        linear-gradient(180deg, #03060f 0%, #050817 45%, #02040b 100%);
+      color: var(--text-main);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    body {
+      position: relative;
+    }
+
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #visualizerCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: min(420px, calc(100% - 24px));
+      margin: 12px;
+      padding: 14px 16px 16px;
+      border: 1px solid var(--panel-border);
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(17, 23, 47, 0.92), rgba(7, 10, 24, 0.9));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      z-index: 2;
+    }
+
+    .overlay summary {
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .overlay summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .summary-note {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-soft);
+    }
+
+    .panel-content {
+      margin-top: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .subtitle {
+      margin: 0;
+      font-size: 0.92rem;
+      line-height: 1.4;
+      color: var(--text-soft);
+    }
+
+    .file-row,
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .button-row button,
+    .file-label,
+    .select-input {
+      border: 1px solid rgba(126, 231, 255, 0.22);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-main);
+      font: inherit;
+    }
+
+    .file-label,
+    .button-row button {
+      min-height: 42px;
+      padding: 10px 14px;
+    }
+
+    .file-label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .file-label:hover,
+    .button-row button:hover,
+    .select-input:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .button-row button {
+      cursor: pointer;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .button-row button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+      transform: none;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .status-box {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(111, 144, 255, 0.09);
+      border: 1px solid rgba(111, 144, 255, 0.18);
+      font-size: 0.9rem;
+      line-height: 1.45;
+      color: var(--text-soft);
+    }
+
+    .status-box strong {
+      color: var(--text-main);
+    }
+
+    .control-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .control-block {
+      display: grid;
+      gap: 6px;
+    }
+
+    .control-block label {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 0.88rem;
+      color: var(--text-soft);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .select-input {
+      min-height: 40px;
+      padding: 9px 12px;
+      width: 100%;
+    }
+
+    .hud {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      display: grid;
+      gap: 6px;
+      min-width: 170px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(7, 10, 24, 0.52);
+      color: var(--text-main);
+      box-shadow: var(--shadow);
+      z-index: 1;
+      backdrop-filter: blur(8px);
+    }
+
+    .hud-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.84rem;
+    }
+
+    .hud-line span:last-child {
+      color: var(--accent);
+    }
+
+    @media (max-width: 700px) {
+      .overlay {
+        width: calc(100% - 16px);
+        margin: 8px;
+        padding: 12px;
+      }
+
+      .hud {
+        right: 8px;
+        left: 8px;
+        bottom: 8px;
+        min-width: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="visualizerCanvas" aria-label="Animated math audio visualizer"></canvas>
+
+    <details class="overlay" open>
+      <summary>
+        <span>Audio Math Visualizer</span>
+        <span class="summary-note">Tap to collapse controls</span>
+      </summary>
+
+      <div class="panel-content">
+        <p class="subtitle">
+          Upload an MP3 or WAV file, press play, and watch math-inspired shapes move with bass, mids, and treble.
+        </p>
+
+        <div class="file-row">
+          <label class="file-label" for="audioFile">Upload MP3 or WAV</label>
+          <input id="audioFile" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" />
+        </div>
+
+        <div class="button-row">
+          <button id="playButton" type="button">Play</button>
+          <button id="pauseButton" type="button" disabled>Pause</button>
+          <button id="stopButton" type="button" disabled>Stop</button>
+          <button id="restartButton" type="button" disabled>Restart</button>
+          <button id="fullscreenButton" type="button">Fullscreen</button>
+        </div>
+
+        <div id="statusMessage" class="status-box">
+          <strong id="statusTitle">No audio loaded.</strong>
+          <span id="statusText"> Choose an MP3 or WAV file to begin.</span>
+        </div>
+
+        <div class="control-grid">
+          <div class="control-block">
+            <label for="modeSelect"><span>Visual mode</span><span id="modeValue">Mixed</span></label>
+            <select id="modeSelect" class="select-input">
+              <option value="mixed">Mixed</option>
+              <option value="nebula">Nebula</option>
+              <option value="geometry">Geometry</option>
+              <option value="waveform">Waveform</option>
+              <option value="spiral">Spiral</option>
+            </select>
+          </div>
+
+          <div class="control-block">
+            <label for="sensitivitySlider"><span>Sensitivity</span><span id="sensitivityValue">1.20</span></label>
+            <input id="sensitivitySlider" type="range" min="0.6" max="2.5" step="0.05" value="1.2" />
+          </div>
+
+          <div class="control-block">
+            <label for="colorSlider"><span>Color intensity</span><span id="colorValue">1.10</span></label>
+            <input id="colorSlider" type="range" min="0.5" max="2.2" step="0.05" value="1.1" />
+          </div>
+
+          <div class="control-block">
+            <label for="densitySlider"><span>Shape density</span><span id="densityValue">0.95</span></label>
+            <input id="densitySlider" type="range" min="0.4" max="1.8" step="0.05" value="0.95" />
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <div class="hud" aria-live="polite">
+      <div class="hud-line"><span>File</span><span id="hudFile">None</span></div>
+      <div class="hud-line"><span>Bass</span><span id="hudBass">0%</span></div>
+      <div class="hud-line"><span>Mids</span><span id="hudMids">0%</span></div>
+      <div class="hud-line"><span>Treble</span><span id="hudTreble">0%</span></div>
+      <div class="hud-line"><span>Volume</span><span id="hudVolume">0%</span></div>
+    </div>
+
+    <audio id="audioElement" preload="metadata"></audio>
+  </div>
+
+  <script>
+    // Basic element references so the rest of the script can stay readable.
+    const app = document.getElementById("app");
+    const canvas = document.getElementById("visualizerCanvas");
+    const ctx = canvas.getContext("2d");
+    const audioFileInput = document.getElementById("audioFile");
+    const audioElement = document.getElementById("audioElement");
+    const playButton = document.getElementById("playButton");
+    const pauseButton = document.getElementById("pauseButton");
+    const stopButton = document.getElementById("stopButton");
+    const restartButton = document.getElementById("restartButton");
+    const fullscreenButton = document.getElementById("fullscreenButton");
+    const statusTitle = document.getElementById("statusTitle");
+    const statusText = document.getElementById("statusText");
+    const modeSelect = document.getElementById("modeSelect");
+    const sensitivitySlider = document.getElementById("sensitivitySlider");
+    const colorSlider = document.getElementById("colorSlider");
+    const densitySlider = document.getElementById("densitySlider");
+    const sensitivityValue = document.getElementById("sensitivityValue");
+    const colorValue = document.getElementById("colorValue");
+    const densityValue = document.getElementById("densityValue");
+    const modeValue = document.getElementById("modeValue");
+    const hudFile = document.getElementById("hudFile");
+    const hudBass = document.getElementById("hudBass");
+    const hudMids = document.getElementById("hudMids");
+    const hudTreble = document.getElementById("hudTreble");
+    const hudVolume = document.getElementById("hudVolume");
+
+    let audioContext = null;
+    let analyser = null;
+    let sourceNode = null;
+    let frequencyData = null;
+    let waveformData = null;
+    let animationFrameId = null;
+    let loadedFileName = "";
+    let currentObjectUrl = "";
+    let smoothedBass = 0;
+    let smoothedMids = 0;
+    let smoothedTreble = 0;
+    let smoothedVolume = 0;
+
+    // These particles are reused instead of recreated so the app stays lightweight.
+    const particles = [];
+    const starCount = 120;
+    const stars = Array.from({ length: starCount }, () => ({
+      x: Math.random(),
+      y: Math.random(),
+      size: Math.random() * 1.5 + 0.4,
+      drift: Math.random() * 0.15 + 0.04
+    }));
+
+    function setCanvasSize() {
+      const ratio = window.devicePixelRatio || 1;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      canvas.width = Math.floor(width * ratio);
+      canvas.height = Math.floor(height * ratio);
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+
+    function updateSliderLabels() {
+      sensitivityValue.textContent = Number(sensitivitySlider.value).toFixed(2);
+      colorValue.textContent = Number(colorSlider.value).toFixed(2);
+      densityValue.textContent = Number(densitySlider.value).toFixed(2);
+      modeValue.textContent = modeSelect.options[modeSelect.selectedIndex].text;
+    }
+
+    function updateStatus(message, strongText) {
+      statusTitle.textContent = strongText;
+      statusText.textContent = " " + message;
+    }
+
+    function updateButtonStates(isLoaded, isPlaying) {
+      playButton.disabled = !isLoaded || isPlaying;
+      pauseButton.disabled = !isLoaded || !isPlaying;
+      stopButton.disabled = !isLoaded;
+      restartButton.disabled = !isLoaded;
+    }
+
+    function createParticles() {
+      const density = Number(densitySlider.value);
+      const desiredCount = Math.max(18, Math.floor(50 * density));
+
+      if (particles.length > desiredCount) {
+        particles.length = desiredCount;
+      }
+
+      while (particles.length < desiredCount) {
+        particles.push({
+          angle: Math.random() * Math.PI * 2,
+          distance: Math.random() * 220 + 30,
+          speed: Math.random() * 0.008 + 0.003,
+          size: Math.random() * 2.6 + 0.8,
+          hueOffset: Math.random() * 120
+        });
+      }
+    }
+
+    function averageRange(data, startRatio, endRatio) {
+      if (!data || data.length === 0) {
+        return 0;
+      }
+
+      const start = Math.floor(data.length * startRatio);
+      const end = Math.max(start + 1, Math.floor(data.length * endRatio));
+      let total = 0;
+
+      for (let i = start; i < end; i += 1) {
+        total += data[i];
+      }
+
+      return total / (end - start) / 255;
+    }
+
+    function updateAudioData() {
+      if (!analyser) {
+        return {
+          bass: 0,
+          mids: 0,
+          treble: 0,
+          volume: 0
+        };
+      }
+
+      analyser.getByteFrequencyData(frequencyData);
+      analyser.getByteTimeDomainData(waveformData);
+
+      const bass = averageRange(frequencyData, 0.0, 0.12);
+      const mids = averageRange(frequencyData, 0.12, 0.45);
+      const treble = averageRange(frequencyData, 0.45, 1.0);
+      const volume = averageRange(frequencyData, 0.0, 1.0);
+      const easing = 0.18;
+
+      smoothedBass += (bass - smoothedBass) * easing;
+      smoothedMids += (mids - smoothedMids) * easing;
+      smoothedTreble += (treble - smoothedTreble) * easing;
+      smoothedVolume += (volume - smoothedVolume) * easing;
+
+      return {
+        bass: smoothedBass,
+        mids: smoothedMids,
+        treble: smoothedTreble,
+        volume: smoothedVolume
+      };
+    }
+
+    function updateHud(levels) {
+      hudBass.textContent = Math.round(levels.bass * 100) + "%";
+      hudMids.textContent = Math.round(levels.mids * 100) + "%";
+      hudTreble.textContent = Math.round(levels.treble * 100) + "%";
+      hudVolume.textContent = Math.round(levels.volume * 100) + "%";
+    }
+
+    function clearBackground(time, levels) {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const intensity = Number(colorSlider.value);
+      const baseHue = (time * 0.018 + levels.mids * 150) % 360;
+      const pulseAlpha = 0.05 + levels.volume * 0.14 * intensity;
+
+      ctx.clearRect(0, 0, width, height);
+
+      const bgGradient = ctx.createRadialGradient(
+        width * 0.5,
+        height * 0.5,
+        width * 0.08,
+        width * 0.5,
+        height * 0.5,
+        width * 0.7
+      );
+      bgGradient.addColorStop(0, "hsla(" + baseHue + ", 90%, 15%, " + (0.24 + pulseAlpha) + ")");
+      bgGradient.addColorStop(0.4, "hsla(" + ((baseHue + 70) % 360) + ", 85%, 11%, 0.18)");
+      bgGradient.addColorStop(1, "rgba(2, 5, 14, 0.96)");
+
+      ctx.fillStyle = bgGradient;
+      ctx.fillRect(0, 0, width, height);
+
+      const mistGradient = ctx.createLinearGradient(0, 0, width, height);
+      mistGradient.addColorStop(0, "hsla(" + ((baseHue + 160) % 360) + ", 70%, 50%, 0.06)");
+      mistGradient.addColorStop(0.5, "hsla(" + ((baseHue + 280) % 360) + ", 80%, 45%, 0.02)");
+      mistGradient.addColorStop(1, "hsla(" + ((baseHue + 40) % 360) + ", 75%, 50%, 0.05)");
+      ctx.fillStyle = mistGradient;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    function drawStars(time, levels) {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      ctx.save();
+
+      for (const star of stars) {
+        const x = star.x * width;
+        const y = (star.y * height + time * star.drift) % height;
+        const glow = star.size + levels.treble * 4;
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(255, 255, 255, " + (0.16 + levels.treble * 0.5) + ")";
+        ctx.arc(x, y, glow, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    function drawNebula(time, levels) {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const sensitivity = Number(sensitivitySlider.value);
+      const intensity = Number(colorSlider.value);
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const pulse = 1 + levels.bass * 1.7 * sensitivity;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+
+      for (let i = 0; i < 5; i += 1) {
+        const radius = (140 + i * 70) * pulse;
+        const angle = time * 0.00022 * (i + 1) + levels.mids * 2.8;
+        const x = centerX + Math.cos(angle) * radius * 0.2;
+        const y = centerY + Math.sin(angle * 1.3) * radius * 0.16;
+        const gradient = ctx.createRadialGradient(x, y, radius * 0.08, x, y, radius);
+        const hue = (220 + i * 28 + time * 0.01 + levels.treble * 120) % 360;
+
+        gradient.addColorStop(0, "hsla(" + hue + ", 95%, 66%, " + (0.14 * intensity) + ")");
+        gradient.addColorStop(0.45, "hsla(" + ((hue + 45) % 360) + ", 90%, 50%, 0.08)");
+        gradient.addColorStop(1, "hsla(" + ((hue + 120) % 360) + ", 90%, 40%, 0)");
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    function drawGeometry(time, levels) {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const density = Number(densitySlider.value);
+      const sensitivity = Number(sensitivitySlider.value);
+      const layers = Math.max(4, Math.floor(7 * density));
+
+      ctx.save();
+      ctx.lineWidth = 1.2;
+      ctx.globalCompositeOperation = "lighter";
+
+      for (let i = 0; i < layers; i += 1) {
+        const sides = 3 + (i % 6);
+        const rotation = time * 0.00025 * (i + 1) + levels.mids * (i + 1) * 0.5;
+        const radius = 60 + i * 26 + levels.bass * 150 * sensitivity;
+        const hue = (180 + i * 24 + levels.treble * 140) % 360;
+
+        ctx.beginPath();
+
+        for (let point = 0; point <= sides; point += 1) {
+          const angle = rotation + (Math.PI * 2 * point) / sides;
+          const wavePush = Math.sin(time * 0.002 + point + i) * levels.mids * 22;
+          const x = centerX + Math.cos(angle) * (radius + wavePush);
+          const y = centerY + Math.sin(angle) * (radius + wavePush);
+
+          if (point === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+
+        ctx.strokeStyle = "hsla(" + hue + ", 95%, 70%, " + (0.22 + levels.volume * 0.45) + ")";
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = "hsla(" + hue + ", 100%, 70%, 0.55)";
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      drawGrid(levels, time);
+    }
+
+    function drawGrid(levels, time) {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const spacing = Math.max(28, 52 - levels.bass * 18);
+
+      ctx.save();
+      ctx.globalAlpha = 0.12 + levels.volume * 0.14;
+      ctx.strokeStyle = "rgba(126, 231, 255, 0.35)";
+      ctx.lineWidth = 1;
+
+      for (let x = 0; x < width + spacing; x += spacing) {
+        ctx.beginPath();
+        ctx.moveTo(x + Math.sin(time * 0.001 + x * 0.01) * levels.mids * 8, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+
+      for (let y = 0; y < height + spacing; y += spacing) {
+        ctx.beginPath();
+        ctx.moveTo(0, y + Math.cos(time * 0.0012 + y * 0.01) * levels.mids * 8);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawWaveform(levels) {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const centerY = height / 2;
+      const sensitivity = Number(sensitivitySlider.value);
+      const intensity = Number(colorSlider.value);
+      const density = Number(densitySlider.value);
+      const lineCount = Math.max(2, Math.floor(4 * density));
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      for (let layer = 0; layer < lineCount; layer += 1) {
+        ctx.beginPath();
+
+        for (let i = 0; i < waveformData.length; i += 1) {
+          const x = (i / (waveformData.length - 1)) * width;
+          const sample = (waveformData[i] - 128) / 128;
+          const offset = (layer - (lineCount - 1) / 2) * 28;
+          const amplitude = 80 + levels.bass * 140 * sensitivity + layer * 16;
+          const sineCurve = Math.sin((i / waveformData.length) * Math.PI * 6) * levels.mids * 26;
+          const y = centerY + sample * amplitude + offset + sineCurve;
+
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+
+        const hue = (200 + layer * 34 + levels.treble * 160) % 360;
+        ctx.strokeStyle = "hsla(" + hue + ", 100%, 72%, " + (0.25 + 0.18 * intensity) + ")";
+        ctx.lineWidth = 1.8 + layer * 0.6;
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = "hsla(" + hue + ", 100%, 70%, 0.55)";
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawSpiral(time, levels) {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const density = Number(densitySlider.value);
+      const sensitivity = Number(sensitivitySlider.value);
+      const loops = Math.max(180, Math.floor(320 * density));
+
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.lineWidth = 1.3;
+
+      for (let arm = 0; arm < 3; arm += 1) {
+        ctx.beginPath();
+
+        for (let i = 0; i < loops; i += 1) {
+          const t = i / loops;
+          const angle = t * Math.PI * 10 + arm * ((Math.PI * 2) / 3) + time * 0.0005 * (1 + levels.mids);
+          const radius = 40 + t * Math.min(width, height) * 0.34 * (1 + levels.bass * sensitivity);
+          const ripple = Math.sin(t * 22 - time * 0.003 + arm) * levels.treble * 18;
+          const x = centerX + Math.cos(angle) * (radius + ripple);
+          const y = centerY + Math.sin(angle) * (radius + ripple);
+
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+
+        const hue = (250 + arm * 55 + levels.volume * 120) % 360;
+        ctx.strokeStyle = "hsla(" + hue + ", 95%, 68%, " + (0.22 + levels.mids * 0.45) + ")";
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = "hsla(" + hue + ", 100%, 68%, 0.6)";
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawParticles(time, levels) {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const sensitivity = Number(sensitivitySlider.value);
+      const intensity = Number(colorSlider.value);
+
+      createParticles();
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      for (const particle of particles) {
+        particle.angle += particle.speed + levels.mids * 0.01 * sensitivity;
+        const radius = particle.distance + Math.sin(time * 0.002 + particle.distance) * levels.bass * 30;
+        const x = centerX + Math.cos(particle.angle) * radius;
+        const y = centerY + Math.sin(particle.angle * 1.1) * radius * 0.7;
+        const size = particle.size + levels.treble * 3.2;
+        const hue = (190 + particle.hueOffset + levels.treble * 120 + time * 0.02) % 360;
+
+        ctx.beginPath();
+        ctx.fillStyle = "hsla(" + hue + ", 100%, 68%, " + (0.18 + 0.25 * intensity) + ")";
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (levels.treble > 0.16) {
+          ctx.strokeStyle = "hsla(" + hue + ", 100%, 75%, 0.18)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(
+            x + Math.cos(particle.angle) * (10 + levels.treble * 24),
+            y + Math.sin(particle.angle) * (10 + levels.treble * 24)
+          );
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+    }
+
+    function drawCenterCircle(levels, time) {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const sensitivity = Number(sensitivitySlider.value);
+      const intensity = Number(colorSlider.value);
+      const radius = 48 + levels.bass * 90 * sensitivity;
+      const hue = (210 + time * 0.02 + levels.mids * 140) % 360;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.fillStyle = "hsla(" + hue + ", 100%, 72%, " + (0.08 + levels.volume * 0.18 * intensity) + ")";
+      ctx.fill();
+      ctx.lineWidth = 2.2;
+      ctx.strokeStyle = "hsla(" + ((hue + 55) % 360) + ", 100%, 78%, " + (0.25 + levels.bass * 0.4) + ")";
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = "hsla(" + hue + ", 100%, 74%, 0.55)";
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawFrame(time) {
+      const levels = updateAudioData();
+      clearBackground(time, levels);
+      drawStars(time, levels);
+      drawNebula(time, levels);
+
+      const selectedMode = modeSelect.value;
+
+      if (selectedMode === "nebula") {
+        drawParticles(time, levels);
+        drawCenterCircle(levels, time);
+      } else if (selectedMode === "geometry") {
+        drawGeometry(time, levels);
+        drawParticles(time, levels);
+      } else if (selectedMode === "waveform") {
+        drawWaveform(levels);
+        drawCenterCircle(levels, time);
+      } else if (selectedMode === "spiral") {
+        drawSpiral(time, levels);
+        drawParticles(time, levels);
+      } else {
+        drawGeometry(time, levels);
+        drawWaveform(levels);
+        drawSpiral(time, levels);
+        drawParticles(time, levels);
+        drawCenterCircle(levels, time);
+      }
+
+      updateHud(levels);
+      animationFrameId = requestAnimationFrame(drawFrame);
+    }
+
+    function startAnimation() {
+      if (!animationFrameId) {
+        animationFrameId = requestAnimationFrame(drawFrame);
+      }
+    }
+
+    function stopAnimation() {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+    }
+
+    // AudioContext must start after a user action in Chrome, so it is created lazily.
+    async function ensureAudioSetup() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.82;
+        frequencyData = new Uint8Array(analyser.frequencyBinCount);
+        waveformData = new Uint8Array(analyser.fftSize);
+        sourceNode = audioContext.createMediaElementSource(audioElement);
+        sourceNode.connect(analyser);
+        analyser.connect(audioContext.destination);
+      }
+
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+    }
+
+    function loadAudioFile(file) {
+      if (!file) {
+        return;
+      }
+
+      if (currentObjectUrl) {
+        URL.revokeObjectURL(currentObjectUrl);
+      }
+
+      currentObjectUrl = URL.createObjectURL(file);
+      audioElement.src = currentObjectUrl;
+      audioElement.load();
+      loadedFileName = file.name;
+      hudFile.textContent = loadedFileName;
+      updateStatus("Press Play to start the visualizer.", "Loaded: " + loadedFileName);
+      updateButtonStates(true, false);
+    }
+
+    async function playAudio() {
+      if (!audioElement.src) {
+        updateStatus("Choose an MP3 or WAV file before pressing Play.", "No audio loaded.");
+        return;
+      }
+
+      try {
+        await ensureAudioSetup();
+        await audioElement.play();
+        startAnimation();
+        updateButtonStates(true, true);
+        updateStatus("The visualizer is reacting live to the music.", "Playing: " + loadedFileName);
+      } catch (error) {
+        updateStatus("Chrome blocked playback. Try pressing Play again after interacting with the page.", "Playback paused.");
+      }
+    }
+
+    function pauseAudio() {
+      audioElement.pause();
+      updateButtonStates(Boolean(audioElement.src), false);
+      updateStatus("Press Play to continue the animation with the same file.", "Paused: " + loadedFileName);
+    }
+
+    function stopAudio() {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+      smoothedBass = 0;
+      smoothedMids = 0;
+      smoothedTreble = 0;
+      smoothedVolume = 0;
+      updateButtonStates(Boolean(audioElement.src), false);
+      updateStatus("Playback has stopped. Press Play to start again.", "Stopped: " + loadedFileName);
+    }
+
+    function restartAudio() {
+      if (!audioElement.src) {
+        updateStatus("Choose an audio file first.", "No audio loaded.");
+        return;
+      }
+
+      audioElement.currentTime = 0;
+      playAudio();
+    }
+
+    async function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        await app.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    }
+
+    audioFileInput.addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      loadAudioFile(file);
+    });
+
+    playButton.addEventListener("click", playAudio);
+    pauseButton.addEventListener("click", pauseAudio);
+    stopButton.addEventListener("click", stopAudio);
+    restartButton.addEventListener("click", restartAudio);
+    fullscreenButton.addEventListener("click", () => {
+      toggleFullscreen().catch(() => {
+        updateStatus("Fullscreen is not available right now.", "Fullscreen unavailable.");
+      });
+    });
+
+    modeSelect.addEventListener("change", updateSliderLabels);
+    sensitivitySlider.addEventListener("input", updateSliderLabels);
+    colorSlider.addEventListener("input", updateSliderLabels);
+    densitySlider.addEventListener("input", () => {
+      createParticles();
+      updateSliderLabels();
+    });
+
+    audioElement.addEventListener("play", () => {
+      startAnimation();
+      updateButtonStates(Boolean(audioElement.src), true);
+    });
+
+    audioElement.addEventListener("pause", () => {
+      if (audioElement.currentTime > 0 && !audioElement.ended) {
+        updateButtonStates(Boolean(audioElement.src), false);
+      }
+    });
+
+    audioElement.addEventListener("ended", () => {
+      updateButtonStates(Boolean(audioElement.src), false);
+      updateStatus("Playback finished. Press Restart or Play to hear it again.", "Finished: " + loadedFileName);
+    });
+
+    window.addEventListener("resize", setCanvasSize);
+
+    window.addEventListener("beforeunload", () => {
+      if (currentObjectUrl) {
+        URL.revokeObjectURL(currentObjectUrl);
+      }
+    });
+
+    // Draw a calm idle scene so the page still looks finished before music starts.
+    setCanvasSize();
+    createParticles();
+    updateSliderLabels();
+    updateButtonStates(false, false);
+    startAnimation();
+  </script>
+</body>
+</html>
