@@ -1,17 +1,18 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang='en'>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset='UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
   <title>Audio Math Visualizer</title>
   <style>
     :root {
-      --panel-bg: rgba(8, 12, 30, 0.86);
-      --panel-border: rgba(126, 231, 255, 0.24);
+      --panel-bg: rgba(8, 12, 30, 0.88);
+      --panel-border: rgba(126, 255, 236, 0.24);
       --text-main: #f4fbff;
       --text-soft: #b8cbef;
       --accent: #7effec;
-      --accent-hot: #ff4fd8;
+      --hot: #ff4fd8;
+      --gold: #ffe66d;
       --shadow: 0 18px 45px rgba(0, 0, 0, 0.42);
     }
 
@@ -22,11 +23,11 @@
       margin: 0;
       min-height: 100%;
       background:
-        radial-gradient(circle at top left, rgba(0, 255, 236, 0.16), transparent 34%),
-        radial-gradient(circle at bottom right, rgba(255, 79, 216, 0.14), transparent 38%),
-        linear-gradient(180deg, #01030a 0%, #050817 48%, #01020a 100%);
+        radial-gradient(circle at 15% 15%, rgba(0, 255, 236, 0.16), transparent 34%),
+        radial-gradient(circle at 85% 82%, rgba(255, 79, 216, 0.16), transparent 38%),
+        linear-gradient(180deg, #01030a 0%, #050817 50%, #01020a 100%);
       color: var(--text-main);
-      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
       overflow: hidden;
     }
 
@@ -43,7 +44,7 @@
       padding: 14px 16px 16px;
       border: 1px solid var(--panel-border);
       border-radius: 18px;
-      background: linear-gradient(180deg, rgba(15, 22, 48, 0.94), rgba(5, 8, 22, 0.92));
+      background: linear-gradient(180deg, rgba(15, 22, 48, 0.95), rgba(5, 8, 22, 0.92));
       box-shadow: var(--shadow);
       backdrop-filter: blur(10px);
       z-index: 2;
@@ -69,12 +70,7 @@
     .file-row,
     .button-row,
     .library-header,
-    .song-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-    }
+    .song-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
     button,
     .file-label,
@@ -87,10 +83,7 @@
     }
 
     .file-label,
-    .button-row button {
-      min-height: 42px;
-      padding: 10px 14px;
-    }
+    .button-row button { min-height: 42px; padding: 10px 14px; }
 
     button,
     .file-label {
@@ -106,14 +99,9 @@
       transform: translateY(-1px);
     }
 
-    button:disabled {
-      cursor: not-allowed;
-      opacity: 0.5;
-      transform: none;
-    }
-
+    button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
     .file-label { display: inline-flex; align-items: center; justify-content: center; }
-    input[type="file"] { display: none; }
+    input[type='file'] { display: none; }
 
     .tiny-button { min-height: 34px; padding: 8px 10px; border-radius: 10px; }
     .info-button {
@@ -132,10 +120,7 @@
     .storage-note,
     .now-playing,
     .library-section,
-    .help-popup {
-      border-radius: 12px;
-      border: 1px solid rgba(126, 255, 236, 0.16);
-    }
+    .help-popup { border-radius: 12px; border: 1px solid rgba(126, 255, 236, 0.16); }
 
     .status-box {
       padding: 10px 12px;
@@ -151,13 +136,7 @@
     .storage-note,
     .library-note,
     .empty-library,
-    .song-meta {
-      margin: 0;
-      font-size: 0.84rem;
-      line-height: 1.45;
-      color: var(--text-soft);
-    }
-
+    .song-meta { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--text-soft); }
     .storage-note { padding: 10px 12px; background: rgba(255, 255, 255, 0.05); }
 
     .now-playing {
@@ -182,7 +161,7 @@
     }
 
     .setting-label { display: inline-flex; align-items: center; gap: 6px; }
-    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    input[type='range'] { width: 100%; accent-color: var(--accent); }
 
     .select-input {
       min-height: 40px;
@@ -199,7 +178,7 @@
 
     .help-popup {
       padding: 8px 10px;
-      background: rgba(4, 8, 20, 0.94);
+      background: rgba(4, 8, 20, 0.96);
       color: var(--text-soft);
       font-size: 0.8rem;
       line-height: 1.4;
@@ -256,159 +235,172 @@
   </style>
 </head>
 <body>
-  <div id="app">
-    <canvas id="visualizerCanvas" aria-label="Animated math audio visualizer"></canvas>
+  <div id='app'>
+    <canvas id='visualizerCanvas' aria-label='Animated math audio visualizer'></canvas>
 
-    <details class="overlay" open>
+    <details class='overlay' open>
       <summary>
         <span>Audio Math Visualizer</span>
-        <span class="summary-note">Tap to collapse controls</span>
+        <span class='summary-note'>Tap to collapse controls</span>
       </summary>
 
-      <div class="panel-content">
-        <p class="subtitle">Upload an MP3 or WAV file, press play, and watch math-inspired shapes move with bass, mids, and treble.</p>
+      <div class='panel-content'>
+        <p class='subtitle'>Upload an MP3 or WAV file, press play, and watch math-inspired shapes move with bass, mids, and treble.</p>
 
-        <div class="file-row">
-          <label class="file-label" for="audioFile">Upload MP3 or WAV</label>
-          <input id="audioFile" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" />
-          <button id="saveSongButton" type="button" class="tiny-button" disabled>Save Song</button>
+        <div class='file-row'>
+          <label class='file-label' for='audioFile'>Upload MP3 or WAV</label>
+          <input id='audioFile' type='file' accept='.mp3,.wav,audio/mpeg,audio/wav'>
+          <button id='saveSongButton' type='button' class='tiny-button' disabled>Save Song</button>
         </div>
 
-        <p class="storage-note">Uploaded songs are temporary unless saved locally in this browser. This page cannot upload songs to GitHub automatically.</p>
+        <p class='storage-note'>Uploaded songs are temporary unless saved locally in this browser. This page cannot upload songs to GitHub automatically.</p>
 
-        <div class="now-playing">
+        <div class='now-playing'>
           <span><strong>Now Playing:</strong></span>
-          <span id="nowPlayingText">No song selected</span>
+          <span id='nowPlayingText'>No song selected</span>
         </div>
 
-        <div class="button-row">
-          <button id="randomSongButton" type="button">Random Song</button>
-          <button id="playButton" type="button">Play</button>
-          <button id="pauseButton" type="button" disabled>Pause</button>
-          <button id="stopButton" type="button" disabled>Stop</button>
-          <button id="restartButton" type="button" disabled>Restart</button>
-          <button id="fullscreenButton" type="button">Fullscreen</button>
+        <div class='button-row'>
+          <button id='randomSongButton' type='button'>Random Song</button>
+          <button id='playButton' type='button'>Play</button>
+          <button id='pauseButton' type='button' disabled>Pause</button>
+          <button id='stopButton' type='button' disabled>Stop</button>
+          <button id='restartButton' type='button' disabled>Restart</button>
+          <button id='fullscreenButton' type='button'>Fullscreen</button>
         </div>
 
-        <div id="statusMessage" class="status-box">
-          <strong id="statusTitle">No audio loaded.</strong>
-          <span id="statusText"> Choose an MP3 or WAV file to begin.</span>
+        <div id='statusMessage' class='status-box'>
+          <strong id='statusTitle'>No audio loaded.</strong>
+          <span id='statusText'> Choose an MP3 or WAV file to begin.</span>
         </div>
 
-        <div class="control-grid">
-          <div class="control-block">
-            <label for="modeSelect">
-              <span class="setting-label">Visual mode <button type="button" class="info-button" data-help-target="modeHelp" aria-label="About visual mode">?</button></span>
-              <span id="modeValue">Mixed</span>
+        <div class='control-grid'>
+          <div class='control-block'>
+            <label for='modeSelect'>
+              <span class='setting-label'>Visual mode <button type='button' class='info-button' data-help-target='modeHelp' aria-label='About visual mode'>?</button></span>
+              <span id='modeValue'>Mixed</span>
             </label>
-            <div class="help-popup" id="modeHelp" hidden>Changes the style of the animation.</div>
-            <select id="modeSelect" class="select-input">
-              <option value="mixed">Mixed</option>
-              <option value="nebula">Nebula</option>
-              <option value="geometry">Geometry</option>
-              <option value="waveform">Waveform</option>
-              <option value="spiral">Spiral</option>
+            <div class='help-popup' id='modeHelp' hidden>Changes the style of the animation.</div>
+            <select id='modeSelect' class='select-input'>
+              <option value='mixed'>Mixed</option>
+              <option value='nebula'>Nebula</option>
+              <option value='geometry'>Geometry</option>
+              <option value='waveform'>Waveform</option>
+              <option value='spiral'>Spiral</option>
             </select>
           </div>
 
-          <div class="control-block">
-            <label for="sensitivitySlider">
-              <span class="setting-label">Sensitivity <button type="button" class="info-button" data-help-target="sensitivityHelp" aria-label="About sensitivity">?</button></span>
-              <span id="sensitivityValue">1.45</span>
+          <div class='control-block'>
+            <label for='sensitivitySlider'>
+              <span class='setting-label'>Sensitivity <button type='button' class='info-button' data-help-target='sensitivityHelp' aria-label='About sensitivity'>?</button></span>
+              <span id='sensitivityValue'>1.45</span>
             </label>
-            <div class="help-popup" id="sensitivityHelp" hidden>Controls how strongly the visuals react to the music.</div>
-            <input id="sensitivitySlider" type="range" min="0.35" max="3.5" step="0.05" value="1.45" />
+            <div class='help-popup' id='sensitivityHelp' hidden>Controls how strongly the visuals react to the music.</div>
+            <input id='sensitivitySlider' type='range' min='0.35' max='3.5' step='0.05' value='1.45'>
           </div>
 
-          <div class="control-block">
-            <label for="colorSlider">
-              <span class="setting-label">Color intensity <button type="button" class="info-button" data-help-target="colorHelp" aria-label="About color intensity">?</button></span>
-              <span id="colorValue">1.45</span>
+          <div class='control-block'>
+            <label for='colorSlider'>
+              <span class='setting-label'>Color intensity <button type='button' class='info-button' data-help-target='colorHelp' aria-label='About color intensity'>?</button></span>
+              <span id='colorValue'>1.45</span>
             </label>
-            <div class="help-popup" id="colorHelp" hidden>Controls how bright and saturated the colors become.</div>
-            <input id="colorSlider" type="range" min="0.35" max="3" step="0.05" value="1.45" />
+            <div class='help-popup' id='colorHelp' hidden>Controls how bright and saturated the colors become.</div>
+            <input id='colorSlider' type='range' min='0.35' max='3' step='0.05' value='1.45'>
           </div>
 
-          <div class="control-block">
-            <label for="densitySlider">
-              <span class="setting-label">Shape density <button type="button" class="info-button" data-help-target="densityHelp" aria-label="About shape density">?</button></span>
-              <span id="densityValue">1.05</span>
+          <div class='control-block'>
+            <label for='densitySlider'>
+              <span class='setting-label'>Shape density <button type='button' class='info-button' data-help-target='densityHelp' aria-label='About shape density'>?</button></span>
+              <span id='densityValue'>1.05</span>
             </label>
-            <div class="help-popup" id="densityHelp" hidden>Controls how many shapes and particles appear.</div>
-            <input id="densitySlider" type="range" min="0.25" max="2.5" step="0.05" value="1.05" />
+            <div class='help-popup' id='densityHelp' hidden>Controls how many shapes and particles appear.</div>
+            <input id='densitySlider' type='range' min='0.25' max='2.5' step='0.05' value='1.05'>
           </div>
         </div>
 
-        <section id="teacherLibrarySection" class="library-section" aria-labelledby="teacherLibraryTitle" hidden>
-          <div class="library-header">
-            <span class="library-title" id="teacherLibraryTitle">Teacher Audio Library</span>
+        <section id='teacherLibrarySection' class='library-section' aria-labelledby='teacherLibraryTitle' hidden>
+          <div class='library-header'>
+            <span class='library-title' id='teacherLibraryTitle'>Teacher Audio Library</span>
           </div>
-          <p class="library-note">Permanent audio files managed in assets/audio. Only the selected song is loaded.</p>
-          <div id="teacherSongsList" class="song-list"></div>
+          <p class='library-note'>Permanent audio files managed in assets/audio. Only the selected song is loaded.</p>
+          <div id='teacherSongsList' class='song-list'></div>
         </section>
 
-        <section class="library-section" aria-labelledby="savedSongsTitle">
-          <div class="library-header">
-            <span class="library-title" id="savedSongsTitle">Saved Songs</span>
-            <button id="clearSavedSongsButton" type="button" class="tiny-button">Clear Saved Songs</button>
+        <section class='library-section' aria-labelledby='savedSongsTitle'>
+          <div class='library-header'>
+            <span class='library-title' id='savedSongsTitle'>Saved Songs</span>
+            <button id='clearSavedSongsButton' type='button' class='tiny-button'>Clear Saved Songs</button>
           </div>
-          <p class="library-note">Browser-only storage on this device. Saved songs are not uploaded online or shared across devices.</p>
-          <div id="savedSongsList" class="song-list"><div class="empty-library">No saved songs yet.</div></div>
+          <p class='library-note'>Browser-only storage on this device. Saved songs are not uploaded online or shared across devices.</p>
+          <div id='savedSongsList' class='song-list'><div class='empty-library'>No saved songs yet.</div></div>
         </section>
       </div>
     </details>
 
-    <div class="hud" aria-live="polite">
-      <div class="hud-line"><span>Now Playing</span><span id="hudFile">None</span></div>
-      <div class="hud-line"><span>Bass</span><span id="hudBass">0%</span></div>
-      <div class="hud-line"><span>Mids</span><span id="hudMids">0%</span></div>
-      <div class="hud-line"><span>Treble</span><span id="hudTreble">0%</span></div>
-      <div class="hud-line"><span>Volume</span><span id="hudVolume">0%</span></div>
+    <div class='hud' aria-live='polite'>
+      <div class='hud-line'><span>Now Playing</span><span id='hudFile'>None</span></div>
+      <div class='hud-line'><span>Bass</span><span id='hudBass'>0%</span></div>
+      <div class='hud-line'><span>Mids</span><span id='hudMids'>0%</span></div>
+      <div class='hud-line'><span>Treble</span><span id='hudTreble'>0%</span></div>
+      <div class='hud-line'><span>Volume</span><span id='hudVolume'>0%</span></div>
     </div>
 
-    <audio id="audioElement" preload="none"></audio>
+    <audio id='audioElement' preload='none'></audio>
   </div>
 
   <script>
-    // Teacher-managed permanent audio files belong here after they are committed to assets/audio/.
-    // This main branch currently exposes only assets/audio/.gitkeep, so no MP3/WAV filenames are listed yet.
+    // Teacher-managed permanent audio files. Keep only titles and paths here so audio loads lazily.
     const teacherAudioLibrary = [
-      // { title: "Villain Arc", file: "assets/audio/villain-arc.wav" }
+      { title: `Blood on the Fjord`, file: `assets/audio/Blood on the Fjord.mp3` },
+      { title: `Candyfloss`, file: `assets/audio/Candyfloss.mp3` },
+      { title: `Captain Grendel Scott`, file: `assets/audio/Captain Grendel Scott.mp3` },
+      { title: `Chaucer's Challenge`, file: `assets/audio/Chaucer's Challenge.mp3` },
+      { title: `Deacon's Chosen`, file: `assets/audio/Deacon's Chosen.mp3` },
+      { title: `Four Million`, file: `assets/audio/Four Million.mp3` },
+      { title: `Fuel the Fire`, file: `assets/audio/Fuel the Fire.mp3` },
+      { title: `Functional Pressure`, file: `assets/audio/Functional Pressure.mp3` },
+      { title: `Marrow Debt`, file: `assets/audio/Marrow Debt.mp3` },
+      { title: `Marrow Pressure`, file: `assets/audio/Marrow Pressure.mp3` },
+      { title: `Mountain Knows Your Name`, file: `assets/audio/Mountain knows your name.mp3` },
+      { title: `Plucked Bells Trapped`, file: `assets/audio/Plucked Bells Trapped.mp3` },
+      { title: `Right on Time`, file: `assets/audio/Right on Time.mp3` },
+      { title: `Talk Big, Dont Trip`, file: `assets/audio/Talk Big, Dont Trip.mp3` },
+      { title: `Villain Arc`, file: `assets/audio/Villain Arc.mp3` }
     ];
 
     const $ = (id) => document.getElementById(id);
-    const app = $("app");
-    const canvas = $("visualizerCanvas");
-    const ctx = canvas.getContext("2d");
-    const audioElement = $("audioElement");
-    const audioFileInput = $("audioFile");
-    const saveSongButton = $("saveSongButton");
-    const randomSongButton = $("randomSongButton");
-    const playButton = $("playButton");
-    const pauseButton = $("pauseButton");
-    const stopButton = $("stopButton");
-    const restartButton = $("restartButton");
-    const fullscreenButton = $("fullscreenButton");
-    const clearSavedSongsButton = $("clearSavedSongsButton");
-    const teacherLibrarySection = $("teacherLibrarySection");
-    const teacherSongsList = $("teacherSongsList");
-    const savedSongsList = $("savedSongsList");
-    const nowPlayingText = $("nowPlayingText");
-    const statusTitle = $("statusTitle");
-    const statusText = $("statusText");
-    const modeSelect = $("modeSelect");
-    const sensitivitySlider = $("sensitivitySlider");
-    const colorSlider = $("colorSlider");
-    const densitySlider = $("densitySlider");
-    const sensitivityValue = $("sensitivityValue");
-    const colorValue = $("colorValue");
-    const densityValue = $("densityValue");
-    const modeValue = $("modeValue");
-    const hudFile = $("hudFile");
-    const hudBass = $("hudBass");
-    const hudMids = $("hudMids");
-    const hudTreble = $("hudTreble");
-    const hudVolume = $("hudVolume");
+    const app = $('app');
+    const canvas = $('visualizerCanvas');
+    const ctx = canvas.getContext('2d');
+    const audioElement = $('audioElement');
+    const audioFileInput = $('audioFile');
+    const saveSongButton = $('saveSongButton');
+    const randomSongButton = $('randomSongButton');
+    const playButton = $('playButton');
+    const pauseButton = $('pauseButton');
+    const stopButton = $('stopButton');
+    const restartButton = $('restartButton');
+    const fullscreenButton = $('fullscreenButton');
+    const clearSavedSongsButton = $('clearSavedSongsButton');
+    const teacherLibrarySection = $('teacherLibrarySection');
+    const teacherSongsList = $('teacherSongsList');
+    const savedSongsList = $('savedSongsList');
+    const nowPlayingText = $('nowPlayingText');
+    const statusTitle = $('statusTitle');
+    const statusText = $('statusText');
+    const modeSelect = $('modeSelect');
+    const sensitivitySlider = $('sensitivitySlider');
+    const colorSlider = $('colorSlider');
+    const densitySlider = $('densitySlider');
+    const sensitivityValue = $('sensitivityValue');
+    const colorValue = $('colorValue');
+    const densityValue = $('densityValue');
+    const modeValue = $('modeValue');
+    const hudFile = $('hudFile');
+    const hudBass = $('hudBass');
+    const hudMids = $('hudMids');
+    const hudTreble = $('hudTreble');
+    const hudVolume = $('hudVolume');
 
     let audioContext = null;
     let analyser = null;
@@ -416,8 +408,8 @@
     let frequencyData = null;
     let waveformData = null;
     let animationFrameId = null;
-    let loadedFileName = "";
-    let currentObjectUrl = "";
+    let loadedFileName = '';
+    let currentObjectUrl = '';
     let currentAudioBlob = null;
     let currentTeacherTrackIndex = -1;
     let hasShownAnalysisError = false;
@@ -427,37 +419,27 @@
     let smoothedTreble = 0;
     let smoothedVolume = 0;
 
-    const DB_NAME = "audioMathVisualizerLibrary";
-    const STORE_NAME = "songs";
+    const DB_NAME = 'audioMathVisualizerLibrary';
+    const STORE_NAME = 'songs';
     let dbPromise = null;
-
     const particles = [];
     const stars = Array.from({ length: 130 }, () => ({
-      x: Math.random(),
-      y: Math.random(),
-      size: Math.random() * 1.7 + 0.35,
-      drift: Math.random() * 0.17 + 0.04
+      x: Math.random(), y: Math.random(), size: Math.random() * 1.7 + 0.35, drift: Math.random() * 0.17 + 0.04
     }));
 
     function escapeHtml(value) {
-      return String(value).replace(/[&<>"']/g, (character) => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        "\"": "&quot;",
-        "'": "&#39;"
-      }[character]));
+      return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
     }
 
     function updateStatus(message, strongText) {
       statusTitle.textContent = strongText;
-      statusText.textContent = " " + message;
+      statusText.textContent = ' ' + message;
     }
 
     function updateNowPlaying(name) {
-      const displayName = name || "No song selected";
+      const displayName = name || 'No song selected';
       nowPlayingText.textContent = displayName;
-      hudFile.textContent = displayName === "No song selected" ? "None" : displayName;
+      hudFile.textContent = displayName === 'No song selected' ? 'None' : displayName;
     }
 
     function updateButtonStates(isLoaded, isPlaying) {
@@ -484,11 +466,7 @@
     }
 
     function safelyRestartFromBeginning() {
-      try {
-        audioElement.currentTime = 0;
-      } catch (error) {
-        // Lazy-loaded teacher tracks may not know their duration yet.
-      }
+      try { audioElement.currentTime = 0; } catch (error) { }
     }
 
     function stopForSongSwitch() {
@@ -501,7 +479,7 @@
     function revokeCurrentObjectUrl() {
       if (currentObjectUrl) {
         URL.revokeObjectURL(currentObjectUrl);
-        currentObjectUrl = "";
+        currentObjectUrl = '';
       }
     }
 
@@ -511,21 +489,19 @@
       const height = window.innerHeight;
       canvas.width = Math.floor(width * ratio);
       canvas.height = Math.floor(height * ratio);
-      canvas.style.width = width + "px";
-      canvas.style.height = height + "px";
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     }
 
     function openSongsDb() {
-      if (!("indexedDB" in window)) return Promise.resolve(null);
+      if (!('indexedDB' in window)) return Promise.resolve(null);
       if (!dbPromise) {
         dbPromise = new Promise((resolve, reject) => {
           const request = indexedDB.open(DB_NAME, 1);
           request.onupgradeneeded = () => {
             const db = request.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-              db.createObjectStore(STORE_NAME, { keyPath: "id" });
-            }
+            if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'id' });
           };
           request.onsuccess = () => resolve(request.result);
           request.onerror = () => reject(request.error);
@@ -551,188 +527,139 @@
 
     async function loadSavedSongsFromDb() {
       const db = await openSongsDb();
-      if (!db) {
-        savedSongs = [];
-        renderSavedSongs();
-        return;
-      }
-      const transaction = db.transaction(STORE_NAME, "readonly");
+      if (!db) { savedSongs = []; renderSavedSongs(); return; }
+      const transaction = db.transaction(STORE_NAME, 'readonly');
       const songs = await requestToPromise(transaction.objectStore(STORE_NAME).getAll());
-      savedSongs = songs.sort((a, b) => (b.savedAt || "").localeCompare(a.savedAt || ""));
+      savedSongs = songs.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
       renderSavedSongs();
     }
 
     async function storeSongLocally() {
       if (!currentAudioBlob) {
-        updateStatus("Load an uploaded MP3 or WAV file first, then save it locally if you want it later.", "Nothing to save yet.");
+        updateStatus('Load an uploaded MP3 or WAV file first, then save it locally if you want it later.', 'Nothing to save yet.');
         return;
       }
       const db = await openSongsDb();
       if (!db) {
-        updateStatus("This browser does not support local saved songs here. You can still upload and play files temporarily.", "Local saving unavailable.");
+        updateStatus('This browser does not support local saved songs here. You can still upload and play files temporarily.', 'Local saving unavailable.');
         return;
       }
-      const transaction = db.transaction(STORE_NAME, "readwrite");
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
       transaction.objectStore(STORE_NAME).put({
-        id: String(Date.now()) + "-" + Math.random().toString(16).slice(2),
+        id: String(Date.now()) + '-' + Math.random().toString(16).slice(2),
         name: loadedFileName,
         blob: currentAudioBlob,
         savedAt: new Date().toISOString()
       });
       await transactionToPromise(transaction);
       await loadSavedSongsFromDb();
-      updateStatus("This song is saved only in this browser on this device.", "Song saved locally.");
+      updateStatus('This song is saved only in this browser on this device.', 'Song saved locally.');
     }
 
     async function deleteSavedSong(songId) {
+      if (!confirm('Delete this saved song from this browser?')) return;
       const db = await openSongsDb();
       if (!db) return;
-      const transaction = db.transaction(STORE_NAME, "readwrite");
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
       transaction.objectStore(STORE_NAME).delete(songId);
       await transactionToPromise(transaction);
       await loadSavedSongsFromDb();
-      updateStatus("The saved song was removed from this browser.", "Saved song deleted.");
+      updateStatus('The saved song was removed from this browser.', 'Saved song deleted.');
     }
 
     async function clearSavedSongs() {
+      if (!confirm('Clear all saved songs from this browser?')) return;
       const db = await openSongsDb();
       if (!db) return;
-      const transaction = db.transaction(STORE_NAME, "readwrite");
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
       transaction.objectStore(STORE_NAME).clear();
       await transactionToPromise(transaction);
       await loadSavedSongsFromDb();
-      updateStatus("All browser-only saved songs were cleared from this device.", "Saved songs cleared.");
-    }
-
-    function formatDate(isoText) {
-      if (!isoText) return "";
-      return new Date(isoText).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+      updateStatus('All saved songs were cleared from this browser.', 'Saved songs cleared.');
     }
 
     function renderSavedSongs() {
-      saveSongButton.disabled = !currentAudioBlob;
-      if (!("indexedDB" in window)) {
-        clearSavedSongsButton.disabled = true;
-        savedSongsList.innerHTML = "<div class=\"empty-library\">Local saved songs are not available in this browser.</div>";
+      if (!('indexedDB' in window)) {
+        saveSongButton.disabled = true;
+        savedSongsList.innerHTML = '<div class="empty-library">Local saved songs are not available in this browser.</div>';
         return;
       }
-      clearSavedSongsButton.disabled = savedSongs.length === 0;
       if (!savedSongs.length) {
-        savedSongsList.innerHTML = "<div class=\"empty-library\">No saved songs yet.</div>";
+        savedSongsList.innerHTML = '<div class="empty-library">No saved songs yet.</div>';
         return;
       }
       savedSongsList.innerHTML = savedSongs.map((song) => (
-        "<div class=\"song-row\">" +
-          "<div class=\"song-info\">" +
-            "<div class=\"song-name\">" + escapeHtml(song.name) + "</div>" +
-            "<div class=\"song-meta\">Saved " + escapeHtml(formatDate(song.savedAt)) + " in this browser</div>" +
-          "</div>" +
-          "<div class=\"song-actions\">" +
-            "<button type=\"button\" class=\"tiny-button\" data-load-saved=\"" + escapeHtml(song.id) + "\">Play</button>" +
-            "<button type=\"button\" class=\"tiny-button\" data-delete-saved=\"" + escapeHtml(song.id) + "\">Delete</button>" +
-          "</div>" +
-        "</div>"
-      )).join("");
-      savedSongsList.querySelectorAll("[data-load-saved]").forEach((button) => {
-        button.addEventListener("click", () => {
-          const song = savedSongs.find((entry) => entry.id === button.dataset.loadSaved);
-          if (song) loadAudioBlob(song.blob, song.name, "Saved song ready. Press Play when you are ready.");
+        '<div class="song-row"><div class="song-info"><span class="song-name">' + escapeHtml(song.name) + '</span>' +
+        '<span class="song-meta">Saved locally in this browser only.</span></div><div class="song-actions">' +
+        '<button type="button" class="tiny-button" data-load-saved-song="' + escapeHtml(song.id) + '">Play</button>' +
+        '<button type="button" class="tiny-button" data-delete-saved-song="' + escapeHtml(song.id) + '">Delete</button></div></div>'
+      )).join('');
+      savedSongsList.querySelectorAll('[data-load-saved-song]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const song = savedSongs.find((item) => item.id === button.dataset.loadSavedSong);
+          if (song) loadAudioBlob(song.blob, song.name, 'Saved song loaded from this browser. Press Play when you are ready.', false);
         });
       });
-      savedSongsList.querySelectorAll("[data-delete-saved]").forEach((button) => {
-        button.addEventListener("click", () => deleteSavedSong(button.dataset.deleteSaved).catch(() => {
-          updateStatus("The saved song could not be deleted right now.", "Delete failed.");
-        }));
+      savedSongsList.querySelectorAll('[data-delete-saved-song]').forEach((button) => {
+        button.addEventListener('click', () => deleteSavedSong(button.dataset.deleteSavedSong).catch(() => updateStatus('The saved song could not be deleted right now.', 'Delete failed.')));
       });
     }
 
     function renderTeacherLibrary() {
-      if (!teacherAudioLibrary.length) {
-        teacherLibrarySection.hidden = true;
-        randomSongButton.disabled = true;
-        return;
-      }
+      if (!teacherAudioLibrary.length) { teacherLibrarySection.hidden = true; return; }
       teacherLibrarySection.hidden = false;
       teacherSongsList.innerHTML = teacherAudioLibrary.map((song, index) => (
-        "<div class=\"song-row\">" +
-          "<div class=\"song-info\">" +
-            "<div class=\"song-name\">" + escapeHtml(song.title) + "</div>" +
-            "<div class=\"song-meta\">" + escapeHtml(song.file) + "</div>" +
-          "</div>" +
-          "<div class=\"song-actions\">" +
-            "<button type=\"button\" class=\"tiny-button\" data-load-teacher=\"" + index + "\">Load</button>" +
-          "</div>" +
-        "</div>"
-      )).join("");
-      teacherSongsList.querySelectorAll("[data-load-teacher]").forEach((button) => {
-        button.addEventListener("click", () => loadTeacherTrack(teacherAudioLibrary[Number(button.dataset.loadTeacher)], Number(button.dataset.loadTeacher)));
+        '<div class="song-row"><div class="song-info"><span class="song-name">' + escapeHtml(song.title) + '</span>' +
+        '<span class="song-meta">Teacher library track. Loaded only when selected.</span></div>' +
+        '<button type="button" class="tiny-button" data-load-teacher-song="' + index + '">Load</button></div>'
+      )).join('');
+      teacherSongsList.querySelectorAll('[data-load-teacher-song]').forEach((button) => {
+        button.addEventListener('click', () => loadTeacherTrack(teacherAudioLibrary[Number(button.dataset.loadTeacherSong)], Number(button.dataset.loadTeacherSong), 'Teacher song selected. Press Play when you are ready.'));
       });
     }
 
-    function bindHelpButtons() {
-      const buttons = Array.from(document.querySelectorAll("[data-help-target]"));
-      function closeAll(exceptId) {
-        buttons.forEach((button) => {
-          const popup = $(button.dataset.helpTarget);
-          const keepOpen = exceptId && button.dataset.helpTarget === exceptId;
-          if (popup) popup.hidden = !keepOpen;
-          button.setAttribute("aria-expanded", keepOpen ? "true" : "false");
-        });
-      }
-      buttons.forEach((button) => {
-        button.setAttribute("aria-expanded", "false");
-        button.addEventListener("click", (event) => {
-          event.stopPropagation();
-          const popup = $(button.dataset.helpTarget);
-          closeAll(popup && popup.hidden ? button.dataset.helpTarget : "");
-        });
-      });
-      document.addEventListener("click", (event) => {
-        if (!event.target.closest("[data-help-target]") && !event.target.closest(".help-popup")) closeAll("");
-      });
-    }
-
-    function loadAudioBlob(blob, fileName, messageText) {
+    function loadAudioBlob(blob, fileName, messageText, canSave = true) {
       stopForSongSwitch();
       revokeCurrentObjectUrl();
       currentTeacherTrackIndex = -1;
-      currentAudioBlob = blob;
+      currentAudioBlob = canSave ? blob : null;
       currentObjectUrl = URL.createObjectURL(blob);
       audioElement.src = currentObjectUrl;
+      audioElement.load();
       loadedFileName = fileName;
-      hasShownAnalysisError = false;
       updateNowPlaying(loadedFileName);
+      resetAudioLevels();
+      hasShownAnalysisError = false;
+      saveSongButton.disabled = !canSave;
       updateButtonStates(true, false);
-      updateStatus(messageText || "Press Play to start the visualizer.", "Loaded: " + loadedFileName);
-      renderSavedSongs();
+      updateStatus(messageText, 'Audio loaded: ' + loadedFileName);
     }
 
     function loadTeacherTrack(track, index, messageText) {
-      if (!track) return;
       stopForSongSwitch();
       revokeCurrentObjectUrl();
-      currentTeacherTrackIndex = typeof index === "number" ? index : teacherAudioLibrary.indexOf(track);
+      currentTeacherTrackIndex = typeof index === 'number' ? index : teacherAudioLibrary.indexOf(track);
       currentAudioBlob = null;
       audioElement.src = track.file;
+      audioElement.load();
       loadedFileName = track.title;
-      hasShownAnalysisError = false;
       updateNowPlaying(loadedFileName);
+      resetAudioLevels();
+      hasShownAnalysisError = false;
+      saveSongButton.disabled = true;
       updateButtonStates(true, false);
-      updateStatus(messageText || "Press Play to load this teacher-managed track from this site.", "Loaded: " + loadedFileName);
-      renderSavedSongs();
+      updateStatus(messageText || 'Teacher song selected. Press Play when you are ready.', 'Audio loaded: ' + loadedFileName);
     }
 
     function selectRandomTeacherTrack() {
       if (!teacherAudioLibrary.length) {
-        updateStatus("Teacher audio files are not committed in assets/audio yet. Upload an MP3 or WAV file to use the visualizer.", "No teacher songs available.");
+        updateStatus('Upload an MP3 or WAV file to use the visualizer.', 'No teacher songs available.');
         updateButtonStates(Boolean(audioElement.src), !audioElement.paused);
         return;
       }
       let nextIndex = Math.floor(Math.random() * teacherAudioLibrary.length);
-      if (teacherAudioLibrary.length > 1) {
-        while (nextIndex === currentTeacherTrackIndex) nextIndex = Math.floor(Math.random() * teacherAudioLibrary.length);
-      }
-      loadTeacherTrack(teacherAudioLibrary[nextIndex], nextIndex, "Random song selected. Press Play when you are ready.");
+      if (teacherAudioLibrary.length > 1) while (nextIndex === currentTeacherTrackIndex) nextIndex = Math.floor(Math.random() * teacherAudioLibrary.length);
+      loadTeacherTrack(teacherAudioLibrary[nextIndex], nextIndex, 'Random song selected. Press Play when you are ready.');
     }
 
     async function ensureAudioSetup() {
@@ -747,7 +674,7 @@
         sourceNode.connect(analyser);
         analyser.connect(audioContext.destination);
       }
-      if (audioContext.state === "suspended") await audioContext.resume();
+      if (audioContext.state === 'suspended') await audioContext.resume();
     }
 
     function averageRange(data, startRatio, endRatio) {
@@ -767,7 +694,7 @@
         hasShownAnalysisError = false;
       } catch (error) {
         if (!hasShownAnalysisError) {
-          updateStatus("The music is playing, but audio analysis could not start. Try pressing Stop, then Play again.", "Audio analysis error.");
+          updateStatus('The music is playing, but audio analysis could not start. Try pressing Stop, then Play again.', 'Audio analysis error.');
           hasShownAnalysisError = true;
         }
         return { bass: 0, mids: 0, treble: 0, volume: 0 };
@@ -790,10 +717,10 @@
     }
 
     function updateHud(levels) {
-      hudBass.textContent = Math.round(levels.bass * 100) + "%";
-      hudMids.textContent = Math.round(levels.mids * 100) + "%";
-      hudTreble.textContent = Math.round(levels.treble * 100) + "%";
-      hudVolume.textContent = Math.round(levels.volume * 100) + "%";
+      hudBass.textContent = Math.round(levels.bass * 100) + '%';
+      hudMids.textContent = Math.round(levels.mids * 100) + '%';
+      hudTreble.textContent = Math.round(levels.treble * 100) + '%';
+      hudVolume.textContent = Math.round(levels.volume * 100) + '%';
     }
 
     function controlValues() {
@@ -808,13 +735,7 @@
       const desiredCount = Math.max(8, Math.floor(72 * Number(densitySlider.value)));
       if (particles.length > desiredCount) particles.length = desiredCount;
       while (particles.length < desiredCount) {
-        particles.push({
-          angle: Math.random() * Math.PI * 2,
-          distance: Math.random() * 220 + 30,
-          speed: Math.random() * 0.014 + 0.004,
-          size: Math.random() * 3.4 + 0.8,
-          hueOffset: Math.random() * 120
-        });
+        particles.push({ angle: Math.random() * Math.PI * 2, distance: Math.random() * 220 + 30, speed: Math.random() * 0.014 + 0.004, size: Math.random() * 3.4 + 0.8, hueOffset: Math.random() * 120 });
       }
     }
 
@@ -825,15 +746,15 @@
       const hue = (time * 0.03 + levels.mids * 210 + levels.treble * 80) % 360;
       ctx.clearRect(0, 0, width, height);
       const bg = ctx.createRadialGradient(width * 0.5, height * 0.5, width * 0.08, width * 0.5, height * 0.5, width * 0.72);
-      bg.addColorStop(0, "hsla(" + hue + ", 100%, " + (12 + levels.volume * 18 * intensity) + "%, " + (0.34 + levels.volume * 0.28 * intensity) + ")");
-      bg.addColorStop(0.42, "hsla(" + ((hue + 80) % 360) + ", 100%, 12%, " + (0.22 + levels.bass * 0.18) + ")");
-      bg.addColorStop(1, "rgba(1, 3, 10, 0.98)");
+      bg.addColorStop(0, 'hsla(' + hue + ', 100%, ' + (12 + levels.volume * 18 * intensity) + '%, ' + (0.34 + levels.volume * 0.28 * intensity) + ')');
+      bg.addColorStop(0.42, 'hsla(' + ((hue + 80) % 360) + ', 100%, 12%, ' + (0.22 + levels.bass * 0.18) + ')');
+      bg.addColorStop(1, 'rgba(1, 3, 10, 0.98)');
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, width, height);
       const mist = ctx.createLinearGradient(0, 0, width, height);
-      mist.addColorStop(0, "hsla(" + ((hue + 150) % 360) + ", 100%, 55%, " + (0.05 + 0.08 * intensity * levels.mids) + ")");
-      mist.addColorStop(0.5, "hsla(" + ((hue + 285) % 360) + ", 100%, 48%, " + (0.03 + 0.06 * levels.treble * intensity) + ")");
-      mist.addColorStop(1, "hsla(" + ((hue + 35) % 360) + ", 100%, 55%, " + (0.05 + 0.08 * levels.bass * intensity) + ")");
+      mist.addColorStop(0, 'hsla(' + ((hue + 150) % 360) + ', 100%, 55%, ' + (0.05 + 0.08 * intensity * levels.mids) + ')');
+      mist.addColorStop(0.5, 'hsla(' + ((hue + 285) % 360) + ', 100%, 48%, ' + (0.03 + 0.06 * levels.treble * intensity) + ')');
+      mist.addColorStop(1, 'hsla(' + ((hue + 35) % 360) + ', 100%, 55%, ' + (0.05 + 0.08 * levels.bass * intensity) + ')');
       ctx.fillStyle = mist;
       ctx.fillRect(0, 0, width, height);
     }
@@ -847,7 +768,7 @@
         const y = (star.y * height + time * star.drift) % height;
         const glow = star.size + levels.treble * 7 + levels.volume * 2;
         ctx.beginPath();
-        ctx.fillStyle = "rgba(255, 255, 255, " + Math.min(0.92, 0.18 + levels.treble * 0.72 + levels.volume * 0.2) + ")";
+        ctx.fillStyle = 'rgba(255, 255, 255, ' + Math.min(0.92, 0.18 + levels.treble * 0.72 + levels.volume * 0.2) + ')';
         ctx.arc(x, y, glow, 0, Math.PI * 2);
         ctx.fill();
       }
@@ -862,7 +783,7 @@
       const centerY = height / 2;
       const pulse = 1 + levels.bass * 2.8 * sensitivity + levels.volume * 0.55;
       ctx.save();
-      ctx.globalCompositeOperation = "screen";
+      ctx.globalCompositeOperation = 'screen';
       for (let i = 0; i < Math.max(3, Math.floor(6 * density)); i += 1) {
         const radius = (120 + i * 62) * pulse;
         const angle = time * 0.00034 * (i + 1) * (0.6 + sensitivity * 0.25) + levels.mids * 4.2;
@@ -870,9 +791,9 @@
         const y = centerY + Math.sin(angle * 1.35) * radius * (0.18 + levels.treble * 0.1);
         const hue = (185 + i * 34 + time * 0.025 + levels.treble * 180) % 360;
         const gradient = ctx.createRadialGradient(x, y, radius * 0.08, x, y, radius);
-        gradient.addColorStop(0, "hsla(" + hue + ", 100%, 70%, " + Math.min(0.55, 0.12 * intensity + levels.volume * 0.18) + ")");
-        gradient.addColorStop(0.42, "hsla(" + ((hue + 48) % 360) + ", 100%, 50%, " + Math.min(0.28, 0.08 * intensity + levels.bass * 0.1) + ")");
-        gradient.addColorStop(1, "hsla(" + ((hue + 120) % 360) + ", 90%, 40%, 0)");
+        gradient.addColorStop(0, 'hsla(' + hue + ', 100%, 70%, ' + Math.min(0.55, 0.12 * intensity + levels.volume * 0.18) + ')');
+        gradient.addColorStop(0.42, 'hsla(' + ((hue + 48) % 360) + ', 100%, 50%, ' + Math.min(0.28, 0.08 * intensity + levels.bass * 0.1) + ')');
+        gradient.addColorStop(1, 'hsla(' + ((hue + 120) % 360) + ', 90%, 40%, 0)');
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -888,7 +809,7 @@
       const spacing = Math.max(18, 58 - levels.bass * 30 - density * 9);
       ctx.save();
       ctx.globalAlpha = Math.min(0.55, 0.1 + levels.volume * 0.24 + intensity * 0.05);
-      ctx.strokeStyle = "rgba(126, 255, 236, 0.46)";
+      ctx.strokeStyle = 'rgba(126, 255, 236, 0.46)';
       ctx.lineWidth = 1 + levels.bass * 1.4;
       for (let x = 0; x < width + spacing; x += spacing) {
         ctx.beginPath();
@@ -914,7 +835,7 @@
       const layers = Math.max(3, Math.floor(10 * density));
       ctx.save();
       ctx.lineWidth = 1.4 + levels.volume * 2.2 * sensitivity;
-      ctx.globalCompositeOperation = "lighter";
+      ctx.globalCompositeOperation = 'lighter';
       for (let i = 0; i < layers; i += 1) {
         const sides = 3 + (i % 6);
         const rotation = time * 0.00036 * (i + 1) * sensitivity + levels.mids * (i + 1) * 0.85;
@@ -926,12 +847,11 @@
           const wavePush = Math.sin(time * 0.0032 + point + i) * levels.mids * 46 * sensitivity;
           const x = centerX + Math.cos(angle) * (radius + wavePush);
           const y = centerY + Math.sin(angle) * (radius + wavePush);
-          if (point === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          if (point === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
-        ctx.strokeStyle = "hsla(" + hue + ", 100%, " + Math.min(82, 54 + intensity * 12) + "%, " + Math.min(0.95, 0.2 + levels.volume * 0.7 + intensity * 0.08) + ")";
+        ctx.strokeStyle = 'hsla(' + hue + ', 100%, ' + Math.min(82, 54 + intensity * 12) + '%, ' + Math.min(0.95, 0.2 + levels.volume * 0.7 + intensity * 0.08) + ')';
         ctx.shadowBlur = 14 + 22 * intensity + levels.bass * 24;
-        ctx.shadowColor = "hsla(" + hue + ", 100%, 70%, 0.82)";
+        ctx.shadowColor = 'hsla(' + hue + ', 100%, 70%, 0.82)';
         ctx.stroke();
       }
       ctx.restore();
@@ -947,7 +867,7 @@
       const samples = waveformData || [];
       const sampleCount = samples.length || 180;
       ctx.save();
-      ctx.globalCompositeOperation = "lighter";
+      ctx.globalCompositeOperation = 'lighter';
       for (let layer = 0; layer < lineCount; layer += 1) {
         ctx.beginPath();
         for (let i = 0; i < sampleCount; i += 1) {
@@ -957,14 +877,13 @@
           const amplitude = 52 + levels.bass * 240 * sensitivity + levels.volume * 90 + layer * 20;
           const sineCurve = Math.sin((i / sampleCount) * Math.PI * (6 + levels.treble * 8) + time * 0.004 * sensitivity) * (levels.mids * 58 * sensitivity + 8);
           const y = centerY + sample * amplitude + offset + sineCurve;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         const hue = (175 + layer * 42 + levels.treble * 220 + time * 0.018) % 360;
-        ctx.strokeStyle = "hsla(" + hue + ", 100%, " + Math.min(84, 58 + intensity * 10) + "%, " + Math.min(0.95, 0.3 + 0.22 * intensity + levels.volume * 0.35) + ")";
+        ctx.strokeStyle = 'hsla(' + hue + ', 100%, ' + Math.min(84, 58 + intensity * 10) + '%, ' + Math.min(0.95, 0.3 + 0.22 * intensity + levels.volume * 0.35) + ')';
         ctx.lineWidth = 1.8 + layer * 0.7 + levels.treble * 3.2;
         ctx.shadowBlur = 18 + intensity * 16 + levels.treble * 20;
-        ctx.shadowColor = "hsla(" + hue + ", 100%, 70%, 0.85)";
+        ctx.shadowColor = 'hsla(' + hue + ', 100%, 70%, 0.85)';
         ctx.stroke();
       }
       ctx.restore();
@@ -978,7 +897,7 @@
       const centerY = height / 2;
       const loops = Math.max(120, Math.floor(380 * density));
       ctx.save();
-      ctx.globalCompositeOperation = "screen";
+      ctx.globalCompositeOperation = 'screen';
       ctx.lineWidth = 1.5 + levels.volume * 2.2;
       for (let arm = 0; arm < 3; arm += 1) {
         ctx.beginPath();
@@ -989,13 +908,12 @@
           const ripple = Math.sin(t * 28 - time * 0.005 * sensitivity + arm) * levels.treble * 38 * sensitivity;
           const x = centerX + Math.cos(angle) * (radius + ripple);
           const y = centerY + Math.sin(angle) * (radius + ripple);
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         const hue = (245 + arm * 65 + levels.volume * 180 + time * 0.016) % 360;
-        ctx.strokeStyle = "hsla(" + hue + ", 100%, " + Math.min(82, 56 + intensity * 12) + "%, " + Math.min(0.9, 0.2 + levels.mids * 0.55 + intensity * 0.08) + ")";
+        ctx.strokeStyle = 'hsla(' + hue + ', 100%, ' + Math.min(82, 56 + intensity * 12) + '%, ' + Math.min(0.9, 0.2 + levels.mids * 0.55 + intensity * 0.08) + ')';
         ctx.shadowBlur = 20 + intensity * 16 + levels.bass * 26;
-        ctx.shadowColor = "hsla(" + hue + ", 100%, 68%, 0.85)";
+        ctx.shadowColor = 'hsla(' + hue + ', 100%, 68%, 0.85)';
         ctx.stroke();
       }
       ctx.restore();
@@ -1009,7 +927,7 @@
       const centerY = height / 2;
       createParticles();
       ctx.save();
-      ctx.globalCompositeOperation = "lighter";
+      ctx.globalCompositeOperation = 'lighter';
       for (const particle of particles) {
         particle.angle += particle.speed * (0.8 + sensitivity * 0.45) + levels.mids * 0.025 * sensitivity;
         const burst = levels.treble * 95 * sensitivity + levels.volume * 35;
@@ -1019,13 +937,13 @@
         const size = particle.size + levels.treble * 6.8 + levels.volume * 3.2;
         const hue = (170 + particle.hueOffset + levels.treble * 210 + time * 0.035) % 360;
         ctx.beginPath();
-        ctx.fillStyle = "hsla(" + hue + ", 100%, " + Math.min(86, 58 + intensity * 12) + "%, " + Math.min(0.9, 0.16 + 0.18 * intensity + levels.treble * 0.35) + ")";
+        ctx.fillStyle = 'hsla(' + hue + ', 100%, ' + Math.min(86, 58 + intensity * 12) + '%, ' + Math.min(0.9, 0.16 + 0.18 * intensity + levels.treble * 0.35) + ')';
         ctx.shadowBlur = 10 + intensity * 12 + levels.treble * 18;
-        ctx.shadowColor = "hsla(" + hue + ", 100%, 70%, 0.8)";
+        ctx.shadowColor = 'hsla(' + hue + ', 100%, 70%, 0.8)';
         ctx.arc(x, y, size, 0, Math.PI * 2);
         ctx.fill();
         if (levels.treble > 0.1) {
-          ctx.strokeStyle = "hsla(" + hue + ", 100%, 75%, " + Math.min(0.65, levels.treble * 0.9) + ")";
+          ctx.strokeStyle = 'hsla(' + hue + ', 100%, 75%, ' + Math.min(0.65, levels.treble * 0.9) + ')';
           ctx.lineWidth = 1 + levels.treble * 2;
           ctx.beginPath();
           ctx.moveTo(x, y);
@@ -1045,15 +963,15 @@
       const radius = 34 + levels.bass * 160 * sensitivity + levels.volume * 42;
       const hue = (190 + time * 0.035 + levels.mids * 210 + levels.treble * 80) % 360;
       ctx.save();
-      ctx.globalCompositeOperation = "screen";
+      ctx.globalCompositeOperation = 'screen';
       ctx.beginPath();
       ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      ctx.fillStyle = "hsla(" + hue + ", 100%, 72%, " + Math.min(0.48, 0.08 + levels.volume * 0.28 * intensity) + ")";
+      ctx.fillStyle = 'hsla(' + hue + ', 100%, 72%, ' + Math.min(0.48, 0.08 + levels.volume * 0.28 * intensity) + ')';
       ctx.fill();
       ctx.lineWidth = 2.5 + levels.bass * 4;
-      ctx.strokeStyle = "hsla(" + ((hue + 55) % 360) + ", 100%, 78%, " + Math.min(0.95, 0.25 + levels.bass * 0.65 + intensity * 0.08) + ")";
+      ctx.strokeStyle = 'hsla(' + ((hue + 55) % 360) + ', 100%, 78%, ' + Math.min(0.95, 0.25 + levels.bass * 0.65 + intensity * 0.08) + ')';
       ctx.shadowBlur = 22 + intensity * 18 + levels.bass * 28;
-      ctx.shadowColor = "hsla(" + hue + ", 100%, 74%, 0.9)";
+      ctx.shadowColor = 'hsla(' + hue + ', 100%, 74%, 0.9)';
       ctx.stroke();
       ctx.restore();
     }
@@ -1064,25 +982,11 @@
       drawStars(time, levels);
       drawNebula(time, levels);
       const mode = modeSelect.value;
-      if (mode === "nebula") {
-        drawParticles(time, levels);
-        drawCenterCircle(time, levels);
-      } else if (mode === "geometry") {
-        drawGeometry(time, levels);
-        drawParticles(time, levels);
-      } else if (mode === "waveform") {
-        drawWaveform(levels, time);
-        drawCenterCircle(time, levels);
-      } else if (mode === "spiral") {
-        drawSpiral(time, levels);
-        drawParticles(time, levels);
-      } else {
-        drawGeometry(time, levels);
-        drawWaveform(levels, time);
-        drawSpiral(time, levels);
-        drawParticles(time, levels);
-        drawCenterCircle(time, levels);
-      }
+      if (mode === 'nebula') { drawParticles(time, levels); drawCenterCircle(time, levels); }
+      else if (mode === 'geometry') { drawGeometry(time, levels); drawParticles(time, levels); }
+      else if (mode === 'waveform') { drawWaveform(levels, time); drawCenterCircle(time, levels); }
+      else if (mode === 'spiral') { drawSpiral(time, levels); drawParticles(time, levels); }
+      else { drawGeometry(time, levels); drawWaveform(levels, time); drawSpiral(time, levels); drawParticles(time, levels); drawCenterCircle(time, levels); }
       updateHud(levels);
       animationFrameId = requestAnimationFrame(drawFrame);
     }
@@ -1093,7 +997,7 @@
 
     async function playAudio() {
       if (!audioElement.src) {
-        updateStatus("Choose an MP3 or WAV file before pressing Play.", "No audio loaded.");
+        updateStatus('Choose an MP3 or WAV file before pressing Play.', 'No audio loaded.');
         return;
       }
       try {
@@ -1101,16 +1005,16 @@
         await audioElement.play();
         startAnimation();
         updateButtonStates(true, true);
-        updateStatus("The visualizer is reacting live to the music.", "Playing: " + loadedFileName);
+        updateStatus('The visualizer is reacting live to the music.', 'Playing: ' + loadedFileName);
       } catch (error) {
-        updateStatus("Chrome blocked playback or analysis setup. Try pressing Play again after interacting with the page.", "Playback paused.");
+        updateStatus('Chrome blocked playback or analysis setup. Try pressing Play again after interacting with the page.', 'Playback paused.');
       }
     }
 
     function pauseAudio() {
       audioElement.pause();
       updateButtonStates(Boolean(audioElement.src), false);
-      updateStatus("Press Play to continue the animation with the same file.", "Paused: " + loadedFileName);
+      updateStatus('Press Play to continue the animation with the same file.', 'Paused: ' + loadedFileName);
     }
 
     function stopAudio() {
@@ -1118,14 +1022,11 @@
       safelyRestartFromBeginning();
       resetAudioLevels();
       updateButtonStates(Boolean(audioElement.src), false);
-      updateStatus("Playback has stopped. Press Play to start again.", "Stopped: " + loadedFileName);
+      updateStatus('Playback has stopped. Press Play to start again.', 'Stopped: ' + loadedFileName);
     }
 
     function restartAudio() {
-      if (!audioElement.src) {
-        updateStatus("Choose an audio file first.", "No audio loaded.");
-        return;
-      }
+      if (!audioElement.src) { updateStatus('Choose an audio file first.', 'No audio loaded.'); return; }
       safelyRestartFromBeginning();
       playAudio();
     }
@@ -1135,46 +1036,39 @@
       else await document.exitFullscreen();
     }
 
-    audioFileInput.addEventListener("change", (event) => {
+    function bindHelpButtons() {
+      document.querySelectorAll('[data-help-target]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const target = $(button.dataset.helpTarget);
+          if (!target) return;
+          document.querySelectorAll('.help-popup').forEach((popup) => { if (popup !== target) popup.hidden = true; });
+          target.hidden = !target.hidden;
+        });
+      });
+    }
+
+    audioFileInput.addEventListener('change', (event) => {
       const file = event.target.files[0];
-      if (file) loadAudioBlob(file, file.name, "Uploaded file ready. Press Play when you are ready.");
+      if (file) loadAudioBlob(file, file.name, 'Uploaded file ready. Press Play when you are ready.');
     });
-
-    saveSongButton.addEventListener("click", () => storeSongLocally().catch(() => {
-      updateStatus("This song could not be saved locally in the browser right now.", "Save failed.");
-    }));
-    randomSongButton.addEventListener("click", selectRandomTeacherTrack);
-    playButton.addEventListener("click", playAudio);
-    pauseButton.addEventListener("click", pauseAudio);
-    stopButton.addEventListener("click", stopAudio);
-    restartButton.addEventListener("click", restartAudio);
-    clearSavedSongsButton.addEventListener("click", () => clearSavedSongs().catch(() => {
-      updateStatus("The saved songs could not be cleared right now.", "Clear failed.");
-    }));
-    fullscreenButton.addEventListener("click", () => toggleFullscreen().catch(() => {
-      updateStatus("Fullscreen is not available right now.", "Fullscreen unavailable.");
-    }));
-
-    modeSelect.addEventListener("change", updateSliderLabels);
-    sensitivitySlider.addEventListener("input", updateSliderLabels);
-    colorSlider.addEventListener("input", updateSliderLabels);
-    densitySlider.addEventListener("input", () => {
-      createParticles();
-      updateSliderLabels();
-    });
-
-    audioElement.addEventListener("play", () => updateButtonStates(Boolean(audioElement.src), true));
-    audioElement.addEventListener("pause", () => {
-      if (audioElement.currentTime > 0 && !audioElement.ended) updateButtonStates(Boolean(audioElement.src), false);
-    });
-    audioElement.addEventListener("error", () => updateStatus("This audio file could not be loaded for playback or analysis.", "Audio load error."));
-    audioElement.addEventListener("ended", () => {
-      updateButtonStates(Boolean(audioElement.src), false);
-      updateStatus("Playback finished. Press Restart or Play to hear it again.", "Finished: " + loadedFileName);
-    });
-
-    window.addEventListener("resize", setCanvasSize);
-    window.addEventListener("beforeunload", revokeCurrentObjectUrl);
+    saveSongButton.addEventListener('click', () => storeSongLocally().catch(() => updateStatus('This song could not be saved locally in the browser right now.', 'Save failed.')));
+    randomSongButton.addEventListener('click', selectRandomTeacherTrack);
+    playButton.addEventListener('click', playAudio);
+    pauseButton.addEventListener('click', pauseAudio);
+    stopButton.addEventListener('click', stopAudio);
+    restartButton.addEventListener('click', restartAudio);
+    clearSavedSongsButton.addEventListener('click', () => clearSavedSongs().catch(() => updateStatus('The saved songs could not be cleared right now.', 'Clear failed.')));
+    fullscreenButton.addEventListener('click', () => toggleFullscreen().catch(() => updateStatus('Fullscreen is not available right now.', 'Fullscreen unavailable.')));
+    modeSelect.addEventListener('change', updateSliderLabels);
+    sensitivitySlider.addEventListener('input', updateSliderLabels);
+    colorSlider.addEventListener('input', updateSliderLabels);
+    densitySlider.addEventListener('input', () => { createParticles(); updateSliderLabels(); });
+    audioElement.addEventListener('play', () => updateButtonStates(Boolean(audioElement.src), true));
+    audioElement.addEventListener('pause', () => { if (audioElement.currentTime > 0 && !audioElement.ended) updateButtonStates(Boolean(audioElement.src), false); });
+    audioElement.addEventListener('error', () => updateStatus('This audio file could not be loaded for playback or analysis.', 'Audio load error.'));
+    audioElement.addEventListener('ended', () => { updateButtonStates(Boolean(audioElement.src), false); updateStatus('Playback finished. Press Restart or Play to hear it again.', 'Finished: ' + loadedFileName); });
+    window.addEventListener('resize', setCanvasSize);
+    window.addEventListener('beforeunload', revokeCurrentObjectUrl);
 
     setCanvasSize();
     createParticles();
@@ -1182,12 +1076,11 @@
     updateButtonStates(false, false);
     bindHelpButtons();
     renderTeacherLibrary();
-    if (teacherAudioLibrary.length) {
-      selectRandomTeacherTrack();
-    } else {
+    if (teacherAudioLibrary.length) selectRandomTeacherTrack();
+    else {
       randomSongButton.disabled = true;
-      updateNowPlaying("");
-      updateStatus("Upload an MP3 or WAV file to begin. Add teacher tracks to assets/audio and list them in teacherAudioLibrary to enable Random Song.", "No teacher songs available.");
+      updateNowPlaying('');
+      updateStatus('Upload an MP3 or WAV file to begin. Add teacher tracks to assets/audio and list them in teacherAudioLibrary to enable Random Song.', 'No teacher songs available.');
     }
     loadSavedSongsFromDb().catch(renderSavedSongs);
     startAnimation();
