@@ -330,7 +330,12 @@
       { title: 'DeltaMath', link: 'https://www.deltamath.com/' },
       { title: 'ClassLink', link: '#' },
       { title: 'Google Classroom', link: 'https://classroom.google.com/' },
-      { title: 'Calculator tools', link: '#' }
+      { title: 'Calculator tools', link: '#' },
+      {
+        title: 'Audio Math Visualizer',
+        description: 'Upload an MP3 or WAV file and watch math-inspired visuals react to the sound.',
+        link: 'audio-math-visualizer/'
+      }
     ];
     // ===== END EDITABLE DATA =====
 
@@ -365,7 +370,7 @@
         '&': '&amp;',
         '<': '&lt;',
         '>': '&gt;',
-        '\"': '&quot;',
+        '"': '&quot;',
         "'": '&#39;'
       }[character]));
     }
@@ -402,7 +407,7 @@
 
     function renderUsefulLinks() {
       document.getElementById('usefulLinks').innerHTML = usefulLinks.map(item => (
-        `<a class="useful-link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>`
+        `<a class="useful-link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(item.description || item.title)}" aria-label="${escapeHtml(item.description || item.title)}">${escapeHtml(item.title)}</a>`
       )).join('');
     }
 
