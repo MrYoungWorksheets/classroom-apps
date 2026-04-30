@@ -227,16 +227,50 @@
     .hud-line { display: flex; justify-content: space-between; gap: 10px; font-size: 0.84rem; }
     .hud-line span:last-child { color: var(--accent); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+    .fullscreen-mini-panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 4;
+      display: none;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-width: min(430px, calc(100vw - 24px));
+      padding: 10px;
+      border: 1px solid rgba(126, 255, 236, 0.24);
+      border-radius: 16px;
+      background: rgba(5, 9, 24, 0.72);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .fullscreen-mini-panel button {
+      min-height: 38px;
+      padding: 8px 11px;
+      font-size: 0.84rem;
+    }
+
+    #app.fullscreen-mode .overlay { display: none; }
+    #app.fullscreen-mode .fullscreen-mini-panel { display: flex; }
+
     @media (max-width: 700px) {
       .overlay { width: calc(100% - 16px); max-height: calc(100vh - 16px); margin: 8px; padding: 12px; }
       .hud { right: 8px; left: 8px; bottom: 8px; min-width: 0; }
       .song-row { align-items: flex-start; }
+      .fullscreen-mini-panel { right: 8px; left: 8px; max-width: none; }
     }
   </style>
 </head>
 <body>
   <div id='app'>
     <canvas id='visualizerCanvas' aria-label='Animated math audio visualizer'></canvas>
+
+    <div id='fullscreenMiniPanel' class='fullscreen-mini-panel' aria-label='Fullscreen quick controls'>
+      <button id='miniRandomButton' type='button'>Play a random song</button>
+      <button id='miniPauseButton' type='button'>Pause</button>
+      <button id='miniNextButton' type='button'>Play next</button>
+      <button id='miniExitFullscreenButton' type='button'>Exit full screen</button>
+    </div>
 
     <details class='overlay' open>
       <summary>
@@ -381,6 +415,10 @@
     const stopButton = $('stopButton');
     const restartButton = $('restartButton');
     const fullscreenButton = $('fullscreenButton');
+    const miniRandomButton = $('miniRandomButton');
+    const miniPauseButton = $('miniPauseButton');
+    const miniNextButton = $('miniNextButton');
+    const miniExitFullscreenButton = $('miniExitFullscreenButton');
     const clearSavedSongsButton = $('clearSavedSongsButton');
     const teacherLibrarySection = $('teacherLibrarySection');
     const teacherSongsList = $('teacherSongsList');
@@ -448,6 +486,9 @@
       stopButton.disabled = !isLoaded;
       restartButton.disabled = !isLoaded;
       randomSongButton.disabled = teacherAudioLibrary.length === 0;
+      miniRandomButton.disabled = teacherAudioLibrary.length === 0;
+      miniNextButton.disabled = teacherAudioLibrary.length === 0;
+      miniPauseButton.disabled = !isLoaded || !isPlaying;
     }
 
     function updateSliderLabels() {
@@ -660,6 +701,28 @@
       let nextIndex = Math.floor(Math.random() * teacherAudioLibrary.length);
       if (teacherAudioLibrary.length > 1) while (nextIndex === currentTeacherTrackIndex) nextIndex = Math.floor(Math.random() * teacherAudioLibrary.length);
       loadTeacherTrack(teacherAudioLibrary[nextIndex], nextIndex, 'Random song selected. Press Play when you are ready.');
+    }
+
+    function selectNextTeacherTrack() {
+      if (!teacherAudioLibrary.length) {
+        updateStatus('Upload an MP3 or WAV file to use the visualizer.', 'No teacher songs available.');
+        updateButtonStates(Boolean(audioElement.src), !audioElement.paused);
+        return;
+      }
+      const nextIndex = currentTeacherTrackIndex >= 0
+        ? (currentTeacherTrackIndex + 1) % teacherAudioLibrary.length
+        : 0;
+      loadTeacherTrack(teacherAudioLibrary[nextIndex], nextIndex, 'Next song selected. Press Play when you are ready.');
+    }
+
+    async function playRandomTeacherTrack() {
+      selectRandomTeacherTrack();
+      await playAudio();
+    }
+
+    async function playNextTeacherTrack() {
+      selectNextTeacherTrack();
+      await playAudio();
     }
 
     async function ensureAudioSetup() {
@@ -1036,6 +1099,12 @@
       else await document.exitFullscreen();
     }
 
+    function updateFullscreenUi() {
+      const isFullscreen = Boolean(document.fullscreenElement);
+      app.classList.toggle('fullscreen-mode', isFullscreen);
+      fullscreenButton.textContent = isFullscreen ? 'Exit Fullscreen' : 'Fullscreen';
+    }
+
     function bindHelpButtons() {
       document.querySelectorAll('[data-help-target]').forEach((button) => {
         button.addEventListener('click', () => {
@@ -1053,6 +1122,12 @@
     });
     saveSongButton.addEventListener('click', () => storeSongLocally().catch(() => updateStatus('This song could not be saved locally in the browser right now.', 'Save failed.')));
     randomSongButton.addEventListener('click', selectRandomTeacherTrack);
+    miniRandomButton.addEventListener('click', () => playRandomTeacherTrack().catch(() => updateStatus('The random song could not start. Try tapping Play again.', 'Playback paused.')));
+    miniPauseButton.addEventListener('click', pauseAudio);
+    miniNextButton.addEventListener('click', () => playNextTeacherTrack().catch(() => updateStatus('The next song could not start. Try tapping Play again.', 'Playback paused.')));
+    miniExitFullscreenButton.addEventListener('click', () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+    });
     playButton.addEventListener('click', playAudio);
     pauseButton.addEventListener('click', pauseAudio);
     stopButton.addEventListener('click', stopAudio);
@@ -1066,14 +1141,23 @@
     audioElement.addEventListener('play', () => updateButtonStates(Boolean(audioElement.src), true));
     audioElement.addEventListener('pause', () => { if (audioElement.currentTime > 0 && !audioElement.ended) updateButtonStates(Boolean(audioElement.src), false); });
     audioElement.addEventListener('error', () => updateStatus('This audio file could not be loaded for playback or analysis.', 'Audio load error.'));
-    audioElement.addEventListener('ended', () => { updateButtonStates(Boolean(audioElement.src), false); updateStatus('Playback finished. Press Restart or Play to hear it again.', 'Finished: ' + loadedFileName); });
+    audioElement.addEventListener('ended', () => {
+      if (currentTeacherTrackIndex >= 0 && teacherAudioLibrary.length > 1) {
+        playNextTeacherTrack().catch(() => updateStatus('The next teacher song is selected. Tap Play if Chrome pauses autoplay.', 'Next song ready.'));
+        return;
+      }
+      updateButtonStates(Boolean(audioElement.src), false);
+      updateStatus('Playback finished. Press Restart or Play to hear it again.', 'Finished: ' + loadedFileName);
+    });
     window.addEventListener('resize', setCanvasSize);
+    document.addEventListener('fullscreenchange', updateFullscreenUi);
     window.addEventListener('beforeunload', revokeCurrentObjectUrl);
 
     setCanvasSize();
     createParticles();
     updateSliderLabels();
     updateButtonStates(false, false);
+    updateFullscreenUi();
     bindHelpButtons();
     renderTeacherLibrary();
     if (teacherAudioLibrary.length) selectRandomTeacherTrack();
