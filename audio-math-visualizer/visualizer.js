@@ -434,7 +434,7 @@
         rmsTotal += centered * centered;
       }
       const volume = Math.min(1, Math.sqrt(rmsTotal / waveformData.length) * 3.4);
-      const easing = 0.24;
+      const easing = 0.32;
       smoothedBass += (bass - smoothedBass) * easing;
       smoothedMids += (mids - smoothedMids) * easing;
       smoothedTreble += (treble - smoothedTreble) * easing;
