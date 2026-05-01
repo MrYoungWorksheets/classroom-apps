@@ -659,11 +659,12 @@ function drawGeoFace(time, levels) {
   const bass = levels.bass * sensitivity;
   const mids = levels.mids * sensitivity;
   const treble = levels.treble * sensitivity;
-  const headPulse = 1 + bass * 0.22;
+  const headPulse = 1 + bass * (performance ? 0.32 : 0.46);
   const headSize = Math.min(width, height) * (performance ? 0.24 : 0.27) * headPulse;
-  const jawDrop = bass * (performance ? 30 : 48) + levels.volume * 10;
-  const jawWidth = headSize * (0.75 + bass * 0.36);
-  const faceTilt = Math.sin(time * 0.0018) * mids * 0.22;
+  const jawDrop = bass * (performance ? 52 : 82) + levels.volume * (performance ? 12 : 20);
+  const jawWidth = headSize * (0.78 + bass * 0.46);
+  const smileBounce = Math.sin(time * 0.012) * (2 + bass * 14);
+  const faceTilt = Math.sin(time * 0.0026) * (0.08 + mids * 0.52);
   const hueBase = (182 + time * 0.02 + levels.mids * 140 + levels.treble * 90) % 360;
 
   ctx.save();
@@ -674,24 +675,25 @@ function drawGeoFace(time, levels) {
   // Outer angular mask.
   ctx.beginPath();
   const sides = 8;
+  const maskScale = 1 + bass * (performance ? 0.06 : 0.12);
   for (let i = 0; i <= sides; i += 1) {
     const angle = -Math.PI / 2 + (Math.PI * 2 * i) / sides;
     const radialJitter = (i % 2 === 0 ? 1.06 : 0.84) + treble * 0.08;
-    const x = Math.cos(angle) * headSize * radialJitter;
-    const y = Math.sin(angle) * headSize * radialJitter;
+    const x = Math.cos(angle) * headSize * radialJitter * maskScale;
+    const y = Math.sin(angle) * headSize * radialJitter * maskScale;
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   ctx.closePath();
-  ctx.lineWidth = 2.2 + bass * 2.8;
-  ctx.strokeStyle = 'hsla(' + hueBase + ', 100%, 68%, ' + (performance ? 0.72 : 0.86) + ')';
-  ctx.shadowBlur = (16 + intensity * 14 + treble * 26) * shadowScale;
+  ctx.lineWidth = 2.4 + bass * 4.2;
+  ctx.strokeStyle = 'hsla(' + hueBase + ', 100%, 68%, ' + (performance ? 0.72 : 0.88) + ')';
+  ctx.shadowBlur = (14 + intensity * 12 + treble * 18) * shadowScale;
   ctx.shadowColor = 'hsla(' + hueBase + ', 100%, 70%, 0.9)';
   ctx.stroke();
 
-  // Eyes (diamond/hex hybrid).
   const eyeOffsetX = headSize * 0.36;
-  const eyeY = -headSize * 0.18;
-  const eyeSize = headSize * (0.14 + mids * 0.06);
+  const eyeY = -headSize * 0.19;
+  const eyeSize = headSize * (0.15 + mids * 0.1);
+  const eyeCoreSize = eyeSize * (0.33 + mids * 0.12);
   for (let side = -1; side <= 1; side += 2) {
     ctx.beginPath();
     for (let i = 0; i <= 6; i += 1) {
@@ -702,73 +704,131 @@ function drawGeoFace(time, levels) {
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.closePath();
-    ctx.strokeStyle = 'hsla(' + ((hueBase + 42) % 360) + ', 100%, 74%, 0.95)';
-    ctx.lineWidth = 1.8 + mids * 2.6;
+    ctx.strokeStyle = 'hsla(' + ((hueBase + 42) % 360) + ', 100%, 76%, 0.96)';
+    ctx.lineWidth = 2.2 + mids * 2.8;
     ctx.stroke();
 
-    const tremble = treble * (performance ? 2.2 : 4.8);
+    ctx.beginPath();
+    ctx.arc(side * eyeOffsetX, eyeY, eyeCoreSize, 0, Math.PI * 2);
+    ctx.fillStyle = 'hsla(' + ((hueBase + 165) % 360) + ', 100%, 74%, 0.38)';
+    ctx.fill();
+
+    const tremble = treble * (performance ? 1.2 : 2.4);
     ctx.beginPath();
     ctx.arc(
-      side * eyeOffsetX + Math.sin(time * 0.02 + side) * tremble,
-      eyeY + Math.cos(time * 0.018 + side) * tremble,
-      eyeSize * 0.28,
+      side * eyeOffsetX + Math.sin(time * 0.015 + side) * tremble,
+      eyeY + Math.cos(time * 0.016 + side) * tremble,
+      eyeCoreSize * 0.46,
       0,
       Math.PI * 2
     );
-    ctx.fillStyle = 'hsla(' + ((hueBase + 150) % 360) + ', 100%, 70%, 0.85)';
+    ctx.fillStyle = 'hsla(' + ((hueBase + 188) % 360) + ', 100%, 88%, 0.95)';
     ctx.fill();
+
+    const browLift = treble * (performance ? 10 : 18);
+    const browY = eyeY - eyeSize * 0.95 - browLift;
+    ctx.beginPath();
+    ctx.moveTo(side * (eyeOffsetX - eyeSize * 0.8), browY + eyeSize * 0.3);
+    ctx.lineTo(side * eyeOffsetX, browY - eyeSize * 0.16);
+    ctx.lineTo(side * (eyeOffsetX + eyeSize * 0.86), browY + eyeSize * 0.16);
+    ctx.strokeStyle = 'hsla(' + ((hueBase + 20) % 360) + ', 100%, 76%, ' + (0.6 + treble * 0.3) + ')';
+    ctx.lineWidth = 1.6 + treble * 1.8;
+    ctx.stroke();
   }
 
   // Nose and inner lines.
   ctx.beginPath();
   ctx.moveTo(0, -headSize * 0.04);
-  ctx.lineTo(headSize * 0.08, headSize * 0.18);
-  ctx.lineTo(-headSize * 0.08, headSize * 0.18);
+  ctx.lineTo(headSize * 0.08, headSize * 0.16 + mids * 6);
+  ctx.lineTo(-headSize * 0.08, headSize * 0.16 + mids * 6);
   ctx.closePath();
-  ctx.strokeStyle = 'hsla(' + ((hueBase + 80) % 360) + ', 100%, 72%, 0.88)';
+  ctx.strokeStyle = 'hsla(' + ((hueBase + 80) % 360) + ', 100%, 74%, 0.88)';
   ctx.lineWidth = 1.6 + mids * 2;
   ctx.stroke();
 
   const lineCount = Math.max(2, Math.floor((performance ? 2 : 5) * density));
   for (let i = 0; i < lineCount; i += 1) {
-    const spread = headSize * (0.2 + i * 0.12 + mids * 0.1);
+    const spread = headSize * (0.2 + i * 0.12 + mids * 0.2);
+    const y = headSize * 0.04 + i * 8 + Math.sin(time * 0.006 + i) * mids * 8;
     ctx.beginPath();
-    ctx.moveTo(-spread, headSize * 0.06 + i * 8);
-    ctx.lineTo(spread, headSize * 0.06 + i * 8);
+    ctx.moveTo(-spread, y);
+    ctx.lineTo(spread, y);
     ctx.strokeStyle = 'hsla(' + ((hueBase + i * 18) % 360) + ', 100%, 64%, ' + (0.26 + mids * 0.35) + ')';
-    ctx.lineWidth = 1 + mids * 1.4;
+    ctx.lineWidth = 1 + mids * 1.6;
     ctx.stroke();
   }
 
-  // Mouth and bass-reactive jaw.
-  const mouthOpen = headSize * (0.05 + bass * 0.24);
+  // Friendly smiling mouth with clear upper/lower edges.
+  const mouthCenterY = headSize * 0.35 + smileBounce;
+  const mouthHalf = jawWidth * 0.34;
+  const mouthOpen = headSize * (0.08 + bass * (performance ? 0.24 : 0.34));
+  const grinLift = headSize * (0.08 + bass * 0.05);
+
   ctx.beginPath();
-  ctx.moveTo(-jawWidth * 0.35, headSize * 0.34);
-  ctx.lineTo(0, headSize * 0.34 + mouthOpen);
-  ctx.lineTo(jawWidth * 0.35, headSize * 0.34);
-  ctx.strokeStyle = 'hsla(' + ((hueBase + 200) % 360) + ', 100%, 76%, 0.92)';
-  ctx.lineWidth = 2 + bass * 2.6;
+  ctx.moveTo(-mouthHalf, mouthCenterY);
+  ctx.lineTo(-mouthHalf * 0.4, mouthCenterY + grinLift);
+  ctx.lineTo(0, mouthCenterY + grinLift + mouthOpen * 0.18);
+  ctx.lineTo(mouthHalf * 0.4, mouthCenterY + grinLift);
+  ctx.lineTo(mouthHalf, mouthCenterY);
+  ctx.strokeStyle = 'hsla(' + ((hueBase + 202) % 360) + ', 100%, 80%, 0.95)';
+  ctx.lineWidth = 2.2 + bass * 3;
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(-jawWidth * 0.48, headSize * 0.48);
-  ctx.lineTo(0, headSize * 0.68 + jawDrop);
-  ctx.lineTo(jawWidth * 0.48, headSize * 0.48);
-  ctx.strokeStyle = 'hsla(' + ((hueBase + 24) % 360) + ', 100%, 70%, 0.9)';
-  ctx.lineWidth = 2.4 + bass * 3.2;
+  ctx.moveTo(-mouthHalf * 0.92, mouthCenterY + mouthOpen * 0.1);
+  ctx.lineTo(-mouthHalf * 0.45, mouthCenterY + grinLift + mouthOpen);
+  ctx.lineTo(0, mouthCenterY + grinLift + mouthOpen * 1.14);
+  ctx.lineTo(mouthHalf * 0.45, mouthCenterY + grinLift + mouthOpen);
+  ctx.lineTo(mouthHalf * 0.92, mouthCenterY + mouthOpen * 0.1);
+  ctx.closePath();
+  ctx.fillStyle = 'hsla(' + ((hueBase + 274) % 360) + ', 58%, 18%, ' + (performance ? 0.74 : 0.86) + ')';
+  ctx.fill();
+  ctx.strokeStyle = 'hsla(' + ((hueBase + 230) % 360) + ', 100%, 74%, 0.9)';
+  ctx.lineWidth = 1.8 + bass * 2.8;
   ctx.stroke();
 
-  // Treble spikes and accents.
-  const spikes = performance ? 6 : 12;
+  ctx.beginPath();
+  ctx.moveTo(-mouthHalf * 1.05, mouthCenterY + grinLift + mouthOpen * 1.2);
+  ctx.lineTo(0, mouthCenterY + grinLift + mouthOpen * 1.75 + jawDrop);
+  ctx.lineTo(mouthHalf * 1.05, mouthCenterY + grinLift + mouthOpen * 1.2);
+  ctx.strokeStyle = 'hsla(' + ((hueBase + 28) % 360) + ', 100%, 72%, 0.9)';
+  ctx.lineWidth = 2.4 + bass * 3.8;
+  ctx.stroke();
+
+  const cheekSpread = mouthHalf * (0.9 + mids * 0.45);
+  const cheekY = mouthCenterY + grinLift * 0.65;
+  for (let side = -1; side <= 1; side += 2) {
+    ctx.beginPath();
+    ctx.moveTo(side * cheekSpread, cheekY - 6);
+    ctx.lineTo(side * (cheekSpread + 14 + mids * 14), cheekY + 8 + mids * 4);
+    ctx.strokeStyle = 'hsla(' + ((hueBase + 8) % 360) + ', 100%, 72%, ' + (0.35 + mids * 0.42) + ')';
+    ctx.lineWidth = 1.2 + mids * 1.6;
+    ctx.stroke();
+  }
+
+  const spikes = performance ? 6 : 11;
   for (let i = 0; i < spikes; i += 1) {
     const spikeAngle = -Math.PI * 0.9 + (i / Math.max(1, spikes - 1)) * Math.PI * 1.8;
     const startR = headSize * 1.02;
-    const endR = headSize * (1.08 + treble * 0.28 + Math.sin(time * 0.01 + i) * 0.04);
+    const endR = headSize * (1.08 + treble * 0.24 + Math.sin(time * 0.012 + i) * 0.03);
     ctx.beginPath();
     ctx.moveTo(Math.cos(spikeAngle) * startR, Math.sin(spikeAngle) * startR);
     ctx.lineTo(Math.cos(spikeAngle) * endR, Math.sin(spikeAngle) * endR);
-    ctx.strokeStyle = 'hsla(' + ((hueBase + 230) % 360) + ', 100%, 74%, ' + (0.2 + treble * 0.65) + ')';
-    ctx.lineWidth = 1 + treble * 1.8;
+    ctx.strokeStyle = 'hsla(' + ((hueBase + 230) % 360) + ', 100%, 74%, ' + (0.16 + treble * 0.6) + ')';
+    ctx.lineWidth = 1 + treble * 1.6;
+    ctx.stroke();
+  }
+
+  const accents = performance ? 4 : 8;
+  for (let i = 0; i < accents; i += 1) {
+    const a = (Math.PI * 2 * i) / accents + time * 0.0008;
+    const r1 = headSize * (1.18 + (i % 2) * 0.06);
+    const r2 = r1 + 8 + treble * 22;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+    ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+    ctx.strokeStyle = 'hsla(' + ((hueBase + 280) % 360) + ', 100%, 78%, ' + (0.14 + treble * 0.45) + ')';
+    ctx.lineWidth = 1;
     ctx.stroke();
   }
 
