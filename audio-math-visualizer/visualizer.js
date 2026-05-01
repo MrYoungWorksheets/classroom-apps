@@ -424,16 +424,17 @@
         }
         return { bass: 0, mids: 0, treble: 0, volume: 0 };
       }
-      const bass = Math.min(1, Math.pow(averageRange(frequencyData, 0.0, 0.12) * 2.45, 0.72));
-      const mids = Math.min(1, Math.pow(averageRange(frequencyData, 0.12, 0.45) * 2.15, 0.78));
-      const treble = Math.min(1, Math.pow(averageRange(frequencyData, 0.45, 1.0) * 2.75, 0.7));
+      // Tuned so mastered songs keep punch but bass/mids do not pin at 100% between real peaks.
+      const bass = Math.min(1, Math.pow(averageRange(frequencyData, 0.0, 0.10) * 1.62, 1.04));
+      const mids = Math.min(1, Math.pow(averageRange(frequencyData, 0.10, 0.42) * 1.56, 1.0));
+      const treble = Math.min(1, Math.pow(averageRange(frequencyData, 0.42, 1.0) * 2.55, 0.72));
       let rmsTotal = 0;
       for (let i = 0; i < waveformData.length; i += 1) {
         const centered = (waveformData[i] - 128) / 128;
         rmsTotal += centered * centered;
       }
       const volume = Math.min(1, Math.sqrt(rmsTotal / waveformData.length) * 3.4);
-      const easing = 0.28;
+      const easing = 0.24;
       smoothedBass += (bass - smoothedBass) * easing;
       smoothedMids += (mids - smoothedMids) * easing;
       smoothedTreble += (treble - smoothedTreble) * easing;
