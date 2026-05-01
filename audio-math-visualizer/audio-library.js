@@ -1,4 +1,5 @@
 window.teacherAudioLibrary = [
+  { title: `Barbershop Doras Dagda (Remastered)`, file: `assets/audio/Barbershop Doras Dagda (Remastered).mp3` },
   { title: `Blood on the Fjord`, file: `assets/audio/Blood on the Fjord.mp3` },
   { title: `Candyfloss`, file: `assets/audio/Candyfloss.mp3` },
   { title: `Captain Grendel Scott`, file: `assets/audio/Captain Grendel Scott.mp3` },
@@ -8,8 +9,12 @@ window.teacherAudioLibrary = [
   { title: `Four Million`, file: `assets/audio/Four Million.mp3` },
   { title: `Fuel the Fire`, file: `assets/audio/Fuel the Fire.mp3` },
   { title: `Functional Pressure`, file: `assets/audio/Functional Pressure.mp3` },
+  { title: `L R L R`, file: `assets/audio/L R L R.mp3` },
+  { title: `Lionel's Law`, file: `assets/audio/Lionel's Law.mp3` },
+  { title: `Marimba Trap`, file: `assets/audio/Marimba Trap.mp3` },
   { title: `Marrow Debt`, file: `assets/audio/Marrow Debt.mp3` },
   { title: `Marrow Pressure`, file: `assets/audio/Marrow Pressure.mp3` },
+  { title: `Mountain knows your name (1)`, file: `assets/audio/Mountain knows your name (1).mp3` },
   { title: `Mountain Knows Your Name`, file: `assets/audio/Mountain knows your name.mp3` },
   { title: `Plucked Bells Trapped`, file: `assets/audio/Plucked Bells Trapped.mp3` },
   { title: `Right on Time`, file: `assets/audio/Right on Time.mp3` },
