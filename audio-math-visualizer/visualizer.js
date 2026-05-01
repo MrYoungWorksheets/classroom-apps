@@ -651,21 +651,31 @@ ctx.restore();
 }
 
 function drawGeoFace(time, levels) {
+  function clampValue(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
   const { sensitivity, intensity, density, shadowScale, performance } = controlValues();
   const centerX = width / 2;
   const centerY = height / 2;
-  const bass = levels.bass * sensitivity;
-  const mids = levels.mids * sensitivity;
-  const treble = levels.treble * sensitivity;
-  const headPulse = 1 + bass * (performance ? 0.32 : 0.46);
+  const bassRaw = Math.min(1, levels.bass);
+  const midsRaw = Math.min(1, levels.mids);
+  const trebleRaw = Math.min(1, levels.treble);
+  const bassPulse = Math.pow(bassRaw, 1.7);
+  const midsPulse = Math.pow(midsRaw, 1.6);
+  const treblePulse = Math.pow(trebleRaw, 1.2);
+  const bass = clampValue(bassPulse * sensitivity, 0, 1);
+  const mids = clampValue(midsPulse * sensitivity, 0, 1);
+  const treble = clampValue(treblePulse * sensitivity, 0, 1);
+  const headPulse = clampValue(1 + bass * 0.08, 1, 1.09);
   const headSize = Math.min(width, height) * (performance ? 0.24 : 0.27) * headPulse;
-  const jawDrop = bass * (performance ? 52 : 82) + levels.volume * (performance ? 12 : 20);
-  const jawWidth = headSize * (0.78 + bass * 0.46);
-  const smileBounce = Math.sin(time * 0.012) * (2 + bass * 14);
-  const faceTilt = Math.sin(time * 0.0026) * (0.08 + mids * 0.52);
-  const hueBase = (182 + time * 0.02 + levels.mids * 140 + levels.treble * 90) % 360;
+  const jawWidth = headSize * (0.76 + bass * 0.22);
+  const smileBounce = Math.sin(time * 0.011) * (1.5 + bass * 5.5);
+  const maxTilt = 0.12;
+  const faceTilt = clampValue(Math.sin(time * 0.0014) * mids * 0.12, -maxTilt, maxTilt);
+  const hueBase = (182 + time * 0.02 + mids * 140 + treble * 90) % 360;
 
   ctx.save();
   ctx.translate(centerX, centerY);
@@ -713,7 +723,7 @@ function drawGeoFace(time, levels) {
     ctx.fillStyle = 'hsla(' + ((hueBase + 165) % 360) + ', 100%, 74%, 0.38)';
     ctx.fill();
 
-    const tremble = treble * (performance ? 1.2 : 2.4);
+    const tremble = treble * (performance ? 0.45 : 1.1);
     ctx.beginPath();
     ctx.arc(
       side * eyeOffsetX + Math.sin(time * 0.015 + side) * tremble,
@@ -736,7 +746,7 @@ function drawGeoFace(time, levels) {
     ctx.stroke();
   }
 
-  // Nose and inner lines.
+  // Nose.
   ctx.beginPath();
   ctx.moveTo(0, -headSize * 0.04);
   ctx.lineTo(headSize * 0.08, headSize * 0.16 + mids * 6);
@@ -746,23 +756,14 @@ function drawGeoFace(time, levels) {
   ctx.lineWidth = 1.6 + mids * 2;
   ctx.stroke();
 
-  const lineCount = Math.max(2, Math.floor((performance ? 2 : 5) * density));
-  for (let i = 0; i < lineCount; i += 1) {
-    const spread = headSize * (0.2 + i * 0.12 + mids * 0.2);
-    const y = headSize * 0.04 + i * 8 + Math.sin(time * 0.006 + i) * mids * 8;
-    ctx.beginPath();
-    ctx.moveTo(-spread, y);
-    ctx.lineTo(spread, y);
-    ctx.strokeStyle = 'hsla(' + ((hueBase + i * 18) % 360) + ', 100%, 64%, ' + (0.26 + mids * 0.35) + ')';
-    ctx.lineWidth = 1 + mids * 1.6;
-    ctx.stroke();
-  }
-
-  // Friendly smiling mouth with clear upper/lower edges.
+  // Singing mouth with clear upper/lower edges.
   const mouthCenterY = headSize * 0.35 + smileBounce;
   const mouthHalf = jawWidth * 0.34;
-  const mouthOpen = headSize * (0.08 + bass * (performance ? 0.24 : 0.34));
-  const grinLift = headSize * (0.08 + bass * 0.05);
+  const shortBeatBounce = Math.sin(time * 0.023) * (headSize * 0.015 + bass * headSize * 0.025);
+  const baseMouth = headSize * (performance ? 0.07 : 0.065);
+  const mouthRange = headSize * (performance ? 0.14 : 0.18);
+  const mouthOpen = clampValue(baseMouth + bass * mouthRange + shortBeatBounce, headSize * 0.05, headSize * 0.24);
+  const grinLift = headSize * (0.055 + bass * 0.045);
 
   ctx.beginPath();
   ctx.moveTo(-mouthHalf, mouthCenterY);
@@ -785,14 +786,6 @@ function drawGeoFace(time, levels) {
   ctx.fill();
   ctx.strokeStyle = 'hsla(' + ((hueBase + 230) % 360) + ', 100%, 74%, 0.9)';
   ctx.lineWidth = 1.8 + bass * 2.8;
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(-mouthHalf * 1.05, mouthCenterY + grinLift + mouthOpen * 1.2);
-  ctx.lineTo(0, mouthCenterY + grinLift + mouthOpen * 1.75 + jawDrop);
-  ctx.lineTo(mouthHalf * 1.05, mouthCenterY + grinLift + mouthOpen * 1.2);
-  ctx.strokeStyle = 'hsla(' + ((hueBase + 28) % 360) + ', 100%, 72%, 0.9)';
-  ctx.lineWidth = 2.4 + bass * 3.8;
   ctx.stroke();
 
   const cheekSpread = mouthHalf * (0.9 + mids * 0.45);
