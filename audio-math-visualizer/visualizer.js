@@ -425,7 +425,7 @@
         return { bass: 0, mids: 0, treble: 0, volume: 0 };
       }
       // Tuned so mastered songs keep punch but bass/mids do not pin at 100% between real peaks.
-      const bass = Math.min(1, Math.pow(averageRange(frequencyData, 0.0, 0.10) * 1.62, 1.04));
+      const bass = Math.min(1, Math.pow(averageRange(frequencyData, 0.0, 0.09) * 1.35, 1.12));
       const mids = Math.min(1, Math.pow(averageRange(frequencyData, 0.10, 0.42) * 1.56, 1.0));
       const treble = Math.min(1, Math.pow(averageRange(frequencyData, 0.42, 1.0) * 2.55, 0.72));
       let rmsTotal = 0;
