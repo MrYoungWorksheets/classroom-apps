@@ -723,36 +723,38 @@ function drawGeoFamily(time, levels, variant = 'face') {
     ctx.beginPath();
     if (variant === 'kitty') {
       const points = [
-        [-headSize * 0.62, headSize * 0.24],
-        [-headSize * 0.55, -headSize * 0.18],
-        [-headSize * 0.48, -headSize * 0.5],
-        [-headSize * 0.68, -headSize * 0.78],
-        [-headSize * 0.3, -headSize * 1.08],
-        [-headSize * 0.14, -headSize * 0.66],
-        [0, -headSize * 0.58],
-        [headSize * 0.14, -headSize * 0.66],
-        [headSize * 0.3, -headSize * 1.08],
-        [headSize * 0.68, -headSize * 0.78],
-        [headSize * 0.48, -headSize * 0.5],
-        [headSize * 0.55, -headSize * 0.18],
-        [headSize * 0.62, headSize * 0.24],
+        [-headSize * 0.6, headSize * 0.24],
+        [-headSize * 0.57, -headSize * 0.22],
+        [-headSize * 0.5, -headSize * 0.54],
+        [-headSize * 0.42, -headSize * 0.68],
+        [-headSize * 0.3, -headSize * 0.98],
+        [-headSize * 0.12, -headSize * 0.66],
+        [0, -headSize * 0.6],
+        [headSize * 0.12, -headSize * 0.66],
+        [headSize * 0.3, -headSize * 0.98],
+        [headSize * 0.42, -headSize * 0.68],
+        [headSize * 0.5, -headSize * 0.54],
+        [headSize * 0.57, -headSize * 0.22],
+        [headSize * 0.6, headSize * 0.24],
         [headSize * 0.2, headSize * 0.64],
         [-headSize * 0.2, headSize * 0.64]
       ];
       points.forEach((point, i) => { if (i === 0) ctx.moveTo(point[0], point[1]); else ctx.lineTo(point[0], point[1]); });
     } else if (variant === 'dog') {
       const points = [
-        [0, -headSize * 0.76],
-        [-headSize * 0.44, -headSize * 0.7],
-        [-headSize * 0.72, -headSize * 0.42],
-        [-headSize * 0.8, headSize * 0.15],
-        [-headSize * 0.55, headSize * 0.48],
+        [0, -headSize * 0.74],
+        [-headSize * 0.36, -headSize * 0.72],
+        [-headSize * 0.6, -headSize * 0.62],
+        [-headSize * 0.86, -headSize * 0.22],
+        [-headSize * 0.88, headSize * 0.38],
+        [-headSize * 0.6, headSize * 0.58],
         [-headSize * 0.16, headSize * 0.68],
         [headSize * 0.16, headSize * 0.68],
-        [headSize * 0.55, headSize * 0.48],
-        [headSize * 0.8, headSize * 0.15],
-        [headSize * 0.72, -headSize * 0.42],
-        [headSize * 0.44, -headSize * 0.7]
+        [headSize * 0.6, headSize * 0.58],
+        [headSize * 0.88, headSize * 0.38],
+        [headSize * 0.86, -headSize * 0.22],
+        [headSize * 0.6, -headSize * 0.62],
+        [headSize * 0.36, -headSize * 0.72]
       ];
       points.forEach((point, i) => { if (i === 0) ctx.moveTo(point[0], point[1]); else ctx.lineTo(point[0], point[1]); });
     } else {
@@ -874,12 +876,15 @@ function drawGeoFamily(time, levels, variant = 'face') {
 
     for (let side = -1; side <= 1; side += 2) {
       for (let w = 0; w < 3; w += 1) {
-        const yOffset = noseY + headSize * (0.05 + w * 0.08);
+        const yOffset = noseY + headSize * (0.04 + w * 0.08);
+        const startX = side * headSize * 0.11;
+        const endX = side * headSize * (0.54 + w * 0.06);
+        const bend = (w - 1) * headSize * 0.04;
         ctx.beginPath();
-        ctx.moveTo(side * headSize * 0.12, yOffset);
-        ctx.lineTo(side * headSize * (0.5 + w * 0.03), yOffset + (w - 1) * headSize * 0.02);
+        ctx.moveTo(startX, yOffset);
+        ctx.quadraticCurveTo(side * headSize * 0.34, yOffset + bend, endX, yOffset + bend * 1.2);
         ctx.strokeStyle = colorFromMood('secondary', hueBase + 50, 0.56, 1);
-        ctx.lineWidth = 1.1;
+        ctx.lineWidth = 1.2;
         ctx.stroke();
       }
     }
