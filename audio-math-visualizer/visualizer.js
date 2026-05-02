@@ -9,15 +9,17 @@
     const audioFileInput = $('audioFile');
     const saveSongButton = $('saveSongButton');
     const randomSongButton = $('randomSongButton');
-    const playButton = $('playButton');
-    const pauseButton = $('pauseButton');
+    const playPauseButton = $('playPauseButton');
+    const dockPlayPauseButton = $('dockPlayPauseButton');
     const stopButton = $('stopButton');
     const restartButton = $('restartButton');
     const fullscreenButton = $('fullscreenButton');
-    const miniRandomButton = $('miniRandomButton');
-    const miniPauseButton = $('miniPauseButton');
-    const miniNextButton = $('miniNextButton');
-    const miniExitFullscreenButton = $('miniExitFullscreenButton');
+    const dockRandomButton = $('dockRandomButton');
+    const dockRestartButton = $('dockRestartButton');
+    const dockStopButton = $('dockStopButton');
+    const dockToggleButton = $('dockToggleButton');
+    const controlsOverlay = $('controlsOverlay');
+    const appRoot = $('app');
     const clearSavedSongsButton = $('clearSavedSongsButton');
     const teacherLibrarySection = $('teacherLibrarySection');
     const teacherSongsList = $('teacherSongsList');
@@ -25,7 +27,7 @@
     const nowPlayingText = $('nowPlayingText');
     const statusTitle = $('statusTitle');
     const statusText = $('statusText');
-    const modeSelect = $('modeSelect');
+    const modeSelect = { value: 'geoface' };
     const performanceModeToggle = $('performanceModeToggle');
     const performanceModeValue = $('performanceModeValue');
     const sensitivitySlider = $('sensitivitySlider');
@@ -35,12 +37,9 @@
     const colorValue = $('colorValue');
     const densityValue = $('densityValue');
     const modeValue = $('modeValue');
-    const moodSelect = $('moodSelect');
+    const moodSelect = { value: 'mellow' };
     const moodValue = $('moodValue');
-    const hudFile = $('hudFile');
-    const hudCurrentTime = $('hudCurrentTime');
-    const hudDuration = $('hudDuration');
-    const hudProgress = $('hudProgress');
+    
     const hudBass = $('hudBass');
     const hudMids = $('hudMids');
     const hudTreble = $('hudTreble');
@@ -108,38 +107,24 @@
     function updateNowPlaying(name) {
       const displayName = name || 'No song selected';
       nowPlayingText.textContent = displayName;
-      hudFile.textContent = displayName === 'No song selected' ? 'None' : displayName;
+      $('dockSongText').textContent = displayName;
     }
 
-    function updateProgressHud() {
-      const current = audioElement.currentTime || 0;
-      const duration = audioElement.duration || 0;
-      const hasDuration = Number.isFinite(duration) && duration > 0;
-      hudCurrentTime.textContent = formatTime(current);
-      hudDuration.textContent = hasDuration ? formatTime(duration) : '--:--';
-      hudProgress.disabled = !hasDuration;
-      hudProgress.value = hasDuration ? Math.min(1000, Math.round((current / duration) * 1000)) : 0;
-      hudProgress.setAttribute('aria-valuetext', formatTime(current) + ' of ' + (hasDuration ? formatTime(duration) : 'unknown duration'));
-    }
+    function updateProgressHud() {}
 
-    function seekFromProgress() {
-      const duration = audioElement.duration || 0;
-      if (!Number.isFinite(duration) || duration <= 0) return;
-      try {
-        audioElement.currentTime = (Number(hudProgress.value) / 1000) * duration;
-      } catch (error) { }
-      updateProgressHud();
-    }
+    function seekFromProgress() {}
 
     function updateButtonStates(isLoaded, isPlaying) {
-      playButton.disabled = !isLoaded || isPlaying;
-      pauseButton.disabled = !isLoaded || !isPlaying;
+      playPauseButton.disabled = !isLoaded;
+      playPauseButton.textContent = isPlaying ? 'Pause' : 'Play';
+      dockPlayPauseButton.disabled = !isLoaded;
+      dockPlayPauseButton.textContent = isPlaying ? 'Pause' : 'Play';
       stopButton.disabled = !isLoaded;
       restartButton.disabled = !isLoaded;
       randomSongButton.disabled = teacherAudioLibrary.length === 0;
-      miniRandomButton.disabled = teacherAudioLibrary.length === 0;
-      miniNextButton.disabled = teacherAudioLibrary.length === 0;
-      miniPauseButton.disabled = !isLoaded || !isPlaying;
+      dockRandomButton.disabled = teacherAudioLibrary.length === 0;
+      dockRestartButton.disabled = !isLoaded;
+      dockStopButton.disabled = !isLoaded;
     }
 
     function getMood() {
@@ -204,9 +189,8 @@
     }
 
     function updateSliderLabels() {
-      const selectedText = modeSelect.options[modeSelect.selectedIndex].text;
-      modeValue.textContent = selectedText + (performanceModeToggle.checked ? ' (Chromebook)' : '');
-      moodValue.textContent = moodSelect.options[moodSelect.selectedIndex].text;
+      document.querySelectorAll('[data-mode]').forEach((button)=>button.classList.toggle('selected', button.dataset.mode===modeSelect.value));
+      document.querySelectorAll('[data-mood]').forEach((button)=>button.classList.toggle('selected', button.dataset.mood===moodSelect.value));
       sensitivityValue.textContent = Number(sensitivitySlider.value).toFixed(2);
       colorValue.textContent = Number(colorSlider.value).toFixed(2);
       densityValue.textContent = Number(densitySlider.value).toFixed(2);
@@ -394,8 +378,9 @@
     }
 
     function renderTeacherLibrary() {
+      const filter = (($('teacherLibrarySearch')||{}).value || '').toLowerCase().trim();
       teacherLibrarySection.hidden = teacherAudioLibrary.length === 0;
-      teacherSongsList.innerHTML = teacherAudioLibrary.map((track, index) => `
+      teacherSongsList.innerHTML = teacherAudioLibrary.filter((track)=>track.title.toLowerCase().includes(filter)).map((track, index) => `
         <div class='song-row'>
           <div class='song-info'>
             <span class='song-name'>${escapeHtml(track.title)}</span>
@@ -1127,18 +1112,16 @@ function drawParticles(time, levels) {
     });
     saveSongButton.addEventListener('click', () => storeSongLocally().catch(() => updateStatus('This song could not be saved locally in the browser right now.', 'Save failed.')));
     randomSongButton.addEventListener('click', () => playRandomTeacherTrack().catch(() => updateStatus('The random song could not start. Try tapping Play again.', 'Playback paused.')));
-    miniRandomButton.addEventListener('click', () => playRandomTeacherTrack().catch(() => updateStatus('The random song could not start. Try tapping Play again.', 'Playback paused.')));
-    miniPauseButton.addEventListener('click', pauseAudio);
-    miniNextButton.addEventListener('click', () => playNextTeacherTrack().catch(() => updateStatus('The next song could not start. Try tapping Play again.', 'Playback paused.')));
-    miniExitFullscreenButton.addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen(); });
-    playButton.addEventListener('click', playAudio);
-    pauseButton.addEventListener('click', pauseAudio);
+    dockRandomButton.addEventListener('click', () => playRandomTeacherTrack().catch(() => updateStatus('The random song could not start. Try tapping Play again.', 'Playback paused.')));
+    [playPauseButton, dockPlayPauseButton].forEach((button)=>button.addEventListener('click', ()=>{ if (audioElement.paused) playAudio(); else pauseAudio(); }));
+    dockRestartButton.addEventListener('click', restartAudio);
+    dockStopButton.addEventListener('click', stopAudio);
     stopButton.addEventListener('click', stopAudio);
     restartButton.addEventListener('click', restartAudio);
     clearSavedSongsButton.addEventListener('click', () => clearSavedSongs().catch(() => updateStatus('The saved songs could not be cleared right now.', 'Clear failed.')));
     fullscreenButton.addEventListener('click', () => toggleFullscreen().catch(() => updateStatus('Fullscreen is not available right now.', 'Fullscreen unavailable.')));
-    modeSelect.addEventListener('change', () => { persistVisualSettings(); updateSliderLabels(); });
-    moodSelect.addEventListener('change', () => { persistVisualSettings(); updateSliderLabels(); });
+    document.querySelectorAll('[data-mode]').forEach((button)=>button.addEventListener('click',()=>{modeSelect.value=button.dataset.mode;persistVisualSettings();updateSliderLabels();}));
+    document.querySelectorAll('[data-mood]').forEach((button)=>button.addEventListener('click',()=>{moodSelect.value=button.dataset.mood;persistVisualSettings();updateSliderLabels();}));
     sensitivitySlider.addEventListener('input', updateSliderLabels);
     colorSlider.addEventListener('input', updateSliderLabels);
     densitySlider.addEventListener('input', () => { createParticles(); updateSliderLabels(); });
@@ -1148,8 +1131,6 @@ function drawParticles(time, levels) {
       createParticles();
       updateSliderLabels();
     });
-    hudProgress.addEventListener('input', seekFromProgress);
-    hudProgress.addEventListener('change', seekFromProgress);
     audioElement.addEventListener('play', () => updateButtonStates(Boolean(audioElement.src), true));
     audioElement.addEventListener('pause', () => { if (audioElement.currentTime > 0 && !audioElement.ended) updateButtonStates(Boolean(audioElement.src), false); });
     audioElement.addEventListener('loadedmetadata', updateProgressHud);
@@ -1173,6 +1154,9 @@ function drawParticles(time, levels) {
     window.addEventListener('beforeunload', revokeCurrentObjectUrl);
 
     applySavedVisualSettings();
+    controlsOverlay.addEventListener('toggle', ()=>appRoot.classList.toggle('controls-open', controlsOverlay.open));
+    dockToggleButton.addEventListener('click', ()=>{ controlsOverlay.open = !controlsOverlay.open; appRoot.classList.toggle('controls-open', controlsOverlay.open); });
+    appRoot.classList.add('controls-open');
     setCanvasSize();
     createParticles();
     updateSliderLabels();
@@ -1181,6 +1165,7 @@ function drawParticles(time, levels) {
     updateFullscreenUi();
     bindHelpButtons();
     renderTeacherLibrary();
+    const teacherLibrarySearch = $('teacherLibrarySearch'); if (teacherLibrarySearch) teacherLibrarySearch.addEventListener('input', renderTeacherLibrary);
     if (teacherAudioLibrary.length) selectRandomTeacherTrack();
     else {
       randomSongButton.disabled = true;

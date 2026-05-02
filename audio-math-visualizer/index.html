@@ -10,42 +10,38 @@
   <div id='app'>
     <canvas id='visualizerCanvas' aria-label='Animated math audio visualizer'></canvas>
 
-    <div id='fullscreenMiniPanel' class='fullscreen-mini-panel' aria-label='Fullscreen quick controls'>
-      <button id='miniRandomButton' type='button'>Play a random song</button>
-      <button id='miniPauseButton' type='button'>Pause</button>
-      <button id='miniNextButton' type='button'>Play next</button>
-      <button id='miniExitFullscreenButton' type='button'>Exit full screen</button>
+    <div id='topLeftDock' class='top-left-dock'>
+      <button id='dockToggleButton' type='button' class='dock-title-block'>
+        <span class='dock-title'>Audio Math Visualizer</span>
+        <span id='dockSongText' class='dock-song'>No song selected</span>
+      </button>
+      <div class='dock-quick-controls'>
+        <button id='dockPlayPauseButton' type='button'>Play</button>
+        <button id='dockRestartButton' type='button'>Restart</button>
+        <button id='dockRandomButton' type='button'>Shuffle</button>
+        <button id='dockStopButton' type='button'>Stop</button>
+      </div>
     </div>
 
-    <details class='overlay' open>
+    <details id='controlsOverlay' class='overlay' open>
       <summary>
-        <span>Audio Math Visualizer</span>
-        <span class='summary-note'>Tap to collapse controls</span>
+        <span>Controls</span>
+        <span class='summary-note'>Tap to collapse panel</span>
       </summary>
 
       <div class='panel-content'>
-        <p class='subtitle'>Upload an MP3 or WAV file, press play, and watch math-inspired shapes move with bass, mids, and treble.</p>
-
-        <div class='file-row'>
-          <label class='file-label' for='audioFile'>Upload MP3 or WAV</label>
-          <input id='audioFile' type='file' accept='.mp3,.wav,audio/mpeg,audio/wav'>
-          <button id='saveSongButton' type='button' class='tiny-button' disabled>Save Song</button>
-        </div>
-
-        <p class='storage-note'>Uploaded songs are temporary unless saved locally in this browser. This page cannot upload songs to GitHub automatically.</p>
-
-        <div class='now-playing'>
-          <span><strong>Now Playing:</strong></span>
-          <span id='nowPlayingText'>No song selected</span>
-        </div>
-
-        <div class='button-row'>
-          <button id='randomSongButton' type='button'>Random Song</button>
-          <button id='playButton' type='button'>Play</button>
-          <button id='pauseButton' type='button' disabled>Pause</button>
-          <button id='stopButton' type='button' disabled>Stop</button>
-          <button id='restartButton' type='button' disabled>Restart</button>
-          <button id='fullscreenButton' type='button'>Fullscreen</button>
+        <div class='playback-card'>
+          <div class='now-playing'>
+            <span><strong>Now Playing:</strong></span>
+            <span id='nowPlayingText'>No song selected</span>
+          </div>
+          <div class='button-row compact-row'>
+            <button id='playPauseButton' type='button'>Play</button>
+            <button id='stopButton' type='button' disabled>Stop</button>
+            <button id='restartButton' type='button' disabled>Restart</button>
+            <button id='randomSongButton' type='button'>Random Song</button>
+            <button id='fullscreenButton' type='button'>Fullscreen</button>
+          </div>
         </div>
 
         <div id='statusMessage' class='status-box'>
@@ -53,35 +49,41 @@
           <span id='statusText'> Choose an MP3 or WAV file to begin.</span>
         </div>
 
-        <div class='control-grid'>
-          <div class='control-block'>
-            <label for='modeSelect'>
-              <span class='setting-label'>Visual mode <button type='button' class='info-button' data-help-target='modeHelp' aria-label='About visual mode'>?</button></span>
-              <span id='modeValue'>GeoFace</span>
-            </label>
-            <div class='help-popup' id='modeHelp' hidden>Choose a geometric character mode (GeoFace family) or classic Waveform.</div>
-            <select id='modeSelect' class='select-input'>
-              <option value='geoface' selected>GeoFace</option>
-              <option value='geokitty'>GeoKitty</option>
-              <option value='geodog'>GeoDog</option>
-              <option value='waveform'>Waveform</option>
-            </select>
+        <div class='control-block'>
+          <label><span class='setting-label'>Visual mode <button type='button' class='info-button' data-help-target='modeHelp' aria-label='About visual mode'>?</button></span></label>
+          <div class='help-popup' id='modeHelp' hidden>Choose a geometric character mode (GeoFace family) or classic Waveform.</div>
+          <div id='modeChips' class='chip-row'>
+            <button type='button' class='chip-button' data-mode='geoface'>GeoFace</button>
+            <button type='button' class='chip-button' data-mode='geokitty'>GeoKitty</button>
+            <button type='button' class='chip-button' data-mode='geodog'>GeoDog</button>
+            <button type='button' class='chip-button' data-mode='waveform'>Waveform</button>
           </div>
+        </div>
 
-          <div class='control-block'>
-            <label for='moodSelect'>
-              <span class='setting-label'>Mood <button type='button' class='info-button' data-help-target='moodHelp' aria-label='About mood'>?</button></span>
-              <span id='moodValue'>Mellow</span>
-            </label>
-            <div class='help-popup' id='moodHelp' hidden>Mood changes palette, glow, pulse intensity, and animation character for all visual modes.</div>
-            <select id='moodSelect' class='select-input'>
-              <option value='mellow' selected>Mellow</option>
-              <option value='depression'>Depression</option>
-              <option value='happy'>Happy</option>
-              <option value='angry'>Angry</option>
-            </select>
+        <div class='control-block'>
+          <label><span class='setting-label'>Mood <button type='button' class='info-button' data-help-target='moodHelp' aria-label='About mood'>?</button></span></label>
+          <div class='help-popup' id='moodHelp' hidden>Mood changes palette, glow, pulse intensity, and animation character for all visual modes.</div>
+          <div id='moodChips' class='chip-row'>
+            <button type='button' class='chip-button' data-mood='mellow'>Mellow</button>
+            <button type='button' class='chip-button' data-mood='depression'>Depression</button>
+            <button type='button' class='chip-button' data-mood='happy'>Happy</button>
+            <button type='button' class='chip-button' data-mood='angry'>Angry</button>
+            <button type='button' class='chip-button' data-mood='spectrum'>Spectrum</button>
           </div>
+        </div>
 
+        <details class='library-section' id='uploadSection'>
+          <summary class='section-summary'>Upload your own song</summary>
+          <div class='file-row'>
+            <label class='file-label' for='audioFile'>Upload MP3 or WAV</label>
+            <input id='audioFile' type='file' accept='.mp3,.wav,audio/mpeg,audio/wav'>
+            <button id='saveSongButton' type='button' class='tiny-button' disabled>Save Song</button>
+          </div>
+          <p class='storage-note'>Uploaded songs are temporary unless saved locally in this browser. This page cannot upload songs to GitHub automatically.</p>
+        </details>
+
+        <details class='library-section' id='advancedSection'>
+          <summary class='section-summary'>Advanced visual tuning</summary>
           <div class='toggle-card'>
             <label for='performanceModeToggle'>
               <span>Performance Mode / Chromebook Mode</span>
@@ -89,59 +91,39 @@
             </label>
             <span id='performanceModeValue'>On: fewer particles, lower glow, shorter trails, and lighter canvas rendering.</span>
           </div>
-
           <div class='control-block'>
-            <label for='sensitivitySlider'>
-              <span class='setting-label'>Sensitivity <button type='button' class='info-button' data-help-target='sensitivityHelp' aria-label='About sensitivity'>?</button></span>
-              <span id='sensitivityValue'>1.20</span>
-            </label>
+            <label for='sensitivitySlider'><span class='setting-label'>Sensitivity <button type='button' class='info-button' data-help-target='sensitivityHelp' aria-label='About sensitivity'>?</button></span><span id='sensitivityValue'>1.20</span></label>
             <div class='help-popup' id='sensitivityHelp' hidden>Controls how strongly the visuals react to the music.</div>
             <input id='sensitivitySlider' type='range' min='0.35' max='3.5' step='0.05' value='1.20'>
           </div>
-
           <div class='control-block'>
-            <label for='colorSlider'>
-              <span class='setting-label'>Color intensity <button type='button' class='info-button' data-help-target='colorHelp' aria-label='About color intensity'>?</button></span>
-              <span id='colorValue'>1.10</span>
-            </label>
+            <label for='colorSlider'><span class='setting-label'>Color intensity <button type='button' class='info-button' data-help-target='colorHelp' aria-label='About color intensity'>?</button></span><span id='colorValue'>1.10</span></label>
             <div class='help-popup' id='colorHelp' hidden>Controls how bright and saturated the colors become.</div>
             <input id='colorSlider' type='range' min='0.35' max='3' step='0.05' value='1.10'>
           </div>
-
           <div class='control-block'>
-            <label for='densitySlider'>
-              <span class='setting-label'>Shape density <button type='button' class='info-button' data-help-target='densityHelp' aria-label='About shape density'>?</button></span>
-              <span id='densityValue'>0.70</span>
-            </label>
+            <label for='densitySlider'><span class='setting-label'>Shape density <button type='button' class='info-button' data-help-target='densityHelp' aria-label='About shape density'>?</button></span><span id='densityValue'>0.70</span></label>
             <div class='help-popup' id='densityHelp' hidden>Controls how many shapes and particles appear. Chromebook Mode caps the effective density to reduce lag.</div>
             <input id='densitySlider' type='range' min='0.25' max='2.5' step='0.05' value='0.70'>
           </div>
-        </div>
+        </details>
 
         <section id='teacherLibrarySection' class='library-section' aria-labelledby='teacherLibraryTitle' hidden>
-          <div class='library-header'>
-            <span class='library-title' id='teacherLibraryTitle'>Teacher Audio Library</span>
-          </div>
+          <div class='library-header'><span class='library-title' id='teacherLibraryTitle'>Teacher Audio Library</span></div>
+          <input id='teacherLibrarySearch' class='search-input' type='search' placeholder='Search teacher songs'>
           <p class='library-note'>Permanent audio files managed in assets/audio. Only the selected song is loaded.</p>
-          <div id='teacherSongsList' class='song-list'></div>
+          <div id='teacherSongsList' class='song-list song-list-scroll'></div>
         </section>
 
         <section class='library-section' aria-labelledby='savedSongsTitle'>
-          <div class='library-header'>
-            <span class='library-title' id='savedSongsTitle'>Saved Songs</span>
-            <button id='clearSavedSongsButton' type='button' class='tiny-button'>Clear Saved Songs</button>
-          </div>
+          <div class='library-header'><span class='library-title' id='savedSongsTitle'>Saved Songs</span><button id='clearSavedSongsButton' type='button' class='tiny-button'>Clear Saved Songs</button></div>
           <p class='library-note'>Browser-only storage on this device. Saved songs are not uploaded online or shared across devices.</p>
           <div id='savedSongsList' class='song-list'><div class='empty-library'>No saved songs yet.</div></div>
         </section>
       </div>
     </details>
 
-    <div class='hud' aria-live='polite'>
-      <div class='hud-line'><span>Now Playing</span></div>
-      <div class='hud-song' id='hudFile'>None</div>
-      <div class='hud-time-row'><span id='hudCurrentTime'>0:00</span><span id='hudDuration'>--:--</span></div>
-      <input id='hudProgress' class='progress-slider' type='range' min='0' max='1000' value='0' disabled aria-label='Seek within current song'>
+    <div id='techHud' class='hud hud-tech' aria-live='polite'>
       <div class='hud-meters'>
         <div class='hud-line'><span>Bass</span><span id='hudBass'>0%</span></div>
         <div class='hud-line'><span>Mids</span><span id='hudMids'>0%</span></div>
