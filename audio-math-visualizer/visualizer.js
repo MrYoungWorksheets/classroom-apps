@@ -713,14 +713,67 @@ function drawGeoFamily(time, levels, variant = 'face') {
     return Math.max(min, Math.min(max, value));
   }
 
+  function drawGeoHead() {
+    ctx.beginPath();
+    if (variant === 'kitty') {
+      const points = [
+        [-headSize * 0.62, headSize * 0.24],
+        [-headSize * 0.55, -headSize * 0.18],
+        [-headSize * 0.48, -headSize * 0.5],
+        [-headSize * 0.68, -headSize * 0.78],
+        [-headSize * 0.3, -headSize * 1.08],
+        [-headSize * 0.14, -headSize * 0.66],
+        [0, -headSize * 0.58],
+        [headSize * 0.14, -headSize * 0.66],
+        [headSize * 0.3, -headSize * 1.08],
+        [headSize * 0.68, -headSize * 0.78],
+        [headSize * 0.48, -headSize * 0.5],
+        [headSize * 0.55, -headSize * 0.18],
+        [headSize * 0.62, headSize * 0.24],
+        [headSize * 0.2, headSize * 0.64],
+        [-headSize * 0.2, headSize * 0.64]
+      ];
+      points.forEach((point, i) => { if (i === 0) ctx.moveTo(point[0], point[1]); else ctx.lineTo(point[0], point[1]); });
+    } else if (variant === 'dog') {
+      const points = [
+        [0, -headSize * 0.76],
+        [-headSize * 0.44, -headSize * 0.7],
+        [-headSize * 0.72, -headSize * 0.42],
+        [-headSize * 0.8, headSize * 0.15],
+        [-headSize * 0.55, headSize * 0.48],
+        [-headSize * 0.16, headSize * 0.68],
+        [headSize * 0.16, headSize * 0.68],
+        [headSize * 0.55, headSize * 0.48],
+        [headSize * 0.8, headSize * 0.15],
+        [headSize * 0.72, -headSize * 0.42],
+        [headSize * 0.44, -headSize * 0.7]
+      ];
+      points.forEach((point, i) => { if (i === 0) ctx.moveTo(point[0], point[1]); else ctx.lineTo(point[0], point[1]); });
+    } else {
+      const sides = 8;
+      const maskScale = 1 + bass * (performance ? 0.06 : 0.12);
+      for (let i = 0; i <= sides; i += 1) {
+        const angle = -Math.PI / 2 + (Math.PI * 2 * i) / sides;
+        const radialJitter = (i % 2 === 0 ? 1.06 : 0.84) + treble * 0.08;
+        const x = Math.cos(angle) * headSize * radialJitter * maskScale;
+        const y = Math.sin(angle) * headSize * radialJitter * maskScale;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+    }
+    ctx.closePath();
+    ctx.lineWidth = 2.4 + bass * 4.2;
+    ctx.strokeStyle = 'hsla(' + hueBase + ', 100%, 68%, ' + (performance ? 0.72 : 0.88) + ')';
+    ctx.shadowBlur = (14 + intensity * 12 + treble * 18) * shadowScale;
+    ctx.shadowColor = 'hsla(' + hueBase + ', 100%, 70%, 0.9)';
+    ctx.stroke();
+  }
+
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
   const { sensitivity, intensity, density, shadowScale, performance } = controlValues();
   const centerX = width / 2;
   const centerY = height / 2;
   const mood = getMood();
-  const isKitty = variant === 'kitty';
-  const isDog = variant === 'dog';
   const bassRaw = Math.min(1, levels.bass);
   const midsRaw = Math.min(1, levels.mids);
   const trebleRaw = Math.min(1, levels.treble);
@@ -731,12 +784,11 @@ function drawGeoFamily(time, levels, variant = 'face') {
   const mids = clampValue(midsPulse * sensitivity, 0, 1);
   const treble = clampValue(treblePulse * sensitivity, 0, 1);
   const headPulse = clampValue(1 + bass * 0.08 * mood.pulse, 1, 1.1);
-  const baseSize = isDog ? 0.285 : 0.27;
+  const baseSize = variant === 'dog' ? 0.285 : 0.27;
   const headSize = Math.min(width, height) * (performance ? 0.24 : baseSize) * headPulse;
-  const jawWidth = headSize * (0.76 + bass * 0.22);
+  const jawWidth = headSize * (0.7 + bass * 0.2);
   const smileBounce = Math.sin(time * 0.011) * (1.5 + bass * 5.5);
-  const maxTilt = 0.12;
-  const faceTilt = clampValue(Math.sin(time * 0.0014) * mids * 0.12, -maxTilt, maxTilt);
+  const faceTilt = clampValue(Math.sin(time * 0.0014) * mids * 0.12, -0.12, 0.12);
   const hueBase = (182 + time * 0.02 * mood.motion + mids * 140 + treble * 90) % 360;
 
   ctx.save();
@@ -744,216 +796,148 @@ function drawGeoFamily(time, levels, variant = 'face') {
   ctx.rotate(faceTilt);
   ctx.globalCompositeOperation = performance ? 'source-over' : 'lighter';
 
-  // Outer angular mask.
-  ctx.beginPath();
-  const sides = 8;
-  const maskScale = 1 + bass * (performance ? 0.06 : 0.12);
-  for (let i = 0; i <= sides; i += 1) {
-    const angle = -Math.PI / 2 + (Math.PI * 2 * i) / sides;
-    const radialJitter = (i % 2 === 0 ? 1.06 : 0.84) + treble * 0.08;
-    const x = Math.cos(angle) * headSize * radialJitter * maskScale;
-    const y = Math.sin(angle) * headSize * radialJitter * maskScale;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.lineWidth = 2.4 + bass * 4.2;
-  ctx.strokeStyle = 'hsla(' + hueBase + ', 100%, 68%, ' + (performance ? 0.72 : 0.88) + ')';
-  ctx.shadowBlur = (14 + intensity * 12 + treble * 18) * shadowScale;
-  ctx.shadowColor = 'hsla(' + hueBase + ', 100%, 70%, 0.9)';
-  ctx.stroke();
+  drawGeoHead();
 
-  if (isKitty) {
-    for (let side = -1; side <= 1; side += 2) {
+  const catEyeY = -headSize * 0.2;
+  const dogEyeY = -headSize * 0.1;
+  const faceEyeY = -headSize * 0.19;
+  for (let side = -1; side <= 1; side += 2) {
+    if (variant === 'kitty') {
+      const ex = side * headSize * 0.27;
+      const ew = headSize * (0.18 + mids * 0.05);
+      const eh = headSize * 0.09;
       ctx.beginPath();
-      ctx.moveTo(side * headSize * 0.34, -headSize * 0.66);
-      ctx.lineTo(side * headSize * 0.2, -headSize * 1.22);
-      ctx.lineTo(side * headSize * 0.05, -headSize * 0.6);
+      ctx.moveTo(ex - ew, catEyeY + eh * 0.25);
+      ctx.lineTo(ex - ew * 0.25, catEyeY - eh);
+      ctx.lineTo(ex + ew, catEyeY + eh * 0.25);
+      ctx.lineTo(ex + ew * 0.05, catEyeY + eh);
       ctx.closePath();
-      ctx.strokeStyle = colorFromMood(hueBase + 34, 0.92, 74);
-      ctx.lineWidth = 2.2 + treble * 1.4;
+      ctx.strokeStyle = colorFromMood(hueBase + 44, 0.96, 80);
+      ctx.lineWidth = 2 + mids * 2;
       ctx.stroke();
-    }
-  }
-  if (isDog) {
-    for (let side = -1; side <= 1; side += 2) {
       ctx.beginPath();
-      ctx.moveTo(side * headSize * 0.72, -headSize * 0.4);
-      ctx.lineTo(side * headSize * 0.95, headSize * 0.15);
-      ctx.lineTo(side * headSize * 0.56, headSize * 0.05);
-      ctx.strokeStyle = colorFromMood(hueBase + 20, 0.8, 64);
-      ctx.lineWidth = 2.4 + bass * 1.4;
+      ctx.moveTo(ex, catEyeY - eh * 0.65);
+      ctx.lineTo(ex, catEyeY + eh * 0.72);
+      ctx.strokeStyle = colorFromMood(hueBase + 176, 0.95, 76);
+      ctx.lineWidth = 1.6 + treble * 1.2;
       ctx.stroke();
-    }
-  }
-
-  const eyeOffsetX = headSize * (isDog ? 0.34 : 0.36);
-  const eyeY = -headSize * 0.19;
-  const eyeSize = headSize * ((isKitty ? 0.13 : 0.15) + mids * (isKitty ? 0.08 : 0.1));
-  const eyeCoreSize = eyeSize * (0.33 + mids * 0.12);
-  for (let side = -1; side <= 1; side += 2) {
-    ctx.beginPath();
-    for (let i = 0; i <= 6; i += 1) {
-      const a = (Math.PI * 2 * i) / 6 + Math.PI / 6;
-      const rx = (i % 2 === 0 ? 1 : 0.72) * eyeSize;
-      const x = side * eyeOffsetX + Math.cos(a) * rx;
-      const y = eyeY + Math.sin(a) * eyeSize;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    if (isKitty) {
+    } else {
+      const eyeOffsetX = headSize * (variant === 'dog' ? 0.28 : 0.36);
+      const eyeY = variant === 'dog' ? dogEyeY : faceEyeY;
+      const eyeSize = headSize * ((variant === 'dog' ? 0.13 : 0.15) + mids * 0.08);
       ctx.beginPath();
-      ctx.moveTo(side * (eyeOffsetX - eyeSize * 1.05), eyeY + eyeSize * 0.16);
-      ctx.lineTo(side * eyeOffsetX, eyeY - eyeSize * 0.36 - treble * 4);
-      ctx.lineTo(side * (eyeOffsetX + eyeSize * 1.05), eyeY + eyeSize * 0.16);
-      ctx.strokeStyle = 'hsla(' + ((hueBase + 32) % 360) + ', 100%, 79%, 0.85)';
-      ctx.lineWidth = 1.6 + treble * 1.5;
+      ctx.arc(side * eyeOffsetX, eyeY, eyeSize, 0, Math.PI * 2);
+      ctx.strokeStyle = colorFromMood(hueBase + 34, 0.94, 78);
+      ctx.lineWidth = 2 + mids * 2.2;
       ctx.stroke();
-    }
-
-    ctx.strokeStyle = 'hsla(' + ((hueBase + 42) % 360) + ', 100%, 76%, 0.96)';
-    ctx.lineWidth = 2.2 + mids * 2.8;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(side * eyeOffsetX, eyeY, eyeCoreSize, 0, Math.PI * 2);
-    ctx.fillStyle = 'hsla(' + ((hueBase + 165) % 360) + ', 100%, 74%, 0.38)';
-    ctx.fill();
-
-    const tremble = treble * (performance ? 0.45 : 1.1);
-    ctx.beginPath();
-    ctx.arc(
-      side * eyeOffsetX + Math.sin(time * 0.015 + side) * tremble,
-      eyeY + Math.cos(time * 0.016 + side) * tremble,
-      eyeCoreSize * 0.46,
-      0,
-      Math.PI * 2
-    );
-    ctx.fillStyle = 'hsla(' + ((hueBase + 188) % 360) + ', 100%, 88%, 0.95)';
-    ctx.fill();
-
-    const browLift = treble * (performance ? 10 : 18);
-    const browY = eyeY - eyeSize * 0.95 - browLift;
-    ctx.beginPath();
-    ctx.moveTo(side * (eyeOffsetX - eyeSize * 0.8), browY + eyeSize * 0.3);
-    ctx.lineTo(side * eyeOffsetX, browY - eyeSize * 0.16);
-    ctx.lineTo(side * (eyeOffsetX + eyeSize * 0.86), browY + eyeSize * 0.16);
-    ctx.strokeStyle = 'hsla(' + ((hueBase + 20) % 360) + ', 100%, 76%, ' + (0.6 + treble * 0.3) + ')';
-    ctx.lineWidth = 1.6 + treble * 1.8;
-    ctx.stroke();
-  }
-
-  // Nose.
-  ctx.beginPath();
-  ctx.moveTo(0, -headSize * 0.04);
-  ctx.lineTo(headSize * 0.08, headSize * 0.16 + mids * 6);
-  ctx.lineTo(-headSize * 0.08, headSize * 0.16 + mids * 6);
-  ctx.closePath();
-  ctx.strokeStyle = 'hsla(' + ((hueBase + 80) % 360) + ', 100%, 74%, 0.88)';
-  ctx.lineWidth = 1.6 + mids * 2;
-  ctx.stroke();
-
-  // Singing mouth with clear upper/lower edges.
-  if (isDog) {
-    ctx.beginPath();
-    ctx.moveTo(-headSize * 0.24, headSize * 0.09);
-    ctx.lineTo(-headSize * 0.2, headSize * 0.3);
-    ctx.lineTo(0, headSize * 0.4 + bass * 6);
-    ctx.lineTo(headSize * 0.2, headSize * 0.3);
-    ctx.lineTo(headSize * 0.24, headSize * 0.09);
-    ctx.strokeStyle = colorFromMood(hueBase + 62, 0.72, 68);
-    ctx.lineWidth = 2 + mids * 1.3;
-    ctx.stroke();
-  }
-
-  const mouthCenterY = headSize * 0.35 + smileBounce;
-  const mouthHalf = jawWidth * 0.34;
-  const shortBeatBounce = Math.sin(time * 0.023) * (headSize * 0.015 + bass * headSize * 0.025);
-  const baseMouth = headSize * (performance ? 0.07 : 0.065);
-  const mouthRange = headSize * (performance ? 0.14 : 0.18);
-  const mouthOpen = clampValue(baseMouth + bass * mouthRange + shortBeatBounce, headSize * 0.05, headSize * 0.24);
-  const grinLift = headSize * (0.055 + bass * 0.045);
-
-  ctx.beginPath();
-  ctx.moveTo(-mouthHalf, mouthCenterY);
-  ctx.lineTo(-mouthHalf * 0.4, mouthCenterY + grinLift);
-  ctx.lineTo(0, mouthCenterY + grinLift + mouthOpen * 0.18);
-  ctx.lineTo(mouthHalf * 0.4, mouthCenterY + grinLift);
-  ctx.lineTo(mouthHalf, mouthCenterY);
-  ctx.strokeStyle = 'hsla(' + ((hueBase + 202) % 360) + ', 100%, 80%, 0.95)';
-  ctx.lineWidth = 2.2 + bass * 3;
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(-mouthHalf * 0.92, mouthCenterY + mouthOpen * 0.1);
-  ctx.lineTo(-mouthHalf * 0.45, mouthCenterY + grinLift + mouthOpen);
-  ctx.lineTo(0, mouthCenterY + grinLift + mouthOpen * 1.14);
-  ctx.lineTo(mouthHalf * 0.45, mouthCenterY + grinLift + mouthOpen);
-  ctx.lineTo(mouthHalf * 0.92, mouthCenterY + mouthOpen * 0.1);
-  ctx.closePath();
-  ctx.fillStyle = 'hsla(' + ((hueBase + 274) % 360) + ', 58%, 18%, ' + (performance ? 0.74 : 0.86) + ')';
-  ctx.fill();
-  ctx.strokeStyle = 'hsla(' + ((hueBase + 230) % 360) + ', 100%, 74%, 0.9)';
-  ctx.lineWidth = 1.8 + bass * 2.8;
-  ctx.stroke();
-
-  const cheekSpread = mouthHalf * (0.9 + mids * 0.45);
-  const cheekY = mouthCenterY + grinLift * 0.65;
-  for (let side = -1; side <= 1; side += 2) {
-    ctx.beginPath();
-    ctx.moveTo(side * cheekSpread, cheekY - 6);
-    ctx.lineTo(side * (cheekSpread + 14 + mids * 14), cheekY + 8 + mids * 4);
-    ctx.strokeStyle = 'hsla(' + ((hueBase + 8) % 360) + ', 100%, 72%, ' + (0.35 + mids * 0.42) + ')';
-    ctx.lineWidth = 1.2 + mids * 1.6;
-    ctx.stroke();
-  }
-
-  if (isKitty) {
-    for (let side = -1; side <= 1; side += 2) {
-      for (let w = 0; w < 3; w += 1) {
-        const yOffset = mouthCenterY - headSize * 0.06 + w * headSize * 0.07;
+      ctx.beginPath();
+      ctx.arc(side * eyeOffsetX, eyeY + eyeSize * 0.04, eyeSize * 0.34, 0, Math.PI * 2);
+      ctx.fillStyle = colorFromMood(hueBase + 170, 0.88, 82);
+      ctx.fill();
+      if (variant === 'dog') {
         ctx.beginPath();
-        ctx.moveTo(side * headSize * 0.18, yOffset);
-        ctx.lineTo(side * headSize * (0.5 + w * 0.05), yOffset - side * 2);
-        ctx.strokeStyle = colorFromMood(hueBase + 48, 0.55, 74);
-        ctx.lineWidth = 1.1;
+        ctx.moveTo(side * (eyeOffsetX - eyeSize * 0.7), eyeY - eyeSize * 1.3);
+        ctx.lineTo(side * (eyeOffsetX + eyeSize * 0.7), eyeY - eyeSize * 1.1);
+        ctx.strokeStyle = colorFromMood(hueBase + 8, 0.5, 72);
+        ctx.lineWidth = 1.4 + treble;
         ctx.stroke();
       }
     }
   }
 
-  if (isDog) {
+  if (variant === 'kitty') {
+    const noseY = headSize * 0.06;
     ctx.beginPath();
-    ctx.moveTo(-headSize * 0.14, headSize * 0.18);
-    ctx.lineTo(0, headSize * 0.29 + bass * 5);
-    ctx.lineTo(headSize * 0.14, headSize * 0.18);
-    ctx.strokeStyle = colorFromMood(hueBase + 70, 0.88, 72);
-    ctx.lineWidth = 2 + mids * 1.1;
+    ctx.moveTo(0, noseY);
+    ctx.lineTo(headSize * 0.05, noseY + headSize * 0.06);
+    ctx.lineTo(-headSize * 0.05, noseY + headSize * 0.06);
+    ctx.closePath();
+    ctx.strokeStyle = colorFromMood(hueBase + 82, 0.88, 74);
+    ctx.lineWidth = 1.8 + mids * 1.4;
     ctx.stroke();
-  }
 
-  const spikes = performance ? 6 : 11;
-  for (let i = 0; i < spikes; i += 1) {
-    const spikeAngle = -Math.PI * 0.9 + (i / Math.max(1, spikes - 1)) * Math.PI * 1.8;
-    const startR = headSize * 1.02;
-    const endR = headSize * (1.08 + treble * 0.24 + Math.sin(time * 0.012 + i) * 0.03);
+    const mouthOpen = headSize * (0.02 + bass * 0.09);
+    for (let side = -1; side <= 1; side += 2) {
+      ctx.beginPath();
+      ctx.moveTo(0, noseY + headSize * 0.06);
+      ctx.quadraticCurveTo(side * headSize * 0.06, noseY + headSize * 0.11 + mouthOpen, side * headSize * 0.11, noseY + headSize * 0.1 + mouthOpen * 0.6);
+      ctx.strokeStyle = colorFromMood(hueBase + 206, 0.9, 76);
+      ctx.lineWidth = 1.8 + bass * 1.8;
+      ctx.stroke();
+    }
+
+    for (let side = -1; side <= 1; side += 2) {
+      for (let w = 0; w < 3; w += 1) {
+        const yOffset = noseY + headSize * (0.05 + w * 0.08);
+        ctx.beginPath();
+        ctx.moveTo(side * headSize * 0.12, yOffset);
+        ctx.lineTo(side * headSize * (0.5 + w * 0.03), yOffset + (w - 1) * headSize * 0.02);
+        ctx.strokeStyle = colorFromMood(hueBase + 50, 0.56, 76);
+        ctx.lineWidth = 1.1;
+        ctx.stroke();
+      }
+    }
+  } else if (variant === 'dog') {
+    const muzzleTop = headSize * 0.05;
+    const muzzleBottom = headSize * (0.44 + bass * 0.06);
     ctx.beginPath();
-    ctx.moveTo(Math.cos(spikeAngle) * startR, Math.sin(spikeAngle) * startR);
-    ctx.lineTo(Math.cos(spikeAngle) * endR, Math.sin(spikeAngle) * endR);
-    ctx.strokeStyle = 'hsla(' + ((hueBase + 230) % 360) + ', 100%, 74%, ' + (0.16 + treble * 0.6) + ')';
-    ctx.lineWidth = 1 + treble * 1.6;
+    ctx.moveTo(-headSize * 0.24, muzzleTop);
+    ctx.lineTo(-headSize * 0.3, headSize * 0.27);
+    ctx.lineTo(-headSize * 0.15, muzzleBottom);
+    ctx.lineTo(headSize * 0.15, muzzleBottom);
+    ctx.lineTo(headSize * 0.3, headSize * 0.27);
+    ctx.lineTo(headSize * 0.24, muzzleTop);
+    ctx.closePath();
+    ctx.strokeStyle = colorFromMood(hueBase + 56, 0.84, 70);
+    ctx.lineWidth = 2.1 + mids * 1.8;
     ctx.stroke();
-  }
 
-  const accents = performance ? 4 : 8;
-  for (let i = 0; i < accents; i += 1) {
-    const a = (Math.PI * 2 * i) / accents + time * 0.0008;
-    const r1 = headSize * (1.18 + (i % 2) * 0.06);
-    const r2 = r1 + 8 + treble * 22;
     ctx.beginPath();
-    ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
-    ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
-    ctx.strokeStyle = 'hsla(' + ((hueBase + 280) % 360) + ', 100%, 78%, ' + (0.14 + treble * 0.45) + ')';
-    ctx.lineWidth = 1;
+    ctx.arc(0, muzzleTop + headSize * 0.06, headSize * 0.06, 0, Math.PI * 2);
+    ctx.fillStyle = colorFromMood(hueBase + 286, 0.86, 24);
+    ctx.fill();
+
+    const mouthY = headSize * 0.28 + smileBounce * 0.2;
+    const mouthOpen = clampValue(headSize * (0.05 + bass * 0.16), headSize * 0.04, headSize * 0.2);
+    ctx.beginPath();
+    ctx.moveTo(-jawWidth * 0.2, mouthY);
+    ctx.lineTo(-jawWidth * 0.12, mouthY + mouthOpen);
+    ctx.lineTo(jawWidth * 0.12, mouthY + mouthOpen);
+    ctx.lineTo(jawWidth * 0.2, mouthY);
+    ctx.strokeStyle = colorFromMood(hueBase + 210, 0.92, 78);
+    ctx.lineWidth = 2 + bass * 2;
+    ctx.stroke();
+    if (bass > 0.62) {
+      ctx.beginPath();
+      ctx.moveTo(-jawWidth * 0.05, mouthY + mouthOpen * 0.82);
+      ctx.lineTo(0, mouthY + mouthOpen * 1.12);
+      ctx.lineTo(jawWidth * 0.05, mouthY + mouthOpen * 0.82);
+      ctx.strokeStyle = colorFromMood(hueBase + 322, 0.66, 66);
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  } else {
+    // Preserve GeoFace mouth/nose balance.
+    ctx.beginPath();
+    ctx.moveTo(0, -headSize * 0.04);
+    ctx.lineTo(headSize * 0.08, headSize * 0.16 + mids * 6);
+    ctx.lineTo(-headSize * 0.08, headSize * 0.16 + mids * 6);
+    ctx.closePath();
+    ctx.strokeStyle = 'hsla(' + ((hueBase + 80) % 360) + ', 100%, 74%, 0.88)';
+    ctx.lineWidth = 1.6 + mids * 2;
+    ctx.stroke();
+    const mouthCenterY = headSize * 0.35 + smileBounce;
+    const mouthHalf = jawWidth * 0.34;
+    const mouthOpen = clampValue(headSize * 0.065 + bass * headSize * 0.18, headSize * 0.05, headSize * 0.24);
+    const grinLift = headSize * (0.055 + bass * 0.045);
+    ctx.beginPath();
+    ctx.moveTo(-mouthHalf, mouthCenterY);
+    ctx.lineTo(-mouthHalf * 0.4, mouthCenterY + grinLift);
+    ctx.lineTo(0, mouthCenterY + grinLift + mouthOpen * 0.18);
+    ctx.lineTo(mouthHalf * 0.4, mouthCenterY + grinLift);
+    ctx.lineTo(mouthHalf, mouthCenterY);
+    ctx.strokeStyle = 'hsla(' + ((hueBase + 202) % 360) + ', 100%, 80%, 0.95)';
+    ctx.lineWidth = 2.2 + bass * 3;
     ctx.stroke();
   }
 
