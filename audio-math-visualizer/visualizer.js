@@ -708,7 +708,7 @@
 ctx.restore();
 }
 
-function drawGeoFamily(time, levels, variant = 'geoface') {
+function drawGeoFamily(time, levels, variant = 'face') {
   function clampValue(value, min, max) {
     return Math.max(min, Math.min(max, value));
   }
@@ -719,8 +719,8 @@ function drawGeoFamily(time, levels, variant = 'geoface') {
   const centerX = width / 2;
   const centerY = height / 2;
   const mood = getMood();
-  const isKitty = variant === 'geokitty';
-  const isDog = variant === 'geodog';
+  const isKitty = variant === 'kitty';
+  const isDog = variant === 'dog';
   const bassRaw = Math.min(1, levels.bass);
   const midsRaw = Math.min(1, levels.mids);
   const trebleRaw = Math.min(1, levels.treble);
@@ -765,11 +765,12 @@ function drawGeoFamily(time, levels, variant = 'geoface') {
   if (isKitty) {
     for (let side = -1; side <= 1; side += 2) {
       ctx.beginPath();
-      ctx.moveTo(side * headSize * 0.32, -headSize * 0.72);
-      ctx.lineTo(side * headSize * 0.1, -headSize * 1.2);
-      ctx.lineTo(side * headSize * 0.04, -headSize * 0.62);
-      ctx.strokeStyle = colorFromMood(hueBase + 30, 0.9, 72);
-      ctx.lineWidth = 2 + treble * 1.2;
+      ctx.moveTo(side * headSize * 0.34, -headSize * 0.66);
+      ctx.lineTo(side * headSize * 0.2, -headSize * 1.22);
+      ctx.lineTo(side * headSize * 0.05, -headSize * 0.6);
+      ctx.closePath();
+      ctx.strokeStyle = colorFromMood(hueBase + 34, 0.92, 74);
+      ctx.lineWidth = 2.2 + treble * 1.4;
       ctx.stroke();
     }
   }
@@ -785,9 +786,9 @@ function drawGeoFamily(time, levels, variant = 'geoface') {
     }
   }
 
-  const eyeOffsetX = headSize * 0.36;
+  const eyeOffsetX = headSize * (isDog ? 0.34 : 0.36);
   const eyeY = -headSize * 0.19;
-  const eyeSize = headSize * (0.15 + mids * 0.1);
+  const eyeSize = headSize * ((isKitty ? 0.13 : 0.15) + mids * (isKitty ? 0.08 : 0.1));
   const eyeCoreSize = eyeSize * (0.33 + mids * 0.12);
   for (let side = -1; side <= 1; side += 2) {
     ctx.beginPath();
@@ -799,6 +800,16 @@ function drawGeoFamily(time, levels, variant = 'geoface') {
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.closePath();
+    if (isKitty) {
+      ctx.beginPath();
+      ctx.moveTo(side * (eyeOffsetX - eyeSize * 1.05), eyeY + eyeSize * 0.16);
+      ctx.lineTo(side * eyeOffsetX, eyeY - eyeSize * 0.36 - treble * 4);
+      ctx.lineTo(side * (eyeOffsetX + eyeSize * 1.05), eyeY + eyeSize * 0.16);
+      ctx.strokeStyle = 'hsla(' + ((hueBase + 32) % 360) + ', 100%, 79%, 0.85)';
+      ctx.lineWidth = 1.6 + treble * 1.5;
+      ctx.stroke();
+    }
+
     ctx.strokeStyle = 'hsla(' + ((hueBase + 42) % 360) + ', 100%, 76%, 0.96)';
     ctx.lineWidth = 2.2 + mids * 2.8;
     ctx.stroke();
@@ -842,6 +853,18 @@ function drawGeoFamily(time, levels, variant = 'geoface') {
   ctx.stroke();
 
   // Singing mouth with clear upper/lower edges.
+  if (isDog) {
+    ctx.beginPath();
+    ctx.moveTo(-headSize * 0.24, headSize * 0.09);
+    ctx.lineTo(-headSize * 0.2, headSize * 0.3);
+    ctx.lineTo(0, headSize * 0.4 + bass * 6);
+    ctx.lineTo(headSize * 0.2, headSize * 0.3);
+    ctx.lineTo(headSize * 0.24, headSize * 0.09);
+    ctx.strokeStyle = colorFromMood(hueBase + 62, 0.72, 68);
+    ctx.lineWidth = 2 + mids * 1.3;
+    ctx.stroke();
+  }
+
   const mouthCenterY = headSize * 0.35 + smileBounce;
   const mouthHalf = jawWidth * 0.34;
   const shortBeatBounce = Math.sin(time * 0.023) * (headSize * 0.015 + bass * headSize * 0.025);
@@ -1000,11 +1023,27 @@ function drawParticles(time, levels) {
       const { performance } = controlValues();
       clearBackground(time, levels);
       if (!performance || mode !== 'waveform') drawStars(time, levels);
-      if (mode === 'waveform') { drawWaveform(levels, time); drawCenterCircle(time, levels); }
-      else if (mode === 'geoface' || mode === 'geokitty' || mode === 'geodog') { drawGeoFamily(time, levels, mode); if (!performance) drawParticles(time, levels); }
-      else {
-        modeSelect.value = 'geoface';
-        drawGeoFamily(time, levels, 'geoface');
+      switch (mode) {
+        case 'waveform':
+          drawWaveform(levels, time);
+          drawCenterCircle(time, levels);
+          break;
+        case 'geokitty':
+          drawGeoFamily(time, levels, 'kitty');
+          if (!performance) drawParticles(time, levels);
+          break;
+        case 'geodog':
+          drawGeoFamily(time, levels, 'dog');
+          if (!performance) drawParticles(time, levels);
+          break;
+        case 'geoface':
+          drawGeoFamily(time, levels, 'face');
+          if (!performance) drawParticles(time, levels);
+          break;
+        default:
+          modeSelect.value = 'geoface';
+          drawGeoFamily(time, levels, 'face');
+          if (!performance) drawParticles(time, levels);
       }
       updateHud(levels);
       animationFrameId = requestAnimationFrame(drawFrame);
