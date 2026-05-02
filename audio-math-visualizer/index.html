@@ -57,16 +57,28 @@
           <div class='control-block'>
             <label for='modeSelect'>
               <span class='setting-label'>Visual mode <button type='button' class='info-button' data-help-target='modeHelp' aria-label='About visual mode'>?</button></span>
-              <span id='modeValue'>Waveform</span>
+              <span id='modeValue'>GeoFace</span>
             </label>
-            <div class='help-popup' id='modeHelp' hidden>Waveform is the default because it is the smoothest option on most Chromebooks. Mixed, nebula, geometry, and spiral are still available.</div>
+            <div class='help-popup' id='modeHelp' hidden>Choose a geometric character mode (GeoFace family) or classic Waveform.</div>
             <select id='modeSelect' class='select-input'>
-              <option value='waveform' selected>Waveform</option>
-              <option value='mixed'>Mixed</option>
-              <option value='nebula'>Nebula</option>
-              <option value='geometry'>Geometry</option>
-              <option value='spiral'>Spiral</option>
-              <option value='geoface'>GeoFace Mode</option>
+              <option value='geoface' selected>GeoFace</option>
+              <option value='geokitty'>GeoKitty</option>
+              <option value='geodog'>GeoDog</option>
+              <option value='waveform'>Waveform</option>
+            </select>
+          </div>
+
+          <div class='control-block'>
+            <label for='moodSelect'>
+              <span class='setting-label'>Mood <button type='button' class='info-button' data-help-target='moodHelp' aria-label='About mood'>?</button></span>
+              <span id='moodValue'>Mellow</span>
+            </label>
+            <div class='help-popup' id='moodHelp' hidden>Mood changes palette, glow, pulse intensity, and animation character for all visual modes.</div>
+            <select id='moodSelect' class='select-input'>
+              <option value='mellow' selected>Mellow</option>
+              <option value='depression'>Depression</option>
+              <option value='happy'>Happy</option>
+              <option value='angry'>Angry</option>
             </select>
           </div>
 

@@ -35,6 +35,8 @@
     const colorValue = $('colorValue');
     const densityValue = $('densityValue');
     const modeValue = $('modeValue');
+    const moodSelect = $('moodSelect');
+    const moodValue = $('moodValue');
     const hudFile = $('hudFile');
     const hudCurrentTime = $('hudCurrentTime');
     const hudDuration = $('hudDuration');
@@ -71,6 +73,17 @@
       size: Math.random() * 1.7 + 0.35,
       drift: Math.random() * 0.17 + 0.04
     }));
+    const VISUAL_STORAGE_KEY = 'audioMathVisualizer.visualMode';
+    const MOOD_STORAGE_KEY = 'audioMathVisualizer.visualMood';
+    const validModes = ['geoface', 'geokitty', 'geodog', 'waveform'];
+    const validMoods = ['mellow', 'depression', 'happy', 'angry'];
+    const moodConfigs = {
+      mellow: { bgTop: [6, 16, 33], bgBottom: [2, 6, 16], bgAlpha: 0.82, accentHue: 200, hueShift: 70, sat: 86, lightBoost: 0, glow: 0.9, pulse: 0.9, motion: 0.9, waveformWidth: 0, gridAlpha: 0.9 },
+      depression: { bgTop: [18, 22, 31], bgBottom: [8, 9, 14], bgAlpha: 0.86, accentHue: 215, hueShift: 36, sat: 44, lightBoost: -8, glow: 0.65, pulse: 0.72, motion: 0.78, waveformWidth: -0.2, gridAlpha: 0.72 },
+      happy: { bgTop: [14, 10, 28], bgBottom: [6, 4, 18], bgAlpha: 0.8, accentHue: 150, hueShift: 150, sat: 100, lightBoost: 8, glow: 1.06, pulse: 1.08, motion: 1.08, waveformWidth: 0.3, gridAlpha: 1 },
+      angry: { bgTop: [26, 8, 8], bgBottom: [15, 3, 3], bgAlpha: 0.84, accentHue: 12, hueShift: 42, sat: 98, lightBoost: -3, glow: 1.12, pulse: 1.16, motion: 1.05, waveformWidth: 0.35, gridAlpha: 1.05 }
+    };
+
 
     function escapeHtml(value) {
       const div = document.createElement('div');
@@ -128,9 +141,34 @@
       miniPauseButton.disabled = !isLoaded || !isPlaying;
     }
 
+    function getMood() {
+      return moodConfigs[moodSelect.value] || moodConfigs.mellow;
+    }
+
+    function colorFromMood(hue, alpha, light = 70) {
+      const mood = getMood();
+      const shifted = (hue + mood.accentHue) % 360;
+      const saturation = Math.max(24, Math.min(100, mood.sat));
+      const moodLight = Math.max(20, Math.min(92, light + mood.lightBoost));
+      return 'hsla(' + shifted + ', ' + saturation + '%, ' + moodLight + '%, ' + alpha + ')';
+    }
+
+    function applySavedVisualSettings() {
+      const savedMode = localStorage.getItem(VISUAL_STORAGE_KEY);
+      const savedMood = localStorage.getItem(MOOD_STORAGE_KEY);
+      modeSelect.value = validModes.includes(savedMode) ? savedMode : 'geoface';
+      moodSelect.value = validMoods.includes(savedMood) ? savedMood : 'mellow';
+    }
+
+    function persistVisualSettings() {
+      localStorage.setItem(VISUAL_STORAGE_KEY, modeSelect.value);
+      localStorage.setItem(MOOD_STORAGE_KEY, moodSelect.value);
+    }
+
     function updateSliderLabels() {
       const selectedText = modeSelect.options[modeSelect.selectedIndex].text;
       modeValue.textContent = selectedText + (performanceModeToggle.checked ? ' (Chromebook)' : '');
+      moodValue.textContent = moodSelect.options[moodSelect.selectedIndex].text;
       sensitivityValue.textContent = Number(sensitivitySlider.value).toFixed(2);
       colorValue.textContent = Number(colorSlider.value).toFixed(2);
       densityValue.textContent = Number(densitySlider.value).toFixed(2);
@@ -540,7 +578,8 @@
       const spacing = Math.max(performance ? 34 : 18, 58 - levels.bass * 30 - density * 9);
       ctx.save();
       ctx.globalAlpha = Math.min(performance ? 0.28 : 0.55, 0.1 + levels.volume * 0.24 + intensity * 0.05);
-      ctx.strokeStyle = 'rgba(126, 255, 236, 0.46)';
+      const mood = getMood();
+      ctx.strokeStyle = colorFromMood(210, 0.46 * mood.gridAlpha, 68);
       ctx.lineWidth = 1 + levels.bass * (performance ? 0.6 : 1.4);
       for (let x = 0; x < width + spacing; x += spacing) {
         ctx.beginPath();
@@ -611,10 +650,11 @@
           if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         const hue = (175 + layer * 42 + levels.treble * 220 + time * 0.018) % 360;
-        ctx.strokeStyle = 'hsla(' + hue + ', 100%, ' + Math.min(84, 58 + intensity * 10) + '%, ' + Math.min(0.95, 0.32 + 0.22 * intensity + levels.volume * 0.28) + ')';
-        ctx.lineWidth = 1.8 + layer * 0.7 + levels.treble * (performance ? 1.2 : 3.2);
-        ctx.shadowBlur = (18 + intensity * 16 + levels.treble * 20) * shadowScale;
-        ctx.shadowColor = 'hsla(' + hue + ', 100%, 70%, 0.85)';
+        const mood = getMood();
+        ctx.strokeStyle = colorFromMood(hue, Math.min(0.95, 0.32 + 0.22 * intensity + levels.volume * 0.28), Math.min(84, 58 + intensity * 10));
+        ctx.lineWidth = 1.8 + layer * 0.7 + levels.treble * (performance ? 1.2 : 3.2) + mood.waveformWidth;
+        ctx.shadowBlur = (18 + intensity * 16 + levels.treble * 20) * shadowScale * mood.glow;
+        ctx.shadowColor = colorFromMood(hue, 0.85, 70);
         ctx.stroke();
       }
       ctx.restore();
@@ -651,7 +691,7 @@
 ctx.restore();
 }
 
-function drawGeoFace(time, levels) {
+function drawGeoFamily(time, levels, variant = 'geoface') {
   function clampValue(value, min, max) {
     return Math.max(min, Math.min(max, value));
   }
@@ -661,6 +701,9 @@ function drawGeoFace(time, levels) {
   const { sensitivity, intensity, density, shadowScale, performance } = controlValues();
   const centerX = width / 2;
   const centerY = height / 2;
+  const mood = getMood();
+  const isKitty = variant === 'geokitty';
+  const isDog = variant === 'geodog';
   const bassRaw = Math.min(1, levels.bass);
   const midsRaw = Math.min(1, levels.mids);
   const trebleRaw = Math.min(1, levels.treble);
@@ -670,13 +713,14 @@ function drawGeoFace(time, levels) {
   const bass = clampValue(bassPulse * sensitivity, 0, 1);
   const mids = clampValue(midsPulse * sensitivity, 0, 1);
   const treble = clampValue(treblePulse * sensitivity, 0, 1);
-  const headPulse = clampValue(1 + bass * 0.08, 1, 1.09);
-  const headSize = Math.min(width, height) * (performance ? 0.24 : 0.27) * headPulse;
+  const headPulse = clampValue(1 + bass * 0.08 * mood.pulse, 1, 1.1);
+  const baseSize = isDog ? 0.285 : 0.27;
+  const headSize = Math.min(width, height) * (performance ? 0.24 : baseSize) * headPulse;
   const jawWidth = headSize * (0.76 + bass * 0.22);
   const smileBounce = Math.sin(time * 0.011) * (1.5 + bass * 5.5);
   const maxTilt = 0.12;
   const faceTilt = clampValue(Math.sin(time * 0.0014) * mids * 0.12, -maxTilt, maxTilt);
-  const hueBase = (182 + time * 0.02 + mids * 140 + treble * 90) % 360;
+  const hueBase = (182 + time * 0.02 * mood.motion + mids * 140 + treble * 90) % 360;
 
   ctx.save();
   ctx.translate(centerX, centerY);
@@ -700,6 +744,29 @@ function drawGeoFace(time, levels) {
   ctx.shadowBlur = (14 + intensity * 12 + treble * 18) * shadowScale;
   ctx.shadowColor = 'hsla(' + hueBase + ', 100%, 70%, 0.9)';
   ctx.stroke();
+
+  if (isKitty) {
+    for (let side = -1; side <= 1; side += 2) {
+      ctx.beginPath();
+      ctx.moveTo(side * headSize * 0.32, -headSize * 0.72);
+      ctx.lineTo(side * headSize * 0.1, -headSize * 1.2);
+      ctx.lineTo(side * headSize * 0.04, -headSize * 0.62);
+      ctx.strokeStyle = colorFromMood(hueBase + 30, 0.9, 72);
+      ctx.lineWidth = 2 + treble * 1.2;
+      ctx.stroke();
+    }
+  }
+  if (isDog) {
+    for (let side = -1; side <= 1; side += 2) {
+      ctx.beginPath();
+      ctx.moveTo(side * headSize * 0.72, -headSize * 0.4);
+      ctx.lineTo(side * headSize * 0.95, headSize * 0.15);
+      ctx.lineTo(side * headSize * 0.56, headSize * 0.05);
+      ctx.strokeStyle = colorFromMood(hueBase + 20, 0.8, 64);
+      ctx.lineWidth = 2.4 + bass * 1.4;
+      ctx.stroke();
+    }
+  }
 
   const eyeOffsetX = headSize * 0.36;
   const eyeY = -headSize * 0.19;
@@ -800,6 +867,30 @@ function drawGeoFace(time, levels) {
     ctx.stroke();
   }
 
+  if (isKitty) {
+    for (let side = -1; side <= 1; side += 2) {
+      for (let w = 0; w < 3; w += 1) {
+        const yOffset = mouthCenterY - headSize * 0.06 + w * headSize * 0.07;
+        ctx.beginPath();
+        ctx.moveTo(side * headSize * 0.18, yOffset);
+        ctx.lineTo(side * headSize * (0.5 + w * 0.05), yOffset - side * 2);
+        ctx.strokeStyle = colorFromMood(hueBase + 48, 0.55, 74);
+        ctx.lineWidth = 1.1;
+        ctx.stroke();
+      }
+    }
+  }
+
+  if (isDog) {
+    ctx.beginPath();
+    ctx.moveTo(-headSize * 0.14, headSize * 0.18);
+    ctx.lineTo(0, headSize * 0.29 + bass * 5);
+    ctx.lineTo(headSize * 0.14, headSize * 0.18);
+    ctx.strokeStyle = colorFromMood(hueBase + 70, 0.88, 72);
+    ctx.lineWidth = 2 + mids * 1.1;
+    ctx.stroke();
+  }
+
   const spikes = performance ? 6 : 11;
   for (let i = 0; i < spikes; i += 1) {
     const spikeAngle = -Math.PI * 0.9 + (i / Math.max(1, spikes - 1)) * Math.PI * 1.8;
@@ -892,20 +983,11 @@ function drawParticles(time, levels) {
       const { performance } = controlValues();
       clearBackground(time, levels);
       if (!performance || mode !== 'waveform') drawStars(time, levels);
-      if (!performance && (mode === 'mixed' || mode === 'nebula')) drawNebula(time, levels);
-      if (mode === 'nebula') { drawNebula(time, levels); drawParticles(time, levels); drawCenterCircle(time, levels); }
-      else if (mode === 'geometry') { drawGeometry(time, levels); if (!performance) drawParticles(time, levels); }
-      else if (mode === 'waveform') { drawWaveform(levels, time); drawCenterCircle(time, levels); }
-      else if (mode === 'spiral') { drawSpiral(time, levels); if (!performance) drawParticles(time, levels); }
-      else if (mode === 'geoface') { drawGeoFace(time, levels); if (!performance) drawParticles(time, levels); }
+      if (mode === 'waveform') { drawWaveform(levels, time); drawCenterCircle(time, levels); }
+      else if (mode === 'geoface' || mode === 'geokitty' || mode === 'geodog') { drawGeoFamily(time, levels, mode); if (!performance) drawParticles(time, levels); }
       else {
-        drawWaveform(levels, time);
-        drawGeometry(time, levels);
-        if (!performance) {
-          drawSpiral(time, levels);
-          drawParticles(time, levels);
-        }
-        drawCenterCircle(time, levels);
+        modeSelect.value = 'geoface';
+        drawGeoFamily(time, levels, 'geoface');
       }
       updateHud(levels);
       animationFrameId = requestAnimationFrame(drawFrame);
@@ -994,7 +1076,8 @@ function drawParticles(time, levels) {
     restartButton.addEventListener('click', restartAudio);
     clearSavedSongsButton.addEventListener('click', () => clearSavedSongs().catch(() => updateStatus('The saved songs could not be cleared right now.', 'Clear failed.')));
     fullscreenButton.addEventListener('click', () => toggleFullscreen().catch(() => updateStatus('Fullscreen is not available right now.', 'Fullscreen unavailable.')));
-    modeSelect.addEventListener('change', updateSliderLabels);
+    modeSelect.addEventListener('change', () => { persistVisualSettings(); updateSliderLabels(); });
+    moodSelect.addEventListener('change', () => { persistVisualSettings(); updateSliderLabels(); });
     sensitivitySlider.addEventListener('input', updateSliderLabels);
     colorSlider.addEventListener('input', updateSliderLabels);
     densitySlider.addEventListener('input', () => { createParticles(); updateSliderLabels(); });
@@ -1028,6 +1111,7 @@ function drawParticles(time, levels) {
     });
     window.addEventListener('beforeunload', revokeCurrentObjectUrl);
 
+    applySavedVisualSettings();
     setCanvasSize();
     createParticles();
     updateSliderLabels();
