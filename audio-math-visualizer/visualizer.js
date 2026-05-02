@@ -719,6 +719,27 @@ function drawGeoFamily(time, levels, variant = 'face') {
     return Math.max(min, Math.min(max, value));
   }
 
+  function drawDogEars() {
+    if (variant !== 'dog') return;
+    for (let side = -1; side <= 1; side += 2) {
+      ctx.beginPath();
+      ctx.moveTo(side * headSize * 0.62, -headSize * 0.56);
+      ctx.lineTo(side * headSize * 0.98, -headSize * 0.42);
+      ctx.lineTo(side * headSize * 0.92, headSize * 0.42);
+      ctx.lineTo(side * headSize * 0.74, headSize * 0.74);
+      ctx.lineTo(side * headSize * 0.56, headSize * 0.48);
+      ctx.lineTo(side * headSize * 0.54, -headSize * 0.08);
+      ctx.closePath();
+      ctx.fillStyle = colorFromMood('secondary', hueBase + side * 18, performance ? 0.26 : 0.32, 0.86);
+      ctx.strokeStyle = colorFromMood('primary', hueBase + side * 12, 0.8, 0.94);
+      ctx.lineWidth = 2 + bass * 1.8;
+      ctx.shadowBlur = (8 + mids * 10) * shadowScale;
+      ctx.shadowColor = colorFromMood('glow', hueBase + 18 + side * 20, 0.5, 0.9);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
   function drawGeoHead() {
     ctx.beginPath();
     if (variant === 'kitty') {
@@ -804,6 +825,7 @@ function drawGeoFamily(time, levels, variant = 'face') {
   ctx.rotate(faceTilt);
   ctx.globalCompositeOperation = performance ? 'source-over' : 'lighter';
 
+  drawDogEars();
   drawGeoHead();
 
   const catEyeY = -headSize * 0.2;
