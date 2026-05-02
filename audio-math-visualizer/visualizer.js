@@ -76,12 +76,13 @@
     const VISUAL_STORAGE_KEY = 'audioMathVisualizer.visualMode';
     const MOOD_STORAGE_KEY = 'audioMathVisualizer.visualMood';
     const validModes = ['geoface', 'geokitty', 'geodog', 'waveform'];
-    const validMoods = ['mellow', 'depression', 'happy', 'angry'];
+    const validMoods = ['mellow', 'depression', 'happy', 'angry', 'spectrum'];
     const moodConfigs = {
-      mellow: { bgTop: [6, 16, 33], bgBottom: [2, 6, 16], bgAlpha: 0.82, accentHue: 200, hueShift: 70, sat: 86, lightBoost: 0, glow: 0.9, pulse: 0.9, motion: 0.9, waveformWidth: 0, gridAlpha: 0.9 },
-      depression: { bgTop: [18, 22, 31], bgBottom: [8, 9, 14], bgAlpha: 0.86, accentHue: 215, hueShift: 36, sat: 44, lightBoost: -8, glow: 0.65, pulse: 0.72, motion: 0.78, waveformWidth: -0.2, gridAlpha: 0.72 },
-      happy: { bgTop: [14, 10, 28], bgBottom: [6, 4, 18], bgAlpha: 0.8, accentHue: 150, hueShift: 150, sat: 100, lightBoost: 8, glow: 1.06, pulse: 1.08, motion: 1.08, waveformWidth: 0.3, gridAlpha: 1 },
-      angry: { bgTop: [26, 8, 8], bgBottom: [15, 3, 3], bgAlpha: 0.84, accentHue: 12, hueShift: 42, sat: 98, lightBoost: -3, glow: 1.12, pulse: 1.16, motion: 1.05, waveformWidth: 0.35, gridAlpha: 1.05 }
+      mellow: { bgTop: [6, 16, 33], bgBottom: [2, 6, 16], bgAlpha: 0.82, glow: 0.9, pulse: 0.9, motion: 0.9, waveformWidth: 0, gridAlpha: 0.9, spectrum: false, palette: { primary: [[121, 196, 255], [92, 171, 240], [130, 155, 235]], secondary: [[74, 145, 220], [69, 196, 210], [77, 139, 188]], accent: [[117, 225, 235], [121, 177, 231], [140, 152, 222]], glow: [[143, 232, 255], [136, 192, 244]], mouth: [[109, 183, 227], [92, 165, 207]], eye: [[156, 231, 255], [123, 201, 252]], grid: [[92, 155, 222], [70, 118, 176]] } },
+      depression: { bgTop: [12, 10, 8], bgBottom: [4, 3, 2], bgAlpha: 0.9, glow: 0.65, pulse: 0.72, motion: 0.78, waveformWidth: -0.2, gridAlpha: 0.72, spectrum: false, palette: { primary: [[123, 95, 64], [146, 115, 73], [102, 89, 74]], secondary: [[168, 136, 78], [129, 108, 68], [91, 103, 120]], accent: [[172, 145, 96], [131, 120, 79], [100, 120, 136]], glow: [[164, 137, 86], [117, 122, 134]], mouth: [[120, 99, 73], [104, 86, 66]], eye: [[152, 128, 88], [111, 118, 132]], grid: [[121, 103, 74], [90, 96, 109]] } },
+      happy: { bgTop: [18, 11, 35], bgBottom: [8, 5, 20], bgAlpha: 0.8, glow: 1.06, pulse: 1.08, motion: 1.08, waveformWidth: 0.3, gridAlpha: 1, spectrum: false, palette: { primary: [[61, 235, 255], [255, 116, 198], [255, 230, 84], [92, 255, 135]], secondary: [[98, 193, 255], [196, 130, 255], [255, 171, 95], [125, 227, 126]], accent: [[66, 243, 221], [255, 108, 154], [255, 242, 124], [151, 121, 255]], glow: [[139, 247, 255], [255, 178, 244], [255, 248, 167]], mouth: [[255, 157, 128], [255, 118, 185]], eye: [[255, 255, 171], [134, 222, 255]], grid: [[89, 220, 255], [163, 138, 255], [255, 202, 95]] } },
+      angry: { bgTop: [26, 8, 8], bgBottom: [15, 3, 3], bgAlpha: 0.84, glow: 1.12, pulse: 1.16, motion: 1.05, waveformWidth: 0.35, gridAlpha: 1.05, spectrum: false, palette: { primary: [[255, 70, 46], [255, 112, 32], [230, 36, 25]], secondary: [[255, 141, 38], [255, 88, 36], [207, 27, 19]], accent: [[255, 196, 65], [255, 132, 58], [255, 86, 66]], glow: [[255, 162, 82], [255, 107, 61]], mouth: [[255, 188, 82], [255, 102, 58]], eye: [[255, 226, 120], [255, 118, 70]], grid: [[255, 102, 56], [199, 48, 28]] } },
+      spectrum: { bgTop: [6, 10, 26], bgBottom: [2, 3, 10], bgAlpha: 0.82, glow: 1.1, pulse: 1.05, motion: 1.05, waveformWidth: 0.25, gridAlpha: 1, spectrum: true, palette: { primary: [[95, 204, 255]], secondary: [[255, 129, 226]], accent: [[155, 255, 142]], glow: [[160, 222, 255]], mouth: [[255, 202, 144]], eye: [[154, 255, 255]], grid: [[137, 191, 255]] } }
     };
 
 
@@ -145,12 +146,32 @@
       return moodConfigs[moodSelect.value] || moodConfigs.mellow;
     }
 
-    function colorFromMood(hue, alpha, light = 70) {
+    function paletteColor(role, indexOffset = 0) {
       const mood = getMood();
-      const shifted = (hue + mood.accentHue) % 360;
-      const saturation = Math.max(24, Math.min(100, mood.sat));
-      const moodLight = Math.max(20, Math.min(92, light + mood.lightBoost));
-      return 'hsla(' + shifted + ', ' + saturation + '%, ' + moodLight + '%, ' + alpha + ')';
+      const list = (mood.palette && mood.palette[role]) || mood.palette.primary;
+      const i = Math.abs(indexOffset) % list.length;
+      return list[i];
+    }
+
+    function rgbColor(color, alpha = 1, lightScale = 1) {
+      const r = Math.min(255, Math.max(0, Math.round(color[0] * lightScale)));
+      const g = Math.min(255, Math.max(0, Math.round(color[1] * lightScale)));
+      const b = Math.min(255, Math.max(0, Math.round(color[2] * lightScale)));
+      return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+    }
+
+    function colorFromHue(hue, alpha, light = 70, sat = 100) {
+      return 'hsla(' + ((hue % 360 + 360) % 360) + ', ' + sat + '%, ' + light + '%, ' + alpha + ')';
+    }
+
+    function colorFromMood(role, timeSeed, alpha, lightScale = 1) {
+      const mood = getMood();
+      if (mood.spectrum) {
+        const hue = (timeSeed % 360 + 360) % 360;
+        return colorFromHue(hue, alpha, Math.min(86, 52 + lightScale * 20), 100);
+      }
+      const color = paletteColor(role, Math.floor(timeSeed * 0.02));
+      return rgbColor(color, alpha, lightScale);
     }
 
     function safeGetStorage(key, fallback) {
@@ -528,15 +549,15 @@
       if (performance) {
         const gradient = ctx.createLinearGradient(0, 0, width, height);
         gradient.addColorStop(0, 'rgba(1, 5, 16, 0.98)');
-        gradient.addColorStop(0.5, 'hsla(' + hue + ', 90%, ' + (10 + levels.volume * 10) + '%, 0.96)');
+        gradient.addColorStop(0.5, colorFromMood('secondary', hue, 0.96, 0.3 + levels.volume * 0.15));
         gradient.addColorStop(1, 'rgba(3, 5, 18, 0.98)');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
         return;
       }
       const bg = ctx.createRadialGradient(width * 0.5, height * 0.5, width * 0.08, width * 0.5, height * 0.5, width * 0.72);
-      bg.addColorStop(0, 'hsla(' + hue + ', 100%, ' + (12 + levels.volume * 18 * intensity) + '%, ' + (0.34 + levels.volume * 0.28 * intensity) + ')');
-      bg.addColorStop(0.42, 'hsla(' + ((hue + 80) % 360) + ', 100%, 12%, ' + (0.22 + levels.bass * 0.18) + ')');
+      bg.addColorStop(0, colorFromMood('primary', hue, (0.34 + levels.volume * 0.28 * intensity), 0.25 + levels.volume * 0.2));
+      bg.addColorStop(0.42, colorFromMood('secondary', hue + 80, (0.22 + levels.bass * 0.18), 0.25));
       bg.addColorStop(1, 'rgba(1, 3, 10, 0.98)');
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, width, height);
@@ -578,8 +599,8 @@
         const y = centerY + Math.sin(angle * 1.35) * radius * 0.18;
         const hue = (185 + i * 34 + time * 0.025 + levels.treble * 180) % 360;
         const gradient = ctx.createRadialGradient(x, y, radius * 0.08, x, y, radius);
-        gradient.addColorStop(0, 'hsla(' + hue + ', 100%, 70%, ' + Math.min(0.5, 0.09 * intensity + levels.volume * 0.14) + ')');
-        gradient.addColorStop(1, 'hsla(' + ((hue + 120) % 360) + ', 90%, 40%, 0)');
+        gradient.addColorStop(0, colorFromMood('glow', hue, Math.min(0.5, 0.09 * intensity + levels.volume * 0.14), 1.02));
+        gradient.addColorStop(1, colorFromMood('secondary', hue + 120, 0, 0.75));
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -596,7 +617,7 @@
       ctx.save();
       ctx.globalAlpha = Math.min(performance ? 0.28 : 0.55, 0.1 + levels.volume * 0.24 + intensity * 0.05);
       const mood = getMood();
-      ctx.strokeStyle = colorFromMood(210, 0.46 * mood.gridAlpha, 68);
+      ctx.strokeStyle = colorFromMood('grid', time + 210, 0.46 * mood.gridAlpha, 1);
       ctx.lineWidth = 1 + levels.bass * (performance ? 0.6 : 1.4);
       for (let x = 0; x < width + spacing; x += spacing) {
         ctx.beginPath();
@@ -636,9 +657,9 @@
           const y = centerY + Math.sin(angle) * (radius + wavePush);
           if (point === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
-        ctx.strokeStyle = 'hsla(' + hue + ', 100%, ' + Math.min(82, 54 + intensity * 12) + '%, ' + Math.min(0.9, 0.2 + levels.volume * 0.65 + intensity * 0.06) + ')';
+        ctx.strokeStyle = colorFromMood('secondary', hue, Math.min(0.9, 0.2 + levels.volume * 0.65 + intensity * 0.06), 0.9 + intensity * 0.12);
         ctx.shadowBlur = (14 + 22 * intensity + levels.bass * 24) * shadowScale;
-        ctx.shadowColor = 'hsla(' + hue + ', 100%, 70%, 0.82)';
+        ctx.shadowColor = colorFromMood('glow', hue + 20, 0.82, 1.04);
         ctx.stroke();
       }
       ctx.restore();
@@ -668,10 +689,10 @@
         }
         const hue = (175 + layer * 42 + levels.treble * 220 + time * 0.018) % 360;
         const mood = getMood();
-        ctx.strokeStyle = colorFromMood(hue, Math.min(0.95, 0.32 + 0.22 * intensity + levels.volume * 0.28), Math.min(84, 58 + intensity * 10));
+        ctx.strokeStyle = colorFromMood('primary', hue, Math.min(0.95, 0.32 + 0.22 * intensity + levels.volume * 0.28), 1 + intensity * 0.08);
         ctx.lineWidth = 1.8 + layer * 0.7 + levels.treble * (performance ? 1.2 : 3.2) + mood.waveformWidth;
         ctx.shadowBlur = (18 + intensity * 16 + levels.treble * 20) * shadowScale * mood.glow;
-        ctx.shadowColor = colorFromMood(hue, 0.85, 70);
+        ctx.shadowColor = colorFromMood('glow', hue + 80, 0.85, 1.05);
         ctx.stroke();
       }
       ctx.restore();
@@ -700,9 +721,9 @@
           if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         const hue = (245 + arm * 65 + levels.volume * 180 + time * 0.016) % 360;
-        ctx.strokeStyle = 'hsla(' + hue + ', 100%, ' + Math.min(82, 56 + intensity * 12) + '%, ' + Math.min(0.86, 0.2 + levels.mids * 0.52 + intensity * 0.08) + ')';
+        ctx.strokeStyle = colorFromMood('accent', hue, Math.min(0.86, 0.2 + levels.mids * 0.52 + intensity * 0.08), 0.95 + intensity * 0.1);
         ctx.shadowBlur = (20 + intensity * 16 + levels.bass * 26) * shadowScale;
-        ctx.shadowColor = 'hsla(' + hue + ', 100%, 68%, 0.85)';
+        ctx.shadowColor = colorFromMood('glow', hue + 40, 0.85, 1.05);
         ctx.stroke();
       }
 ctx.restore();
@@ -762,9 +783,9 @@ function drawGeoFamily(time, levels, variant = 'face') {
     }
     ctx.closePath();
     ctx.lineWidth = 2.4 + bass * 4.2;
-    ctx.strokeStyle = 'hsla(' + hueBase + ', 100%, 68%, ' + (performance ? 0.72 : 0.88) + ')';
+    ctx.strokeStyle = colorFromMood('primary', hueBase, (performance ? 0.72 : 0.88), 1.02);
     ctx.shadowBlur = (14 + intensity * 12 + treble * 18) * shadowScale;
-    ctx.shadowColor = 'hsla(' + hueBase + ', 100%, 70%, 0.9)';
+    ctx.shadowColor = colorFromMood('glow', hueBase + 30, 0.9, 1.1);
     ctx.stroke();
   }
 
@@ -812,13 +833,13 @@ function drawGeoFamily(time, levels, variant = 'face') {
       ctx.lineTo(ex + ew, catEyeY + eh * 0.25);
       ctx.lineTo(ex + ew * 0.05, catEyeY + eh);
       ctx.closePath();
-      ctx.strokeStyle = colorFromMood(hueBase + 44, 0.96, 80);
+      ctx.strokeStyle = colorFromMood('eye', hueBase + 44, 0.96, 1.08);
       ctx.lineWidth = 2 + mids * 2;
       ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(ex, catEyeY - eh * 0.65);
       ctx.lineTo(ex, catEyeY + eh * 0.72);
-      ctx.strokeStyle = colorFromMood(hueBase + 176, 0.95, 76);
+      ctx.strokeStyle = colorFromMood('accent', hueBase + 176, 0.95, 1.02);
       ctx.lineWidth = 1.6 + treble * 1.2;
       ctx.stroke();
     } else {
@@ -827,18 +848,18 @@ function drawGeoFamily(time, levels, variant = 'face') {
       const eyeSize = headSize * ((variant === 'dog' ? 0.13 : 0.15) + mids * 0.08);
       ctx.beginPath();
       ctx.arc(side * eyeOffsetX, eyeY, eyeSize, 0, Math.PI * 2);
-      ctx.strokeStyle = colorFromMood(hueBase + 34, 0.94, 78);
+      ctx.strokeStyle = colorFromMood('eye', hueBase + 34, 0.94, 1.05);
       ctx.lineWidth = 2 + mids * 2.2;
       ctx.stroke();
       ctx.beginPath();
       ctx.arc(side * eyeOffsetX, eyeY + eyeSize * 0.04, eyeSize * 0.34, 0, Math.PI * 2);
-      ctx.fillStyle = colorFromMood(hueBase + 170, 0.88, 82);
+      ctx.fillStyle = colorFromMood('accent', hueBase + 170, 0.88, 1.1);
       ctx.fill();
       if (variant === 'dog') {
         ctx.beginPath();
         ctx.moveTo(side * (eyeOffsetX - eyeSize * 0.7), eyeY - eyeSize * 1.3);
         ctx.lineTo(side * (eyeOffsetX + eyeSize * 0.7), eyeY - eyeSize * 1.1);
-        ctx.strokeStyle = colorFromMood(hueBase + 8, 0.5, 72);
+        ctx.strokeStyle = colorFromMood('secondary', hueBase + 8, 0.5, 0.95);
         ctx.lineWidth = 1.4 + treble;
         ctx.stroke();
       }
@@ -852,7 +873,7 @@ function drawGeoFamily(time, levels, variant = 'face') {
     ctx.lineTo(headSize * 0.05, noseY + headSize * 0.06);
     ctx.lineTo(-headSize * 0.05, noseY + headSize * 0.06);
     ctx.closePath();
-    ctx.strokeStyle = colorFromMood(hueBase + 82, 0.88, 74);
+    ctx.strokeStyle = colorFromMood('mouth', hueBase + 82, 0.88, 1.02);
     ctx.lineWidth = 1.8 + mids * 1.4;
     ctx.stroke();
 
@@ -861,7 +882,7 @@ function drawGeoFamily(time, levels, variant = 'face') {
       ctx.beginPath();
       ctx.moveTo(0, noseY + headSize * 0.06);
       ctx.quadraticCurveTo(side * headSize * 0.06, noseY + headSize * 0.11 + mouthOpen, side * headSize * 0.11, noseY + headSize * 0.1 + mouthOpen * 0.6);
-      ctx.strokeStyle = colorFromMood(hueBase + 206, 0.9, 76);
+      ctx.strokeStyle = colorFromMood('mouth', hueBase + 206, 0.9, 1.03);
       ctx.lineWidth = 1.8 + bass * 1.8;
       ctx.stroke();
     }
@@ -872,7 +893,7 @@ function drawGeoFamily(time, levels, variant = 'face') {
         ctx.beginPath();
         ctx.moveTo(side * headSize * 0.12, yOffset);
         ctx.lineTo(side * headSize * (0.5 + w * 0.03), yOffset + (w - 1) * headSize * 0.02);
-        ctx.strokeStyle = colorFromMood(hueBase + 50, 0.56, 76);
+        ctx.strokeStyle = colorFromMood('secondary', hueBase + 50, 0.56, 1);
         ctx.lineWidth = 1.1;
         ctx.stroke();
       }
@@ -888,13 +909,13 @@ function drawGeoFamily(time, levels, variant = 'face') {
     ctx.lineTo(headSize * 0.3, headSize * 0.27);
     ctx.lineTo(headSize * 0.24, muzzleTop);
     ctx.closePath();
-    ctx.strokeStyle = colorFromMood(hueBase + 56, 0.84, 70);
+    ctx.strokeStyle = colorFromMood('mouth', hueBase + 56, 0.84, 0.95);
     ctx.lineWidth = 2.1 + mids * 1.8;
     ctx.stroke();
 
     ctx.beginPath();
     ctx.arc(0, muzzleTop + headSize * 0.06, headSize * 0.06, 0, Math.PI * 2);
-    ctx.fillStyle = colorFromMood(hueBase + 286, 0.86, 24);
+    ctx.fillStyle = colorFromMood('accent', hueBase + 286, 0.86, 0.5);
     ctx.fill();
 
     const mouthY = headSize * 0.28 + smileBounce * 0.2;
@@ -904,7 +925,7 @@ function drawGeoFamily(time, levels, variant = 'face') {
     ctx.lineTo(-jawWidth * 0.12, mouthY + mouthOpen);
     ctx.lineTo(jawWidth * 0.12, mouthY + mouthOpen);
     ctx.lineTo(jawWidth * 0.2, mouthY);
-    ctx.strokeStyle = colorFromMood(hueBase + 210, 0.92, 78);
+    ctx.strokeStyle = colorFromMood('mouth', hueBase + 210, 0.92, 1.04);
     ctx.lineWidth = 2 + bass * 2;
     ctx.stroke();
     if (bass > 0.62) {
@@ -912,7 +933,7 @@ function drawGeoFamily(time, levels, variant = 'face') {
       ctx.moveTo(-jawWidth * 0.05, mouthY + mouthOpen * 0.82);
       ctx.lineTo(0, mouthY + mouthOpen * 1.12);
       ctx.lineTo(jawWidth * 0.05, mouthY + mouthOpen * 0.82);
-      ctx.strokeStyle = colorFromMood(hueBase + 322, 0.66, 66);
+      ctx.strokeStyle = colorFromMood('accent', hueBase + 322, 0.66, 0.92);
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }
@@ -923,7 +944,7 @@ function drawGeoFamily(time, levels, variant = 'face') {
     ctx.lineTo(headSize * 0.08, headSize * 0.16 + mids * 6);
     ctx.lineTo(-headSize * 0.08, headSize * 0.16 + mids * 6);
     ctx.closePath();
-    ctx.strokeStyle = 'hsla(' + ((hueBase + 80) % 360) + ', 100%, 74%, 0.88)';
+    ctx.strokeStyle = colorFromMood('accent', hueBase + 80, 0.88, 1.02);
     ctx.lineWidth = 1.6 + mids * 2;
     ctx.stroke();
     const mouthCenterY = headSize * 0.35 + smileBounce;
@@ -936,7 +957,7 @@ function drawGeoFamily(time, levels, variant = 'face') {
     ctx.lineTo(0, mouthCenterY + grinLift + mouthOpen * 0.18);
     ctx.lineTo(mouthHalf * 0.4, mouthCenterY + grinLift);
     ctx.lineTo(mouthHalf, mouthCenterY);
-    ctx.strokeStyle = 'hsla(' + ((hueBase + 202) % 360) + ', 100%, 80%, 0.95)';
+    ctx.strokeStyle = colorFromMood('mouth', hueBase + 202, 0.95, 1.1);
     ctx.lineWidth = 2.2 + bass * 3;
     ctx.stroke();
   }
@@ -962,13 +983,13 @@ function drawParticles(time, levels) {
         const size = particle.size + levels.treble * (performance ? 2.2 : 6.8) + levels.volume * (performance ? 1.4 : 3.2);
         const hue = (170 + particle.hueOffset + levels.treble * 210 + time * 0.035) % 360;
         ctx.beginPath();
-        ctx.fillStyle = 'hsla(' + hue + ', 100%, ' + Math.min(86, 58 + intensity * 12) + '%, ' + Math.min(0.86, 0.16 + 0.16 * intensity + levels.treble * 0.28) + ')';
+        ctx.fillStyle = colorFromMood('accent', hue, Math.min(0.86, 0.16 + 0.16 * intensity + levels.treble * 0.28), 0.95 + intensity * 0.1);
         ctx.shadowBlur = (10 + intensity * 12 + levels.treble * 18) * shadowScale;
-        ctx.shadowColor = 'hsla(' + hue + ', 100%, 70%, 0.8)';
+        ctx.shadowColor = colorFromMood('glow', hue, 0.8, 1.03);
         ctx.arc(x, y, size, 0, Math.PI * 2);
         ctx.fill();
         if (!performance && levels.treble > 0.1) {
-          ctx.strokeStyle = 'hsla(' + hue + ', 100%, 75%, ' + Math.min(0.65, levels.treble * 0.9) + ')';
+          ctx.strokeStyle = colorFromMood('secondary', hue, Math.min(0.65, levels.treble * 0.9), 1.04);
           ctx.lineWidth = 1 + levels.treble * 2;
           ctx.beginPath();
           ctx.moveTo(x, y);
@@ -991,12 +1012,12 @@ function drawParticles(time, levels) {
       ctx.globalCompositeOperation = performance ? 'source-over' : 'screen';
       ctx.beginPath();
       ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      ctx.fillStyle = 'hsla(' + hue + ', 100%, 72%, ' + Math.min(0.42, 0.07 + levels.volume * 0.24 * intensity) + ')';
+      ctx.fillStyle = colorFromMood('primary', hue, Math.min(0.42, 0.07 + levels.volume * 0.24 * intensity), 1.05);
       ctx.fill();
       ctx.lineWidth = 2 + levels.bass * 3;
-      ctx.strokeStyle = 'hsla(' + ((hue + 55) % 360) + ', 100%, 78%, ' + Math.min(0.9, 0.25 + levels.bass * 0.6 + intensity * 0.08) + ')';
+      ctx.strokeStyle = colorFromMood('accent', hue + 55, Math.min(0.9, 0.25 + levels.bass * 0.6 + intensity * 0.08), 1.08);
       ctx.shadowBlur = (22 + intensity * 18 + levels.bass * 28) * shadowScale;
-      ctx.shadowColor = 'hsla(' + hue + ', 100%, 74%, 0.9)';
+      ctx.shadowColor = colorFromMood('glow', hue, 0.9, 1.1);
       ctx.stroke();
       ctx.restore();
     }
