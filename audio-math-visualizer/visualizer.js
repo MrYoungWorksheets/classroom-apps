@@ -153,16 +153,33 @@
       return 'hsla(' + shifted + ', ' + saturation + '%, ' + moodLight + '%, ' + alpha + ')';
     }
 
+    function safeGetStorage(key, fallback) {
+      try {
+        const value = localStorage.getItem(key);
+        return value || fallback;
+      } catch (error) {
+        return fallback;
+      }
+    }
+
+    function safeSetStorage(key, value) {
+      try {
+        localStorage.setItem(key, value);
+      } catch (error) {
+        // Persistence unavailable. Ignore so the visualizer keeps running.
+      }
+    }
+
     function applySavedVisualSettings() {
-      const savedMode = localStorage.getItem(VISUAL_STORAGE_KEY);
-      const savedMood = localStorage.getItem(MOOD_STORAGE_KEY);
+      const savedMode = safeGetStorage(VISUAL_STORAGE_KEY, 'geoface');
+      const savedMood = safeGetStorage(MOOD_STORAGE_KEY, 'mellow');
       modeSelect.value = validModes.includes(savedMode) ? savedMode : 'geoface';
       moodSelect.value = validMoods.includes(savedMood) ? savedMood : 'mellow';
     }
 
     function persistVisualSettings() {
-      localStorage.setItem(VISUAL_STORAGE_KEY, modeSelect.value);
-      localStorage.setItem(MOOD_STORAGE_KEY, moodSelect.value);
+      safeSetStorage(VISUAL_STORAGE_KEY, modeSelect.value);
+      safeSetStorage(MOOD_STORAGE_KEY, moodSelect.value);
     }
 
     function updateSliderLabels() {
