@@ -513,6 +513,14 @@ let smoothedSkullJawOpen = 0;
       hudVolume.textContent = Math.round(levels.volume * 100) + '%';
     }
 
+    function finiteOr(value, fallback) {
+      return Number.isFinite(value) ? value : fallback;
+    }
+
+    function clampValue(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
     function createParticles() {
       const { performance, density } = controlValues();
       const desiredCount = Math.max(performance ? 4 : 8, Math.floor((performance ? 24 : 72) * density));
@@ -718,10 +726,6 @@ ctx.restore();
 }
 
 function drawGeoFamily(time, levels, variant = 'face') {
-  function clampValue(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-  }
-
   function drawDogEars() {
     if (variant !== 'dog') return;
     for (let side = -1; side <= 1; side += 2) {
@@ -1060,21 +1064,29 @@ function drawGeoFamily(time, levels, variant = 'face') {
 
 
 function drawGeoSkull(time, levels) {
+  const safeTime = finiteOr(time, 0);
+  const safeLevels = {
+    bass: clampValue(finiteOr(levels && levels.bass, 0), 0, 1),
+    mids: clampValue(finiteOr(levels && levels.mids, 0), 0, 1),
+    treble: clampValue(finiteOr(levels && levels.treble, 0), 0, 1),
+    volume: clampValue(finiteOr(levels && levels.volume, 0), 0, 1)
+  };
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
   const { sensitivity, intensity, shadowScale, performance } = controlValues();
   const centerX = width / 2;
   const centerY = height / 2;
   const mood = getMood();
-  const bass = Math.min(1, Math.pow(levels.bass * sensitivity, 1.35));
-  const mids = Math.min(1, Math.pow(levels.mids * sensitivity, 1.25));
-  const treble = Math.min(1, Math.pow(levels.treble * sensitivity, 1.12));
-  const hueBase = (205 + time * 0.02 * mood.motion + mids * 120 + treble * 80) % 360;
-  const skullSize = Math.min(width, height) * (performance ? 0.23 : 0.27) * (1 + bass * 0.05);
-  const targetJawOpen = clampValue(0.02 + mids * 0.2 + levels.volume * 0.12, 0.02, 0.32);
+  const bass = clampValue(Math.min(1, Math.pow(safeLevels.bass * sensitivity, 1.35)), 0, 1);
+  const mids = clampValue(Math.min(1, Math.pow(safeLevels.mids * sensitivity, 1.25)), 0, 1);
+  const treble = clampValue(Math.min(1, Math.pow(safeLevels.treble * sensitivity, 1.12)), 0, 1);
+  const hueBase = finiteOr((205 + safeTime * 0.02 * mood.motion + mids * 120 + treble * 80) % 360, 205);
+  const skullSize = finiteOr(Math.min(width, height) * (performance ? 0.23 : 0.27) * (1 + bass * 0.05), Math.min(width, height) * 0.24);
+  const targetJawOpen = clampValue(finiteOr(0.02 + mids * 0.2 + safeLevels.volume * 0.12, 0.02), 0, 0.32);
   smoothedSkullJawOpen += (targetJawOpen - smoothedSkullJawOpen) * 0.22;
+  smoothedSkullJawOpen = clampValue(finiteOr(smoothedSkullJawOpen, 0.02), 0, 0.32);
   const jawOpen = smoothedSkullJawOpen;
-  const jawDrop = skullSize * jawOpen;
+  const jawDrop = finiteOr(skullSize * jawOpen, 0);
 
   ctx.save();
   ctx.translate(centerX, centerY);
@@ -1351,44 +1363,69 @@ function drawParticles(time, levels) {
       ctx.restore();
     }
 
-    function drawFrame(time) {
+function drawFrame(time) {
       const levels = updateAudioData();
       const mode = modeSelect.value;
       const { performance } = controlValues();
       clearBackground(time, levels);
-      if (!performance || mode !== 'waveform') drawStars(time, levels);
-      switch (mode) {
-        case 'waveform':
-          drawWaveform(levels, time);
-          drawCenterCircle(time, levels);
-          break;
-        case 'geokitty':
-          drawGeoFamily(time, levels, 'kitty');
-          if (!performance) drawParticles(time, levels);
-          break;
-        case 'geodog':
-          drawGeoFamily(time, levels, 'dog');
-          if (!performance) drawParticles(time, levels);
-          break;
-        case 'geoface':
-          drawGeoFamily(time, levels, 'face');
-          if (!performance) drawParticles(time, levels);
-          break;
-        case 'geoskull':
-          drawGeoSkull(time, levels);
-          if (!performance) drawParticles(time, levels);
-          break;
-        case 'stickman':
-          drawStickman(time, levels);
-          if (!performance) drawParticles(time, levels);
-          break;
-        default:
-          modeSelect.value = 'geoface';
-          drawGeoFamily(time, levels, 'face');
-          if (!performance) drawParticles(time, levels);
+      try {
+        if (!performance || mode !== 'waveform') drawStars(time, levels);
+        switch (mode) {
+          case 'waveform':
+            drawWaveform(levels, time);
+            drawCenterCircle(time, levels);
+            break;
+          case 'geokitty':
+            drawGeoFamily(time, levels, 'kitty');
+            if (!performance) drawParticles(time, levels);
+            break;
+          case 'geodog':
+            drawGeoFamily(time, levels, 'dog');
+            if (!performance) drawParticles(time, levels);
+            break;
+          case 'geoface':
+            drawGeoFamily(time, levels, 'face');
+            if (!performance) drawParticles(time, levels);
+            break;
+          case 'geoskull':
+            drawGeoSkull(time, levels);
+            if (!performance) drawParticles(time, levels);
+            break;
+          case 'stickman':
+            drawStickman(time, levels);
+            if (!performance) drawParticles(time, levels);
+            break;
+          default:
+            modeSelect.value = 'geoface';
+            drawGeoFamily(time, levels, 'face');
+            if (!performance) drawParticles(time, levels);
+        }
+      } catch (error) {
+        console.error('Visualizer render error:', mode, error);
+        drawRenderFallback(mode);
       }
       updateHud(levels);
       animationFrameId = requestAnimationFrame(drawFrame);
+    }
+
+    function drawRenderFallback(mode) {
+      try {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        ctx.save();
+        ctx.fillStyle = 'rgba(2, 6, 18, 0.72)';
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = 'rgba(255, 170, 120, 0.95)';
+        ctx.font = 'bold 24px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText((mode || 'Visualizer') + ' render error', width / 2, height / 2 - 10);
+        ctx.fillStyle = 'rgba(255, 230, 210, 0.9)';
+        ctx.font = '16px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+        ctx.fillText('Switch modes or refresh', width / 2, height / 2 + 20);
+        ctx.restore();
+      } catch (fallbackError) {
+        console.error('Visualizer fallback draw error:', fallbackError);
+      }
     }
 
     function startAnimation() {
