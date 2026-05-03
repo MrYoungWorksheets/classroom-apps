@@ -63,6 +63,7 @@
     let smoothedMids = 0;
     let smoothedTreble = 0;
     let smoothedVolume = 0;
+let smoothedSkullJawOpen = 0;
 
     const DB_NAME = 'audioMathVisualizerLibrary';
     const STORE_NAME = 'songs';
@@ -1070,7 +1071,10 @@ function drawGeoSkull(time, levels) {
   const treble = Math.min(1, Math.pow(levels.treble * sensitivity, 1.12));
   const hueBase = (205 + time * 0.02 * mood.motion + mids * 120 + treble * 80) % 360;
   const skullSize = Math.min(width, height) * (performance ? 0.23 : 0.27) * (1 + bass * 0.05);
-  const jawDrop = skullSize * (0.035 + mids * 0.12 + levels.volume * 0.08);
+  const targetJawOpen = clampValue(0.02 + mids * 0.2 + levels.volume * 0.12, 0.02, 0.32);
+  smoothedSkullJawOpen += (targetJawOpen - smoothedSkullJawOpen) * 0.22;
+  const jawOpen = smoothedSkullJawOpen;
+  const jawDrop = skullSize * jawOpen;
 
   ctx.save();
   ctx.translate(centerX, centerY);
@@ -1080,96 +1084,113 @@ function drawGeoSkull(time, levels) {
   ctx.shadowBlur = (14 + mids * 12 + treble * 16) * shadowScale;
   ctx.shadowColor = colorFromMood('glow', hueBase + 20, 0.86, 1.1);
 
+  // Cranium + upper skull silhouette.
   ctx.beginPath();
-  ctx.moveTo(-skullSize * 0.42, -skullSize * 0.74);
-  ctx.quadraticCurveTo(0, -skullSize * 0.95, skullSize * 0.42, -skullSize * 0.74);
-  ctx.lineTo(skullSize * 0.62, -skullSize * 0.13);
-  ctx.lineTo(skullSize * 0.53, skullSize * 0.16);
-  ctx.lineTo(skullSize * 0.34, skullSize * 0.35);
-  ctx.lineTo(skullSize * 0.2, skullSize * 0.46);
-  ctx.lineTo(-skullSize * 0.2, skullSize * 0.46);
-  ctx.lineTo(-skullSize * 0.34, skullSize * 0.35);
-  ctx.lineTo(-skullSize * 0.53, skullSize * 0.16);
-  ctx.lineTo(-skullSize * 0.62, -skullSize * 0.13);
+  ctx.moveTo(-skullSize * 0.56, -skullSize * 0.1);
+  ctx.quadraticCurveTo(-skullSize * 0.62, -skullSize * 0.68, -skullSize * 0.18, -skullSize * 0.88);
+  ctx.quadraticCurveTo(0, -skullSize * 0.96, skullSize * 0.18, -skullSize * 0.88);
+  ctx.quadraticCurveTo(skullSize * 0.62, -skullSize * 0.68, skullSize * 0.56, -skullSize * 0.1);
+  ctx.lineTo(skullSize * 0.46, skullSize * 0.24);
+  ctx.lineTo(skullSize * 0.3, skullSize * 0.42);
+  ctx.lineTo(-skullSize * 0.3, skullSize * 0.42);
+  ctx.lineTo(-skullSize * 0.46, skullSize * 0.24);
   ctx.closePath();
   ctx.stroke();
 
+  // Cheekbones.
+  ctx.strokeStyle = colorFromMood('secondary', hueBase + 108, 0.85, 1.02);
+  ctx.lineWidth = 2 + bass * 1.9;
   for (const side of [-1, 1]) {
     ctx.beginPath();
-    ctx.ellipse(side * skullSize * 0.23, -skullSize * 0.1, skullSize * 0.16, skullSize * 0.2, side * 0.16, 0, Math.PI * 2);
-    ctx.strokeStyle = colorFromMood('eye', hueBase + side * 24, 0.95, 1.08);
+    ctx.moveTo(side * skullSize * 0.5, -skullSize * 0.03);
+    ctx.lineTo(side * skullSize * 0.35, skullSize * 0.17);
+    ctx.lineTo(side * skullSize * 0.2, skullSize * 0.34);
+    ctx.stroke();
+  }
+
+  // Eye sockets.
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(side * skullSize * 0.23, -skullSize * 0.12, skullSize * 0.15, skullSize * 0.18, side * 0.12, 0, Math.PI * 2);
+    ctx.strokeStyle = colorFromMood('eye', hueBase + side * 22, 0.95, 1.1);
     ctx.lineWidth = 2 + mids * 2;
     ctx.stroke();
-    if (treble > 0.35) {
-      ctx.beginPath();
-      ctx.moveTo(side * skullSize * 0.09, -skullSize * 0.24);
-      ctx.lineTo(side * skullSize * 0.34, -skullSize * 0.02);
-      ctx.strokeStyle = colorFromMood('accent', hueBase + 90, 0.6, 1);
-      ctx.lineWidth = 1.4 + treble * 1.8;
-      ctx.stroke();
-    }
   }
 
+  // Nasal cavity.
   ctx.beginPath();
   ctx.moveTo(0, skullSize * 0.01);
-  ctx.lineTo(skullSize * 0.1, skullSize * 0.23);
-  ctx.lineTo(0, skullSize * 0.29);
-  ctx.lineTo(-skullSize * 0.1, skullSize * 0.23);
+  ctx.lineTo(skullSize * 0.1, skullSize * 0.21);
+  ctx.lineTo(0, skullSize * 0.3);
+  ctx.lineTo(-skullSize * 0.1, skullSize * 0.21);
   ctx.closePath();
-  ctx.strokeStyle = colorFromMood('secondary', hueBase + 60, 0.88, 1.02);
-  ctx.lineWidth = 1.7 + mids * 1.5;
+  ctx.strokeStyle = colorFromMood('accent', hueBase + 62, 0.86, 1);
+  ctx.lineWidth = 1.8 + mids * 1.5;
   ctx.stroke();
 
+  // Upper jaw / maxilla block.
+  const maxillaTop = skullSize * 0.35;
+  const maxillaBottom = skullSize * 0.46;
   ctx.beginPath();
-  ctx.moveTo(-skullSize * 0.28, skullSize * 0.18);
-  ctx.lineTo(-skullSize * 0.17, skullSize * 0.35);
-  ctx.lineTo(skullSize * 0.17, skullSize * 0.35);
-  ctx.lineTo(skullSize * 0.28, skullSize * 0.18);
-  ctx.strokeStyle = colorFromMood('secondary', hueBase + 120, 0.84, 1);
-  ctx.lineWidth = 1.8 + bass * 2;
-  ctx.stroke();
-
-  const maxillaY = skullSize * 0.36;
-  const jawTopY = skullSize * 0.5;
-  const jawBottomY = jawTopY + jawDrop;
-  ctx.beginPath();
-  ctx.moveTo(-skullSize * 0.24, maxillaY);
-  ctx.lineTo(skullSize * 0.24, maxillaY);
-  ctx.lineTo(skullSize * 0.24, maxillaY + skullSize * 0.1);
-  ctx.lineTo(-skullSize * 0.24, maxillaY + skullSize * 0.1);
+  ctx.moveTo(-skullSize * 0.26, maxillaTop);
+  ctx.lineTo(skullSize * 0.26, maxillaTop);
+  ctx.lineTo(skullSize * 0.24, maxillaBottom);
+  ctx.lineTo(-skullSize * 0.24, maxillaBottom);
   ctx.closePath();
-  ctx.strokeStyle = colorFromMood('secondary', hueBase + 142, 0.8, 1);
-  ctx.lineWidth = 1.5 + treble * 1.2;
+  ctx.strokeStyle = colorFromMood('secondary', hueBase + 145, 0.82, 1.02);
+  ctx.lineWidth = 1.8 + treble * 1.2;
   ctx.stroke();
 
-  ctx.beginPath();
-  ctx.moveTo(-skullSize * 0.28, jawTopY - skullSize * 0.02);
-  ctx.lineTo(-skullSize * 0.21, jawBottomY);
-  ctx.lineTo(skullSize * 0.21, jawBottomY);
-  ctx.lineTo(skullSize * 0.28, jawTopY - skullSize * 0.02);
-  ctx.lineTo(skullSize * 0.22, jawTopY + skullSize * 0.08);
-  ctx.lineTo(-skullSize * 0.22, jawTopY + skullSize * 0.08);
-  ctx.closePath();
-  ctx.strokeStyle = colorFromMood('mouth', hueBase + 200, 0.9, 1.06);
-  ctx.lineWidth = 2 + mids * 2.3;
-  ctx.stroke();
-
-  const toothCount = 7;
+  const toothCount = 8;
+  // Upper teeth stay fixed with upper skull.
   for (let i = 0; i <= toothCount; i += 1) {
-    const x = -skullSize * 0.19 + (skullSize * 0.38 * i) / toothCount;
+    const x = -skullSize * 0.2 + (skullSize * 0.4 * i) / toothCount;
     ctx.beginPath();
-    ctx.moveTo(x, maxillaY);
-    ctx.lineTo(x, maxillaY + skullSize * 0.1);
-    ctx.strokeStyle = colorFromMood('accent', hueBase + 240 + i * 7, 0.72, 0.98);
-    ctx.lineWidth = 1 + treble * 1.2;
+    ctx.moveTo(x, maxillaTop + skullSize * 0.01);
+    ctx.lineTo(x, maxillaBottom);
+    ctx.strokeStyle = colorFromMood('accent', hueBase + 236 + i * 7, 0.73, 0.98);
+    ctx.lineWidth = 1 + treble * 1.15;
     ctx.stroke();
   }
-  for (let i = 0; i <= toothCount; i += 1) {
-    const x = -skullSize * 0.17 + (skullSize * 0.34 * i) / toothCount;
+
+  // Mandible (lower jaw) connected to the skull at hinge points.
+  const hingeY = skullSize * 0.34;
+  const jawTopBase = skullSize * 0.48;
+  const jawTopY = jawTopBase + jawDrop * 0.55;
+  const jawBottomY = skullSize * 0.64 + jawDrop;
+
+  ctx.beginPath();
+  ctx.moveTo(-skullSize * 0.33, hingeY);
+  ctx.lineTo(-skullSize * 0.27, jawTopY);
+  ctx.lineTo(-skullSize * 0.2, jawBottomY);
+  ctx.lineTo(skullSize * 0.2, jawBottomY);
+  ctx.lineTo(skullSize * 0.27, jawTopY);
+  ctx.lineTo(skullSize * 0.33, hingeY);
+  ctx.lineTo(skullSize * 0.21, jawTopY - skullSize * 0.01);
+  ctx.lineTo(-skullSize * 0.21, jawTopY - skullSize * 0.01);
+  ctx.closePath();
+  ctx.strokeStyle = colorFromMood('mouth', hueBase + 198, 0.92, 1.06);
+  ctx.lineWidth = 2 + mids * 2.2;
+  ctx.stroke();
+
+  // Visual hinge links so jaw always reads as attached.
+  for (const side of [-1, 1]) {
     ctx.beginPath();
-    ctx.moveTo(x, jawTopY + skullSize * 0.08);
-    ctx.lineTo(x, jawBottomY);
-    ctx.strokeStyle = colorFromMood('accent', hueBase + 268 + i * 6, 0.68, 0.94);
+    ctx.moveTo(side * skullSize * 0.33, hingeY);
+    ctx.lineTo(side * skullSize * 0.29, jawTopY);
+    ctx.strokeStyle = colorFromMood('secondary', hueBase + 176, 0.82, 1);
+    ctx.lineWidth = 1.7 + bass * 1.2;
+    ctx.stroke();
+  }
+
+  // Lower teeth move with the mandible.
+  const lowerTeethTop = jawTopY + skullSize * 0.015;
+  for (let i = 0; i <= toothCount; i += 1) {
+    const x = -skullSize * 0.18 + (skullSize * 0.36 * i) / toothCount;
+    ctx.beginPath();
+    ctx.moveTo(x, lowerTeethTop);
+    ctx.lineTo(x, jawBottomY - skullSize * 0.02);
+    ctx.strokeStyle = colorFromMood('accent', hueBase + 265 + i * 6, 0.7, 0.94);
     ctx.lineWidth = 1 + treble;
     ctx.stroke();
   }
