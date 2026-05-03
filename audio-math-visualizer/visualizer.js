@@ -1082,9 +1082,9 @@ function drawGeoSkull(time, levels) {
   const treble = clampValue(Math.min(1, Math.pow(safeLevels.treble * sensitivity, 1.12)), 0, 1);
   const hueBase = finiteOr((205 + safeTime * 0.02 * mood.motion + mids * 120 + treble * 80) % 360, 205);
   const skullSize = finiteOr(Math.min(width, height) * (performance ? 0.23 : 0.27) * (1 + bass * 0.05), Math.min(width, height) * 0.24);
-  const targetJawOpen = clampValue(finiteOr(0.02 + mids * 0.2 + safeLevels.volume * 0.12, 0.02), 0, 0.32);
+  const targetJawOpen = clampValue(finiteOr(mids * 0.24 + safeLevels.volume * 0.14, 0), 0, 0.34);
   smoothedSkullJawOpen += (targetJawOpen - smoothedSkullJawOpen) * 0.22;
-  smoothedSkullJawOpen = clampValue(finiteOr(smoothedSkullJawOpen, 0.02), 0, 0.32);
+  smoothedSkullJawOpen = clampValue(finiteOr(smoothedSkullJawOpen, 0), 0, 0.34);
   const jawOpen = smoothedSkullJawOpen;
   const jawDrop = finiteOr(skullSize * jawOpen, 0);
 
@@ -1166,20 +1166,21 @@ function drawGeoSkull(time, levels) {
   }
 
   // Mandible (lower jaw) connected to the skull at hinge points.
-  const hingeY = skullSize * 0.34;
-  const jawTopBase = skullSize * 0.48;
-  const jawTopY = jawTopBase + jawDrop * 0.55;
-  const jawBottomY = skullSize * 0.64 + jawDrop;
+  const hingeY = skullSize * 0.36;
+  const jawTopBase = maxillaBottom + skullSize * 0.01;
+  const jawTopY = jawTopBase + jawDrop * 0.82;
+  const jawBottomY = skullSize * 0.64 + jawDrop * 1.05;
 
   ctx.beginPath();
-  ctx.moveTo(-skullSize * 0.33, hingeY);
-  ctx.lineTo(-skullSize * 0.27, jawTopY);
-  ctx.lineTo(-skullSize * 0.2, jawBottomY);
-  ctx.lineTo(skullSize * 0.2, jawBottomY);
-  ctx.lineTo(skullSize * 0.27, jawTopY);
-  ctx.lineTo(skullSize * 0.33, hingeY);
-  ctx.lineTo(skullSize * 0.21, jawTopY - skullSize * 0.01);
-  ctx.lineTo(-skullSize * 0.21, jawTopY - skullSize * 0.01);
+  ctx.moveTo(-skullSize * 0.34, hingeY);
+  ctx.lineTo(-skullSize * 0.28, jawTopY);
+  ctx.lineTo(-skullSize * 0.22, jawBottomY);
+  ctx.lineTo(0, jawBottomY + skullSize * 0.04);
+  ctx.lineTo(skullSize * 0.22, jawBottomY);
+  ctx.lineTo(skullSize * 0.28, jawTopY);
+  ctx.lineTo(skullSize * 0.34, hingeY);
+  ctx.lineTo(skullSize * 0.16, jawTopY + skullSize * 0.01);
+  ctx.lineTo(-skullSize * 0.16, jawTopY + skullSize * 0.01);
   ctx.closePath();
   ctx.strokeStyle = colorFromMood('mouth', hueBase + 198, 0.92, 1.06);
   ctx.lineWidth = 2 + mids * 2.2;
@@ -1189,19 +1190,19 @@ function drawGeoSkull(time, levels) {
   for (const side of [-1, 1]) {
     ctx.beginPath();
     ctx.moveTo(side * skullSize * 0.33, hingeY);
-    ctx.lineTo(side * skullSize * 0.29, jawTopY);
+    ctx.lineTo(side * skullSize * 0.29, jawTopY + jawDrop * 0.06);
     ctx.strokeStyle = colorFromMood('secondary', hueBase + 176, 0.82, 1);
     ctx.lineWidth = 1.7 + bass * 1.2;
     ctx.stroke();
   }
 
   // Lower teeth move with the mandible.
-  const lowerTeethTop = jawTopY + skullSize * 0.015;
+  const lowerTeethTop = jawTopY + skullSize * 0.012;
   for (let i = 0; i <= toothCount; i += 1) {
     const x = -skullSize * 0.18 + (skullSize * 0.36 * i) / toothCount;
     ctx.beginPath();
     ctx.moveTo(x, lowerTeethTop);
-    ctx.lineTo(x, jawBottomY - skullSize * 0.02);
+    ctx.lineTo(x, jawBottomY - skullSize * 0.06);
     ctx.strokeStyle = colorFromMood('accent', hueBase + 265 + i * 6, 0.7, 0.94);
     ctx.lineWidth = 1 + treble;
     ctx.stroke();
@@ -1217,12 +1218,17 @@ function drawStickman(time, levels) {
   const centerX = width / 2;
   const centerY = height / 2;
   const mood = getMood();
-  const bass = Math.min(1, Math.pow(levels.bass * sensitivity, 1.35));
-  const mids = Math.min(1, Math.pow(levels.mids * sensitivity, 1.2));
-  const treble = Math.min(1, Math.pow(levels.treble * sensitivity, 1.1));
+  const bassRaw = clampValue(finiteOr(levels && levels.bass, 0), 0, 1);
+  const midsRaw = clampValue(finiteOr(levels && levels.mids, 0), 0, 1);
+  const trebleRaw = clampValue(finiteOr(levels && levels.treble, 0), 0, 1);
+  const volumeRaw = clampValue(finiteOr(levels && levels.volume, 0), 0, 1);
+  const hasInput = volumeRaw > 0.02 || bassRaw > 0.03 || midsRaw > 0.03 || trebleRaw > 0.03;
+  const bass = hasInput ? Math.min(1, Math.pow(bassRaw * sensitivity, 1.35)) : 0;
+  const mids = hasInput ? Math.min(1, Math.pow(midsRaw * sensitivity, 1.2)) : 0;
+  const treble = hasInput ? Math.min(1, Math.pow(trebleRaw * sensitivity, 1.1)) : 0;
   const hueBase = (160 + time * 0.02 * mood.motion + mids * 140) % 360;
   const scale = Math.min(width, height) * (performance ? 0.18 : 0.2);
-  const torsoBend = Math.sin(time * 0.006 + bass * 3) * (scale * 0.1 + mids * scale * 0.1);
+  const torsoBend = hasInput ? Math.sin(time * 0.005 + mids * 2.2) * (scale * 0.05 + mids * scale * 0.07) : 0;
   const torsoTopY = -scale * 0.45;
   const hipsY = scale * 0.28;
   const shoulderY = -scale * 0.05;
@@ -1233,7 +1239,7 @@ function drawStickman(time, levels) {
   ctx.globalCompositeOperation = performance ? 'source-over' : 'lighter';
   ctx.fillStyle = colorFromMood('primary', hueBase, 0.78, 1.03);
   ctx.strokeStyle = colorFromMood('accent', hueBase + 60, 0.92, 1.08);
-  ctx.lineWidth = 2 + levels.volume * 2;
+  ctx.lineWidth = 2 + volumeRaw * 2;
   ctx.shadowBlur = (10 + treble * 14 + mids * 10) * shadowScale;
   ctx.shadowColor = colorFromMood('glow', hueBase + 24, 0.85, 1.08);
 
@@ -1249,15 +1255,20 @@ function drawStickman(time, levels) {
   ctx.fill();
   ctx.stroke();
 
-  const armSwing = Math.sin(time * 0.012 + treble * 9) * (scale * 0.14 + treble * scale * 0.14);
   const shoulderLeftX = torsoTopX - scale * 0.15;
   const shoulderRightX = torsoTopX + scale * 0.15;
-  const elbowDrop = scale * (0.12 + treble * 0.2);
+  const leftArmSwing = hasInput ? Math.sin(time * 0.016 + treble * 10) * (scale * 0.08 + treble * scale * 0.17) : 0;
+  const rightArmDrive = hasInput ? Math.sin(time * 0.011 + bass * 8) * (scale * 0.1 + bass * scale * 0.22) : 0;
   const armWidth = scale * 0.08;
-  for (const side of [-1,1]) {
+  for (const side of [-1, 1]) {
     const shoulderX = side < 0 ? shoulderLeftX : shoulderRightX;
-    const handX = shoulderX + side * (scale * 0.18 + armSwing * 0.8);
-    const handY = shoulderY + scale * (0.2 + treble * 0.28) + Math.sin(time * 0.016 + side * 0.7) * (scale * 0.15 + treble * scale * 0.12);
+    const isLeft = side < 0;
+    const handX = isLeft
+      ? shoulderX - (scale * 0.17 + leftArmSwing)
+      : shoulderX + (scale * 0.2 + rightArmDrive * 0.95);
+    const handY = isLeft
+      ? shoulderY + scale * (0.2 + treble * 0.32) + (hasInput ? Math.sin(time * 0.02 + treble * 6) * (scale * 0.06 + treble * scale * 0.08) : 0)
+      : shoulderY + scale * (0.24 + bass * 0.36) + (hasInput ? Math.cos(time * 0.013 + bass * 5) * (scale * 0.04 + bass * scale * 0.1) : 0);
     ctx.beginPath();
     ctx.arc(shoulderX, shoulderY, armWidth, 0, Math.PI * 2);
     ctx.arc(handX, handY, armWidth * 0.92, 0, Math.PI * 2);
@@ -1271,12 +1282,11 @@ function drawStickman(time, levels) {
     ctx.fill();
   }
 
-  const stomp = Math.max(0, Math.sin(time * 0.014 + bass * 10)) * (scale * 0.34 + bass * scale * 0.26);
   const legWidth = scale * 0.1;
-  for (const side of [-1,1]) {
+  for (const side of [-1, 1]) {
     const hipX = hipsX + side * scale * 0.11;
-    const footY = scale * 0.88 + (side < 0 ? stomp : stomp * 0.72);
-    const footX = hipX + side * scale * 0.13 + Math.sin(time * 0.01 + side * 2) * scale * 0.07;
+    const footY = scale * 0.88;
+    const footX = hipX + side * scale * 0.13;
     ctx.beginPath();
     ctx.moveTo(hipX - legWidth * 0.5, hipsY);
     ctx.lineTo(footX - legWidth, footY);
@@ -1287,7 +1297,7 @@ function drawStickman(time, levels) {
   }
 
   const neckY = torsoTopY - scale * 0.02;
-  const headY = torsoTopY - headR * 0.88 - mids * scale * 0.08 + Math.sin(time * 0.009) * scale * 0.03;
+  const headY = torsoTopY - headR * 0.88 - mids * scale * 0.08 + (hasInput ? Math.sin(time * 0.009 + mids * 5) * (scale * 0.015 + mids * scale * 0.03) : 0);
   ctx.beginPath();
   ctx.moveTo(torsoTopX - scale * 0.04, neckY);
   ctx.lineTo(torsoTopX + scale * 0.04, neckY);
