@@ -19,6 +19,8 @@
     const dockStopButton = $('dockStopButton');
     const dockToggleButton = $('dockToggleButton');
     const controlsOverlay = $('controlsOverlay');
+    const panelToggleNote = $('panelToggleNote');
+    const dockToggleNote = $('dockToggleNote');
     const appRoot = $('app');
     const clearSavedSongsButton = $('clearSavedSongsButton');
     const teacherLibrarySection = $('teacherLibrarySection');
@@ -1122,6 +1124,14 @@ function drawParticles(time, levels) {
       fullscreenButton.textContent = isFullscreen ? 'Exit Fullscreen' : 'Fullscreen';
     }
 
+
+    function updatePanelToggleCopy() {
+      const isExpanded = controlsOverlay.open;
+      const toggleText = isExpanded ? 'Tap to collapse panel' : 'Tap to expand panel';
+      if (panelToggleNote) panelToggleNote.textContent = toggleText;
+      if (dockToggleNote) dockToggleNote.textContent = toggleText;
+    }
+
     function bindHelpButtons() {
       document.querySelectorAll('[data-help-target]').forEach((button) => {
         button.addEventListener('click', () => {
@@ -1181,9 +1191,17 @@ function drawParticles(time, levels) {
     window.addEventListener('beforeunload', revokeCurrentObjectUrl);
 
     applySavedVisualSettings();
-    controlsOverlay.addEventListener('toggle', ()=>appRoot.classList.toggle('controls-open', controlsOverlay.open));
-    dockToggleButton.addEventListener('click', ()=>{ controlsOverlay.open = !controlsOverlay.open; appRoot.classList.toggle('controls-open', controlsOverlay.open); });
+    controlsOverlay.addEventListener('toggle', () => {
+      appRoot.classList.toggle('controls-open', controlsOverlay.open);
+      updatePanelToggleCopy();
+    });
+    dockToggleButton.addEventListener('click', () => {
+      controlsOverlay.open = !controlsOverlay.open;
+      appRoot.classList.toggle('controls-open', controlsOverlay.open);
+      updatePanelToggleCopy();
+    });
     appRoot.classList.add('controls-open');
+    updatePanelToggleCopy();
     setCanvasSize();
     createParticles();
     updateSliderLabels();
