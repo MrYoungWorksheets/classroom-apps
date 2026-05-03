@@ -3,7 +3,7 @@
 html,body { margin:0; min-height:100%; color:var(--text-main); font-family:'Trebuchet MS','Segoe UI',sans-serif; overflow:hidden; background:radial-gradient(circle at 15% 15%, rgba(0,255,236,.16), transparent 34%),radial-gradient(circle at 85% 82%, rgba(255,79,216,.16), transparent 38%),linear-gradient(180deg,#01030a 0%,#050817 50%,#01020a 100%);}
 #app{position:relative;width:100vw;height:100vh;overflow:hidden;} #visualizerCanvas{display:block;width:100%;height:100%;}
 .top-left-dock{position:absolute;top:12px;left:12px;z-index:5;display:grid;gap:8px;padding:10px;border:1px solid var(--panel-border);border-radius:14px;background:rgba(5,9,24,.72);backdrop-filter:blur(10px);max-width:min(430px,calc(100vw - 24px));}
-.dock-title-block{all:unset;cursor:pointer;display:grid;gap:2px}.dock-title{font-weight:700}.dock-song{font-size:.82rem;color:var(--text-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dock-title-block{all:unset;cursor:pointer;display:grid;gap:3px}.dock-title{font-weight:700}.dock-song{font-size:.82rem;color:var(--text-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dock-toggle-note{font-size:.78rem;color:var(--text-soft)}
 .dock-quick-controls{display:flex;flex-wrap:wrap;gap:6px}.dock-quick-controls button{min-height:36px;padding:6px 10px;font-size:.82rem}
 .overlay{position:absolute;top:92px;left:12px;width:min(470px,calc(100% - 24px));max-height:calc(100vh - 104px);overflow:auto;padding:12px;border:1px solid var(--panel-border);border-radius:16px;background:linear-gradient(180deg, rgba(15,22,48,.95), rgba(5,8,22,.92));box-shadow:var(--shadow);z-index:4}
 .overlay summary{cursor:pointer;display:flex;justify-content:space-between;font-weight:700}.summary-note{font-size:.8rem;color:var(--text-soft)}.panel-content{margin-top:8px;display:grid;gap:10px}
@@ -20,5 +20,7 @@ button{cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}.file-label{
 .hud-tech{position:absolute;right:12px;bottom:12px;z-index:2;padding:10px 12px;background:rgba(5,9,24,.62);border-radius:12px;border:1px solid rgba(126,255,236,.16);display:none}
 .hud-line{display:flex;justify-content:space-between;gap:12px;font-size:.84rem}.hud-line span:last-child{color:var(--accent)}
 #app.controls-open .dock-quick-controls{display:none}
+#app.controls-open .dock-toggle-note{display:none}
 #app.controls-open .hud-tech{display:block}
+#app:not(.controls-open) .overlay{display:none}
 @media (max-width:700px){.overlay{top:88px;left:8px;width:calc(100% - 16px);max-height:calc(100vh - 96px)}.top-left-dock{left:8px;top:8px;right:8px;max-width:none}.hud-tech{right:8px;bottom:8px}}
