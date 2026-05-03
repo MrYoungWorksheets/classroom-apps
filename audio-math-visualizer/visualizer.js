@@ -839,7 +839,7 @@ function drawGeoFamily(time, levels, variant = 'face') {
   const baseSize = variant === 'dog' ? 0.285 : 0.27;
   const headSize = Math.min(width, height) * (performance ? 0.24 : baseSize) * headPulse;
   const jawWidth = headSize * (0.7 + bass * 0.2);
-  const smileBounce = Math.sin(time * 0.011) * (1.5 + bass * 5.5);
+  const smileBounce = Math.sin(time * 0.011) * (1.5 + bass * 3);
   const faceTilt = clampValue(Math.sin(time * 0.0014) * mids * 0.12, -0.12, 0.12);
   const hueBase = (182 + time * 0.02 * mood.motion + mids * 140 + treble * 90) % 360;
 
@@ -923,25 +923,27 @@ function drawGeoFamily(time, levels, variant = 'face') {
 
   if (variant === 'face') {
     ctx.beginPath();
-    ctx.moveTo(-headSize * 0.5, -headSize * 0.58);
-    ctx.lineTo(-headSize * 0.46, -headSize * 0.72);
-    ctx.lineTo(-headSize * 0.34, -headSize * 0.78);
-    ctx.lineTo(-headSize * 0.2, -headSize * 0.74);
-    ctx.lineTo(-headSize * 0.1, -headSize * 0.8);
-    ctx.lineTo(0, -headSize * 0.74);
-    ctx.lineTo(headSize * 0.1, -headSize * 0.8);
-    ctx.lineTo(headSize * 0.2, -headSize * 0.74);
-    ctx.lineTo(headSize * 0.34, -headSize * 0.78);
-    ctx.lineTo(headSize * 0.46, -headSize * 0.72);
-    ctx.lineTo(headSize * 0.5, -headSize * 0.58);
-    ctx.lineTo(headSize * 0.42, -headSize * 0.46);
-    ctx.lineTo(-headSize * 0.42, -headSize * 0.46);
+    ctx.moveTo(-headSize * 0.44, -headSize * 0.62);
+    ctx.quadraticCurveTo(-headSize * 0.26, -headSize * 0.82, 0, -headSize * 0.75);
+    ctx.quadraticCurveTo(headSize * 0.26, -headSize * 0.82, headSize * 0.44, -headSize * 0.62);
+    ctx.lineTo(headSize * 0.43, -headSize * 0.48);
+    ctx.quadraticCurveTo(0, -headSize * 0.44, -headSize * 0.43, -headSize * 0.48);
     ctx.closePath();
-    ctx.fillStyle = colorFromMood('secondary', hueBase + 6, 0.6, 0.55);
+    ctx.fillStyle = colorFromMood('secondary', hueBase + 6, 0.62, 0.58);
     ctx.fill();
-    ctx.strokeStyle = colorFromMood('accent', hueBase + 32, 0.55, 0.7);
+    ctx.strokeStyle = colorFromMood('accent', hueBase + 32, 0.58, 0.74);
     ctx.lineWidth = 1.5;
     ctx.stroke();
+
+    for (let i = 0; i < 5; i += 1) {
+      const tx = -headSize * 0.28 + i * headSize * 0.14;
+      ctx.beginPath();
+      ctx.moveTo(tx, -headSize * 0.64);
+      ctx.lineTo(tx + headSize * 0.03, -headSize * 0.58);
+      ctx.strokeStyle = colorFromMood('accent', hueBase + 16 + i * 5, 0.34, 0.82);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
   }
 
   if (variant === 'kitty') {
@@ -1019,27 +1021,36 @@ function drawGeoFamily(time, levels, variant = 'face') {
       ctx.stroke();
     }
   } else {
+    const noseY = headSize * 0.07;
     ctx.beginPath();
-    ctx.moveTo(0, -headSize * 0.02);
-    ctx.lineTo(headSize * 0.07, headSize * 0.13 + mids * 5);
-    ctx.lineTo(0, headSize * 0.21 + mids * 7);
-    ctx.lineTo(-headSize * 0.07, headSize * 0.13 + mids * 5);
+    ctx.moveTo(0, -headSize * 0.01);
+    ctx.lineTo(headSize * 0.055, noseY);
+    ctx.lineTo(0, noseY + headSize * 0.1);
+    ctx.lineTo(-headSize * 0.055, noseY);
     ctx.closePath();
-    ctx.strokeStyle = colorFromMood('accent', hueBase + 80, 0.88, 1.02);
-    ctx.lineWidth = 1.6 + mids * 2;
+    ctx.strokeStyle = colorFromMood('accent', hueBase + 80, 0.82, 0.96);
+    ctx.lineWidth = 1.5 + mids * 1.5;
     ctx.stroke();
-    const mouthCenterY = headSize * 0.35 + smileBounce;
-    const mouthHalf = jawWidth * 0.34;
-    const mouthOpen = clampValue(headSize * 0.065 + bass * headSize * 0.18, headSize * 0.05, headSize * 0.24);
-    const grinLift = headSize * (0.055 + bass * 0.045);
+
+    ctx.beginPath();
+    ctx.moveTo(-headSize * 0.06, noseY + headSize * 0.08);
+    ctx.quadraticCurveTo(0, noseY + headSize * 0.14, headSize * 0.06, noseY + headSize * 0.08);
+    ctx.strokeStyle = colorFromMood('secondary', hueBase + 100, 0.72, 0.9);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    const mouthCenterY = headSize * 0.33 + smileBounce * 0.12;
+    const mouthHalf = jawWidth * 0.28;
+    const mouthOpen = clampValue(headSize * (0.02 + mids * 0.1 + levels.volume * 0.06), headSize * 0.02, headSize * 0.17);
     ctx.beginPath();
     ctx.moveTo(-mouthHalf, mouthCenterY);
-    ctx.lineTo(-mouthHalf * 0.4, mouthCenterY + grinLift);
-    ctx.lineTo(0, mouthCenterY + grinLift + mouthOpen * 0.18);
-    ctx.lineTo(mouthHalf * 0.4, mouthCenterY + grinLift);
-    ctx.lineTo(mouthHalf, mouthCenterY);
-    ctx.strokeStyle = colorFromMood('mouth', hueBase + 202, 0.95, 1.1);
-    ctx.lineWidth = 2.2 + bass * 3;
+    ctx.quadraticCurveTo(0, mouthCenterY + mouthOpen * 0.2, mouthHalf, mouthCenterY);
+    ctx.quadraticCurveTo(0, mouthCenterY + mouthOpen, -mouthHalf, mouthCenterY);
+    ctx.closePath();
+    ctx.fillStyle = colorFromMood('mouth', hueBase + 196, 0.58, 0.62);
+    ctx.fill();
+    ctx.strokeStyle = colorFromMood('mouth', hueBase + 210, 0.95, 1.03);
+    ctx.lineWidth = 2 + mids * 1.8;
     ctx.stroke();
   }
 
@@ -1059,7 +1070,7 @@ function drawGeoSkull(time, levels) {
   const treble = Math.min(1, Math.pow(levels.treble * sensitivity, 1.12));
   const hueBase = (205 + time * 0.02 * mood.motion + mids * 120 + treble * 80) % 360;
   const skullSize = Math.min(width, height) * (performance ? 0.23 : 0.27) * (1 + bass * 0.05);
-  const jawDrop = skullSize * (0.02 + bass * 0.12);
+  const jawDrop = skullSize * (0.035 + mids * 0.12 + levels.volume * 0.08);
 
   ctx.save();
   ctx.translate(centerX, centerY);
@@ -1071,21 +1082,21 @@ function drawGeoSkull(time, levels) {
 
   ctx.beginPath();
   ctx.moveTo(-skullSize * 0.42, -skullSize * 0.74);
-  ctx.quadraticCurveTo(0, -skullSize * 0.92, skullSize * 0.42, -skullSize * 0.74);
-  ctx.lineTo(skullSize * 0.62, -skullSize * 0.14);
-  ctx.lineTo(skullSize * 0.48, skullSize * 0.2);
-  ctx.lineTo(skullSize * 0.28, skullSize * 0.32);
-  ctx.lineTo(skullSize * 0.24, skullSize * (0.52 + bass * 0.04));
-  ctx.lineTo(-skullSize * 0.24, skullSize * (0.52 + bass * 0.04));
-  ctx.lineTo(-skullSize * 0.28, skullSize * 0.32);
-  ctx.lineTo(-skullSize * 0.48, skullSize * 0.2);
-  ctx.lineTo(-skullSize * 0.62, -skullSize * 0.14);
+  ctx.quadraticCurveTo(0, -skullSize * 0.95, skullSize * 0.42, -skullSize * 0.74);
+  ctx.lineTo(skullSize * 0.62, -skullSize * 0.13);
+  ctx.lineTo(skullSize * 0.53, skullSize * 0.16);
+  ctx.lineTo(skullSize * 0.34, skullSize * 0.35);
+  ctx.lineTo(skullSize * 0.2, skullSize * 0.46);
+  ctx.lineTo(-skullSize * 0.2, skullSize * 0.46);
+  ctx.lineTo(-skullSize * 0.34, skullSize * 0.35);
+  ctx.lineTo(-skullSize * 0.53, skullSize * 0.16);
+  ctx.lineTo(-skullSize * 0.62, -skullSize * 0.13);
   ctx.closePath();
   ctx.stroke();
 
   for (const side of [-1, 1]) {
     ctx.beginPath();
-    ctx.ellipse(side * skullSize * 0.23, -skullSize * 0.1, skullSize * 0.15, skullSize * 0.2, side * 0.2, 0, Math.PI * 2);
+    ctx.ellipse(side * skullSize * 0.23, -skullSize * 0.1, skullSize * 0.16, skullSize * 0.2, side * 0.16, 0, Math.PI * 2);
     ctx.strokeStyle = colorFromMood('eye', hueBase + side * 24, 0.95, 1.08);
     ctx.lineWidth = 2 + mids * 2;
     ctx.stroke();
@@ -1100,41 +1111,66 @@ function drawGeoSkull(time, levels) {
   }
 
   ctx.beginPath();
-  ctx.moveTo(0, skullSize * 0.04);
-  ctx.lineTo(skullSize * 0.08, skullSize * 0.26);
-  ctx.lineTo(-skullSize * 0.08, skullSize * 0.26);
+  ctx.moveTo(0, skullSize * 0.01);
+  ctx.lineTo(skullSize * 0.1, skullSize * 0.23);
+  ctx.lineTo(0, skullSize * 0.29);
+  ctx.lineTo(-skullSize * 0.1, skullSize * 0.23);
   ctx.closePath();
   ctx.strokeStyle = colorFromMood('secondary', hueBase + 60, 0.88, 1.02);
   ctx.lineWidth = 1.7 + mids * 1.5;
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(-skullSize * 0.3, skullSize * 0.22);
-  ctx.lineTo(-skullSize * 0.16, skullSize * 0.4);
-  ctx.lineTo(skullSize * 0.16, skullSize * 0.4);
-  ctx.lineTo(skullSize * 0.3, skullSize * 0.22);
+  ctx.moveTo(-skullSize * 0.28, skullSize * 0.18);
+  ctx.lineTo(-skullSize * 0.17, skullSize * 0.35);
+  ctx.lineTo(skullSize * 0.17, skullSize * 0.35);
+  ctx.lineTo(skullSize * 0.28, skullSize * 0.18);
   ctx.strokeStyle = colorFromMood('secondary', hueBase + 120, 0.84, 1);
   ctx.lineWidth = 1.8 + bass * 2;
   ctx.stroke();
 
-  const jawY = skullSize * 0.5 + jawDrop;
+  const maxillaY = skullSize * 0.36;
+  const jawTopY = skullSize * 0.5;
+  const jawBottomY = jawTopY + jawDrop;
   ctx.beginPath();
-  ctx.moveTo(-skullSize * 0.26, skullSize * 0.54);
-  ctx.lineTo(-skullSize * 0.24, jawY);
-  ctx.lineTo(skullSize * 0.24, jawY);
-  ctx.lineTo(skullSize * 0.26, skullSize * 0.54);
-  ctx.strokeStyle = colorFromMood('mouth', hueBase + 200, 0.9, 1.06);
-  ctx.lineWidth = 2.1 + bass * 2.6;
+  ctx.moveTo(-skullSize * 0.24, maxillaY);
+  ctx.lineTo(skullSize * 0.24, maxillaY);
+  ctx.lineTo(skullSize * 0.24, maxillaY + skullSize * 0.1);
+  ctx.lineTo(-skullSize * 0.24, maxillaY + skullSize * 0.1);
+  ctx.closePath();
+  ctx.strokeStyle = colorFromMood('secondary', hueBase + 142, 0.8, 1);
+  ctx.lineWidth = 1.5 + treble * 1.2;
   ctx.stroke();
 
-  const toothCount = 8;
+  ctx.beginPath();
+  ctx.moveTo(-skullSize * 0.28, jawTopY - skullSize * 0.02);
+  ctx.lineTo(-skullSize * 0.21, jawBottomY);
+  ctx.lineTo(skullSize * 0.21, jawBottomY);
+  ctx.lineTo(skullSize * 0.28, jawTopY - skullSize * 0.02);
+  ctx.lineTo(skullSize * 0.22, jawTopY + skullSize * 0.08);
+  ctx.lineTo(-skullSize * 0.22, jawTopY + skullSize * 0.08);
+  ctx.closePath();
+  ctx.strokeStyle = colorFromMood('mouth', hueBase + 200, 0.9, 1.06);
+  ctx.lineWidth = 2 + mids * 2.3;
+  ctx.stroke();
+
+  const toothCount = 7;
   for (let i = 0; i <= toothCount; i += 1) {
-    const x = -skullSize * 0.2 + (skullSize * 0.4 * i) / toothCount;
+    const x = -skullSize * 0.19 + (skullSize * 0.38 * i) / toothCount;
     ctx.beginPath();
-    ctx.moveTo(x, skullSize * 0.56);
-    ctx.lineTo(x, jawY);
+    ctx.moveTo(x, maxillaY);
+    ctx.lineTo(x, maxillaY + skullSize * 0.1);
     ctx.strokeStyle = colorFromMood('accent', hueBase + 240 + i * 7, 0.72, 0.98);
     ctx.lineWidth = 1 + treble * 1.2;
+    ctx.stroke();
+  }
+  for (let i = 0; i <= toothCount; i += 1) {
+    const x = -skullSize * 0.17 + (skullSize * 0.34 * i) / toothCount;
+    ctx.beginPath();
+    ctx.moveTo(x, jawTopY + skullSize * 0.08);
+    ctx.lineTo(x, jawBottomY);
+    ctx.strokeStyle = colorFromMood('accent', hueBase + 268 + i * 6, 0.68, 0.94);
+    ctx.lineWidth = 1 + treble;
     ctx.stroke();
   }
 
@@ -1153,7 +1189,7 @@ function drawStickman(time, levels) {
   const treble = Math.min(1, Math.pow(levels.treble * sensitivity, 1.1));
   const hueBase = (160 + time * 0.02 * mood.motion + mids * 140) % 360;
   const scale = Math.min(width, height) * (performance ? 0.18 : 0.2);
-  const torsoBend = Math.sin(time * 0.006 + bass * 3) * (scale * 0.14 + mids * scale * 0.12);
+  const torsoBend = Math.sin(time * 0.006 + bass * 3) * (scale * 0.1 + mids * scale * 0.1);
   const torsoTopY = -scale * 0.45;
   const hipsY = scale * 0.28;
   const shoulderY = -scale * 0.05;
@@ -1180,15 +1216,15 @@ function drawStickman(time, levels) {
   ctx.fill();
   ctx.stroke();
 
-  const armSwing = Math.sin(time * 0.012 + treble * 9) * (scale * 0.45 + treble * scale * 0.35);
+  const armSwing = Math.sin(time * 0.012 + treble * 9) * (scale * 0.14 + treble * scale * 0.14);
   const shoulderLeftX = torsoTopX - scale * 0.15;
   const shoulderRightX = torsoTopX + scale * 0.15;
   const elbowDrop = scale * (0.12 + treble * 0.2);
   const armWidth = scale * 0.08;
   for (const side of [-1,1]) {
     const shoulderX = side < 0 ? shoulderLeftX : shoulderRightX;
-    const handX = shoulderX + side * (scale * 0.34 + armSwing);
-    const handY = shoulderY + elbowDrop + Math.sin(time * 0.016 + side) * scale * 0.12;
+    const handX = shoulderX + side * (scale * 0.18 + armSwing * 0.8);
+    const handY = shoulderY + scale * (0.2 + treble * 0.28) + Math.sin(time * 0.016 + side * 0.7) * (scale * 0.15 + treble * scale * 0.12);
     ctx.beginPath();
     ctx.arc(shoulderX, shoulderY, armWidth, 0, Math.PI * 2);
     ctx.arc(handX, handY, armWidth * 0.92, 0, Math.PI * 2);
@@ -1217,7 +1253,17 @@ function drawStickman(time, levels) {
     ctx.fill();
   }
 
-  const headY = torsoTopY - headR * 0.95 - mids * scale * 0.1 + Math.sin(time * 0.009) * scale * 0.04;
+  const neckY = torsoTopY - scale * 0.02;
+  const headY = torsoTopY - headR * 0.88 - mids * scale * 0.08 + Math.sin(time * 0.009) * scale * 0.03;
+  ctx.beginPath();
+  ctx.moveTo(torsoTopX - scale * 0.04, neckY);
+  ctx.lineTo(torsoTopX + scale * 0.04, neckY);
+  ctx.lineTo(torsoTopX + scale * 0.03, headY + headR * 0.76);
+  ctx.lineTo(torsoTopX - scale * 0.03, headY + headR * 0.76);
+  ctx.closePath();
+  ctx.fillStyle = colorFromMood('primary', hueBase + 12, 0.78, 1.01);
+  ctx.fill();
+  ctx.stroke();
   ctx.beginPath();
   ctx.ellipse(torsoTopX, headY, headR * 0.95, headR, 0, 0, Math.PI * 2);
   ctx.fillStyle = colorFromMood('secondary', hueBase + 28, 0.84, 1.04);
