@@ -28,3 +28,6 @@ details > summary { cursor: pointer; font-weight: 600; margin-bottom: .5rem; }
 .workflow-step { flex: 1 1 150px; padding: .5rem .75rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #f1f5f9; color: #334155; }
 .workflow-step.complete { background: #dcfce7; border-color: #86efac; color: #166534; font-weight: 600; }
 .workflow-step.current { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; font-weight: 600; }
+
+.hidden { display:none; }
+input, select { padding:.45rem; border:1px solid #94a3b8; border-radius:6px; }

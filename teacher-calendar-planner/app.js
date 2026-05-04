@@ -11,7 +11,7 @@ const BLANK_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\n\nSKIP_WEEKENDS
 
 const EXAMPLE_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\nAlgebra 2\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\nFall Semester | 2026-08-12 | 2026-12-14\nSpring Semester | 2027-01-06 | 2027-05-14\n\nBLOCKED_DAYS:\nLabor Day | 2026-09-07\nFlex Day PD / Student Holiday | 2026-10-09\nProfessional Development / Student Holiday | 2026-10-12\nFall Break | 2026-11-23 | 2026-11-27\nWinter Break | 2026-12-21 | 2027-01-03\nTeacher Workday / Student Holiday | 2027-01-04\nProfessional Development / Student Holiday | 2027-01-05\nStudent / Staff Holiday | 2027-01-18\nProfessional Development / Student Holiday | 2027-02-12\nFlex Day PD / Student Holiday | 2027-02-15\nSpring Break | 2027-03-08 | 2027-03-12\nHoliday | 2027-03-26\nProfessional Development / Student Holiday | 2027-04-30\nFinal Exams | 2027-05-17 | 2027-05-20\nProfessional Development / Student Holiday | 2027-05-21\n\nEVENT_NOTES:\nGrowth Pre-Test | 2026-08-24 | 2026-08-27\nGrowth Pre-Test Choir/Band | 2026-09-02 | 2026-09-04\nTSIA2 English | 2026-09-28\nTSIA2 Math | 2026-10-06\nPSAT | 2026-10-22\nCBE | 2026-10-27 | 2026-10-30\nEng I & II Interim | 2026-11-03\nAlg I Interim | 2026-11-19\nEOC Retakes | 2026-12-01 | 2026-12-10\nMidterms | 2026-12-15 | 2026-12-18\nCBE / ASVAB | 2027-01-19 | 2027-01-22\nEng I & II Interim | 2027-01-26 | 2027-01-27\nBio & US Hist Interim | 2027-02-10\nAlg I Interim | 2027-02-23\nTELPAS | 2027-03-02 | 2027-03-04\nTSIA2 English | 2027-03-18\nTSIA2 Math | 2027-03-25\nSAT Day for Juniors | 2027-03-30\nEnglish I & II EOC | 2027-04-08\nBio & US Hist EOC | 2027-04-15\nAlg I EOC | 2027-04-27\nGrowth Post Test | 2027-04-28 | 2027-05-03\nAP / IBC Testing Window | 2027-05-04 | 2027-05-14\n\nUNIT_PLAN:\nFall Semester | Unit 00 Fundamentals | 13\nFall Semester | Unit 01 Linear F(x) | 13\nFall Semester | Unit 02 Systems | 13\nFall Semester | Unit 03 Quadratics | 13\nFall Semester | Unit 04 Quadratics Pt 2 | 16\nFall Semester | Unit 04.5 | 11\nSpring Semester | Unit 05 Polynomials | 17\nSpring Semester | Unit 06 Rational Exponents / Radical Functions | 16\nSpring Semester | Unit 07 Exponential / Logarithms | 24\nSpring Semester | Unit 08 Rational Functions | 20\nSpring Semester | Unit 09 Regressions and Review | 7\n`;
 
-const state = { workbook: null, workbookName: '', diagnostics: null, parsed: null, preview: null, applied: false, exportWarning: '', templateLoaded: false, validationSucceeded: false, previewSucceeded: false, nextStep: 'Upload a workbook to begin.' };
+const state = { workbook: null, workbookName: '', diagnostics: null, parsed: null, preview: null, applied: false, exportWarning: '', templateLoaded: false, validationSucceeded: false, previewSucceeded: false, nextStep: 'Upload a workbook to begin.', mode: 'guided', guidedUnits: [] };
 const $ = (id) => document.getElementById(id);
 
 
@@ -28,10 +28,14 @@ function hasWorkbookWithDates() {
 function updateWorkflowButtons() {
   const workbookLoaded = !!state.workbook;
   const hasTemplate = !!($('templateInput').value || '').trim();
+  const guidedValid = validateGuided(false).ok;
   $('validateBtn').disabled = !(workbookLoaded && hasTemplate);
-  $('previewBtn').disabled = !state.validationSucceeded;
+  $('previewBtn').disabled = !(state.mode === 'guided' && workbookLoaded && guidedValid);
   $('applyBtn').disabled = !state.previewSucceeded;
   $('downloadBtn').disabled = !state.applied;
+  $('advPreviewBtn').disabled = !state.validationSucceeded;
+  $('advApplyBtn').disabled = !state.previewSucceeded;
+  $('advDownloadBtn').disabled = !state.applied;
 }
 
 function updateWorkflowState() {
@@ -56,6 +60,15 @@ function updateWorkflowState() {
 
   $('stepUploadIndicator').className = `workflow-step${workbookReady ? ' complete' : (!state.workbook ? ' current' : '')}`;
   $('stepTemplateIndicator').className = `workflow-step${hasTemplate ? ' complete' : (workbookReady ? ' current' : '')}`;
+  $('step1Indicator').className = `workflow-step${workbookReady ? ' complete' : ' current'}`;
+  const hasCourse = !!$('courseNameInput').value.trim();
+  $('step2Indicator').className = `workflow-step${hasCourse ? ' complete' : (workbookReady ? ' current' : '')}`;
+  $('step3Indicator').className = `workflow-step${state.guidedUnits.length ? ' complete' : (hasCourse ? ' current' : '')}`;
+
+  $('guidedWorkflowRow').classList.toggle('hidden', state.mode !== 'guided');
+  $('advancedWorkflowRow').classList.toggle('hidden', state.mode !== 'advanced');
+  $('guidedSection').classList.toggle('hidden', state.mode !== 'guided');
+  $('advancedSection').classList.toggle('hidden', state.mode !== 'advanced');
 
   updateWorkflowButtons();
   renderStatusPanel();
@@ -226,6 +239,7 @@ function getMatchedSheets(sheetNames) {
 $('copyBlankBtn').onclick = async () => {
   await navigator.clipboard.writeText(BLANK_TEMPLATE);
   refreshWorkbookDiagnostics();
+    if (hasWorkbookWithDates()) setNextStep('Next: enter your course name and number of units.');
 };
 $('loadExampleBtn').onclick = () => { $('templateInput').value = EXAMPLE_TEMPLATE; state.templateLoaded = true; state.validationSucceeded = false; state.previewSucceeded = false; refreshWorkbookDiagnostics(); };
 $('templateInput').addEventListener('input', () => { state.templateLoaded = !!$('templateInput').value.trim(); state.validationSucceeded = false; state.previewSucceeded = false; refreshWorkbookDiagnostics(); });
@@ -432,7 +446,7 @@ $('validateBtn').onclick = () => {
   updateWorkflowState();
 };
 
-$('previewBtn').onclick = () => {
+$('advPreviewBtn').onclick = () => {
   if (!state.workbook || !state.diagnostics) {
     setError('No workbook uploaded. Upload a workbook before generating preview.');
     return;
@@ -529,7 +543,7 @@ function renderPreview(rows) {
   </tr></thead><tbody>${rows.map((r) => `<tr><td>${r.term}</td><td>${r.unit}</td><td>${r.days}</td><td>${r.startDate}</td><td>${r.endDate}</td><td>${r.skippedBlockedDays}</td><td>${r.eventWarnings}</td><td>${r.status}</td></tr>`).join('')}</tbody></table>`;
 }
 
-$('applyBtn').onclick = () => {
+$('advApplyBtn').onclick = () => {
   if (!state.workbook || !state.preview || !state.diagnostics) {
     setError('Cannot apply changes: generate a preview first.');
     return;
@@ -580,7 +594,7 @@ function colorDateCell(ws, addr, fill) {
   cell.fill = { ...fill };
 }
 
-$('downloadBtn').onclick = async () => {
+$('advDownloadBtn').onclick = async () => {
   if (!state.workbook || !state.applied) {
     setError('No applied changes to export.');
     return;
@@ -600,6 +614,95 @@ $('downloadBtn').onclick = async () => {
     setError(`Export failed: ${err.message}`);
   }
 };
+
+
+function getDefaultTemplateFromGuided() {
+  const courseName = $('courseNameInput').value.trim();
+  const unitLines = state.guidedUnits.map((u) => `${u.termName} | ${u.unitName} | ${u.days}`).join('\n');
+  return `SCHOOL_YEAR:
+2026-2027
+
+COURSE_NAME:
+${courseName}
+
+SKIP_WEEKENDS:
+yes
+
+TERMS:
+Fall Semester | 2026-08-12 | 2026-12-14
+Spring Semester | 2027-01-06 | 2027-05-14
+
+BLOCKED_DAYS:
+Labor Day | 2026-09-07
+Flex Day PD / Student Holiday | 2026-10-09
+Professional Development / Student Holiday | 2026-10-12
+Fall Break | 2026-11-23 | 2026-11-27
+Winter Break | 2026-12-21 | 2027-01-03
+Teacher Workday / Student Holiday | 2027-01-04
+Professional Development / Student Holiday | 2027-01-05
+Student / Staff Holiday | 2027-01-18
+Professional Development / Student Holiday | 2027-02-12
+Flex Day PD / Student Holiday | 2027-02-15
+Spring Break | 2027-03-08 | 2027-03-12
+Holiday | 2027-03-26
+Professional Development / Student Holiday | 2027-04-30
+Final Exams | 2027-05-17 | 2027-05-20
+Professional Development / Student Holiday | 2027-05-21
+
+EVENT_NOTES:
+Growth Pre-Test | 2026-08-24 | 2026-08-27
+Growth Pre-Test Choir/Band | 2026-09-02 | 2026-09-04
+TSIA2 English | 2026-09-28
+TSIA2 Math | 2026-10-06
+PSAT | 2026-10-22
+CBE | 2026-10-27 | 2026-10-30
+Eng I & II Interim | 2026-11-03
+Alg I Interim | 2026-11-19
+EOC Retakes | 2026-12-01 | 2026-12-10
+Midterms | 2026-12-15 | 2026-12-18
+CBE / ASVAB | 2027-01-19 | 2027-01-22
+Eng I & II Interim | 2027-01-26 | 2027-01-27
+Bio & US Hist Interim | 2027-02-10
+Alg I Interim | 2027-02-23
+TELPAS | 2027-03-02 | 2027-03-04
+TSIA2 English | 2027-03-18
+TSIA2 Math | 2027-03-25
+SAT Day for Juniors | 2027-03-30
+English I & II EOC | 2027-04-08
+Bio & US Hist EOC | 2027-04-15
+Alg I EOC | 2027-04-27
+Growth Post Test | 2027-04-28 | 2027-05-03
+AP / IBC Testing Window | 2027-05-04 | 2027-05-14
+
+UNIT_PLAN:
+${unitLines}
+`;
+}
+function validateGuided(render=true){
+ const errors=[];
+ if(!$('courseNameInput').value.trim()) errors.push('Course name is required.');
+ if(state.guidedUnits.length<1) errors.push('Number of units must be at least 1.');
+ state.guidedUnits.forEach((u,i)=>{ if(!u.unitName.trim()) errors.push(`Row ${i+1}: unit name is required.`); if(!Number.isInteger(Number(u.days))||Number(u.days)<=0) errors.push(`Row ${i+1}: instructional days must be greater than 0.`); if(!['Fall Semester','Spring Semester'].includes(u.termName)) errors.push(`Row ${i+1}: valid term is required.`);});
+ if(render){$('validationOutput').innerHTML = errors.length ? `<p class="error">Guided validation errors:</p><ul>${errors.map(e=>`<li>${e}</li>`).join('')}</ul>` : '<p class="ok">Guided unit table is valid. Next: generate preview.</p>'; }
+ return {ok:!errors.length,errors};
+}
+function renderUnitTable(){
+ if(!state.guidedUnits.length){$('unitTableOutput').textContent='Create a unit table to begin.';return;}
+ $('unitTableOutput').innerHTML = `<table><thead><tr><th>Unit #</th><th>Term</th><th>Unit Name</th><th>Instructional Days</th></tr></thead><tbody>${state.guidedUnits.map((u,i)=>`<tr><td>${i+1}</td><td><select data-i="${i}" data-k="termName"><option ${u.termName==='Fall Semester'?'selected':''}>Fall Semester</option><option ${u.termName==='Spring Semester'?'selected':''}>Spring Semester</option></select></td><td><input data-i="${i}" data-k="unitName" value="${u.unitName.replace(/"/g,'&quot;')}" /></td><td><input type="number" min="1" data-i="${i}" data-k="days" value="${u.days}" /></td></tr>`).join('')}</tbody></table>`;
+ $('unitTableOutput').querySelectorAll('input,select').forEach(el=>el.addEventListener('input',e=>{const i=Number(e.target.dataset.i); const k=e.target.dataset.k; state.guidedUnits[i][k]=k==='days'?Number(e.target.value):e.target.value; validateGuided(); updateWorkflowState();}));
+ validateGuided();
+ updateWorkflowState();
+}
+$('modeGuided').onchange=()=>{state.mode='guided'; updateWorkflowState();};
+$('modeAdvanced').onchange=()=>{state.mode='advanced'; updateWorkflowState();};
+$('createUnitTableBtn').onclick=()=>{const n=Number($('unitCountInput').value); if(!Number.isInteger(n)||n<1){$('validationOutput').innerHTML='<p class="error">Number of units must be at least 1.</p>';return;} state.guidedUnits=[]; for(let i=0;i<n;i++){state.guidedUnits.push({termName:i<Math.ceil(n/2)?'Fall Semester':'Spring Semester',unitName:'',days:1});} renderUnitTable(); setNextStep('Next: fill in each unit name and instructional day count.');};
+$('addUnitRowBtn').onclick=()=>{state.guidedUnits.push({termName:'Spring Semester',unitName:'',days:1}); renderUnitTable();};
+$('removeUnitRowBtn').onclick=()=>{state.guidedUnits.pop(); renderUnitTable();};
+$('clearUnitTableBtn').onclick=()=>{state.guidedUnits=[]; renderUnitTable();};
+$('previewBtn').onclick=()=>{ if(!state.workbook||!state.diagnostics){setError('No workbook uploaded. Upload a workbook before generating preview.'); return;} const v=validateGuided(true); if(!v.ok) return; $('templateInput').value=getDefaultTemplateFromGuided(); const parsed=parseTemplate($('templateInput').value); state.validationSucceeded=true; state.previewSucceeded=false; if(!parsed.ok){ setError('Internal guided template generation failed.'); return;} $('advPreviewBtn').onclick(); setNextStep('Review the start and end dates. If they look correct, apply changes.');};
+$('applyBtn').onclick=()=>{$('advApplyBtn').onclick(); if(state.applied) setNextStep('Download the edited workbook.');};
+$('downloadBtn').onclick=async()=>{$('advDownloadBtn').onclick();};
+$('courseNameInput').addEventListener('input',()=>{updateWorkflowState();});
 
 function setError(message) {
   $('validationOutput').innerHTML = `<p class="error">${message}</p>`;
