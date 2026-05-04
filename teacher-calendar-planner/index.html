@@ -13,14 +13,26 @@
     <h1>Teacher Pacing Calendar Planner (Private / Local)</h1>
 
     <section>
-      <h2>Upload Calendar File</h2>
-      <input id="fileInput" type="file" accept=".xlsx,.xlsm,.xls" />
-      <p id="fileStatus" class="status">No workbook loaded.</p>
+      <h2>Workflow</h2>
+      <div class="button-row workflow-row">
+        <button id="stepUploadBtn" type="button" disabled>1. Upload</button>
+        <button id="stepTemplateBtn" type="button" disabled>2. Load/Paste Template</button>
+        <button id="validateBtn" type="button" disabled>3. Validate</button>
+        <button id="previewBtn" type="button" disabled>4. Generate Preview</button>
+        <button id="applyBtn" type="button" disabled>5. Apply Changes</button>
+        <button id="downloadBtn" type="button" disabled>6. Download Workbook</button>
+      </div>
     </section>
 
     <section>
-      <h2>Workbook Diagnostics</h2>
-      <div id="diagnostics" class="panel">Upload a workbook to view diagnostics.</div>
+      <h2>Status</h2>
+      <div id="statusPanel" class="panel">Upload a workbook to begin.</div>
+    </section>
+
+    <section>
+      <h2>Upload Calendar File</h2>
+      <input id="fileInput" type="file" accept=".xlsx,.xlsm,.xls" />
+      <p id="fileStatus" class="status">No workbook loaded.</p>
     </section>
 
     <section>
@@ -34,13 +46,7 @@
 
     <section>
       <h2>Validate Template</h2>
-      <button id="validateBtn" type="button">Validate Template</button>
       <div id="validationOutput" class="panel">Validation output appears here.</div>
-    </section>
-
-    <section>
-      <h2>Generate Pacing Plan</h2>
-      <button id="previewBtn" type="button">Generate Preview</button>
     </section>
 
     <section>
@@ -50,13 +56,15 @@
 
     <section>
       <h2>Apply to Workbook</h2>
-      <button id="applyBtn" type="button" disabled>Apply Changes</button>
       <p id="applyStatus" class="status"></p>
     </section>
 
     <section>
-      <h2>Export Edited Calendar</h2>
-      <button id="downloadBtn" type="button" disabled>Download Edited Workbook</button>
+      <h2>Advanced Diagnostics</h2>
+      <details>
+        <summary>Advanced Diagnostics</summary>
+        <div id="diagnostics" class="panel">Upload a workbook to view diagnostics.</div>
+      </details>
     </section>
   </main>
 </body>
