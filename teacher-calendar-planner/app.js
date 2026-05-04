@@ -26,9 +26,9 @@ function hasWorkbookWithDates() {
 }
 
 function updateWorkflowButtons() {
-  const workbookReady = hasWorkbookWithDates();
+  const workbookLoaded = !!state.workbook;
   const hasTemplate = !!($('templateInput').value || '').trim();
-  $('validateBtn').disabled = !(workbookReady && hasTemplate);
+  $('validateBtn').disabled = !(workbookLoaded && hasTemplate);
   $('previewBtn').disabled = !state.validationSucceeded;
   $('applyBtn').disabled = !state.previewSucceeded;
   $('downloadBtn').disabled = !state.applied;
@@ -82,6 +82,16 @@ function renderStatusPanel() {
 function setNextStep(message) {
   state.nextStep = message;
   renderStatusPanel();
+}
+
+function refreshWorkbookDiagnostics() {
+  if (!state.workbook) {
+    updateWorkflowState();
+    return;
+  }
+  state.diagnostics = detectWorkbookDates(state.workbook, state.workbookName);
+  renderDiagnostics(state.diagnostics);
+  updateWorkflowState();
 }
 
 function isoDate(value) { return new Date(value).toISOString().slice(0, 10); }
@@ -215,10 +225,10 @@ function getMatchedSheets(sheetNames) {
 
 $('copyBlankBtn').onclick = async () => {
   await navigator.clipboard.writeText(BLANK_TEMPLATE);
-  updateWorkflowState();
+  refreshWorkbookDiagnostics();
 };
-$('loadExampleBtn').onclick = () => { $('templateInput').value = EXAMPLE_TEMPLATE; state.templateLoaded = true; state.validationSucceeded = false; state.previewSucceeded = false; updateWorkflowState(); };
-$('templateInput').addEventListener('input', () => { state.templateLoaded = !!$('templateInput').value.trim(); state.validationSucceeded = false; state.previewSucceeded = false; updateWorkflowState(); });
+$('loadExampleBtn').onclick = () => { $('templateInput').value = EXAMPLE_TEMPLATE; state.templateLoaded = true; state.validationSucceeded = false; state.previewSucceeded = false; refreshWorkbookDiagnostics(); };
+$('templateInput').addEventListener('input', () => { state.templateLoaded = !!$('templateInput').value.trim(); state.validationSucceeded = false; state.previewSucceeded = false; refreshWorkbookDiagnostics(); });
 
 $('fileInput').onchange = async (e) => {
   const file = e.target.files?.[0];
@@ -238,9 +248,7 @@ $('fileInput').onchange = async (e) => {
     state.previewSucceeded = false;
     $('fileStatus').textContent = `Loaded: ${file.name}`;
 
-    state.diagnostics = detectWorkbookDates(state.workbook, file.name);
-    renderDiagnostics(state.diagnostics);
-    updateWorkflowState();
+    refreshWorkbookDiagnostics();
   } catch (err) {
     setError(`Failed to read workbook: ${err.message}`);
   }
