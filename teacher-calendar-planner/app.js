@@ -11,7 +11,7 @@ const BLANK_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\n\nSKIP_WEEKENDS
 
 const EXAMPLE_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\nAlgebra 2\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\nFall Semester | 2026-08-12 | 2026-12-14\nSpring Semester | 2027-01-06 | 2027-05-14\n\nBLOCKED_DAYS:\nLabor Day | 2026-09-07\nFlex Day PD / Student Holiday | 2026-10-09\nProfessional Development / Student Holiday | 2026-10-12\nFall Break | 2026-11-23 | 2026-11-27\nWinter Break | 2026-12-21 | 2027-01-03\nTeacher Workday / Student Holiday | 2027-01-04\nProfessional Development / Student Holiday | 2027-01-05\nStudent / Staff Holiday | 2027-01-18\nProfessional Development / Student Holiday | 2027-02-12\nFlex Day PD / Student Holiday | 2027-02-15\nSpring Break | 2027-03-08 | 2027-03-12\nHoliday | 2027-03-26\nProfessional Development / Student Holiday | 2027-04-30\nFinal Exams | 2027-05-17 | 2027-05-20\nProfessional Development / Student Holiday | 2027-05-21\n\nEVENT_NOTES:\nGrowth Pre-Test | 2026-08-24 | 2026-08-27\nGrowth Pre-Test Choir/Band | 2026-09-02 | 2026-09-04\nTSIA2 English | 2026-09-28\nTSIA2 Math | 2026-10-06\nPSAT | 2026-10-22\nCBE | 2026-10-27 | 2026-10-30\nEng I & II Interim | 2026-11-03\nAlg I Interim | 2026-11-19\nEOC Retakes | 2026-12-01 | 2026-12-10\nMidterms | 2026-12-15 | 2026-12-18\nCBE / ASVAB | 2027-01-19 | 2027-01-22\nEng I & II Interim | 2027-01-26 | 2027-01-27\nBio & US Hist Interim | 2027-02-10\nAlg I Interim | 2027-02-23\nTELPAS | 2027-03-02 | 2027-03-04\nTSIA2 English | 2027-03-18\nTSIA2 Math | 2027-03-25\nSAT Day for Juniors | 2027-03-30\nEnglish I & II EOC | 2027-04-08\nBio & US Hist EOC | 2027-04-15\nAlg I EOC | 2027-04-27\nGrowth Post Test | 2027-04-28 | 2027-05-03\nAP / IBC Testing Window | 2027-05-04 | 2027-05-14\n\nUNIT_PLAN:\nFall Semester | Unit 00 Fundamentals | 13\nFall Semester | Unit 01 Linear F(x) | 13\nFall Semester | Unit 02 Systems | 13\nFall Semester | Unit 03 Quadratics | 13\nFall Semester | Unit 04 Quadratics Pt 2 | 16\nFall Semester | Unit 04.5 | 11\nSpring Semester | Unit 05 Polynomials | 17\nSpring Semester | Unit 06 Rational Exponents / Radical Functions | 16\nSpring Semester | Unit 07 Exponential / Logarithms | 24\nSpring Semester | Unit 08 Rational Functions | 20\nSpring Semester | Unit 09 Regressions and Review | 7\n`;
 
-const state = { workbook: null, workbookName: '', diagnostics: null, parsed: null, preview: null, applied: false, exportWarning: '', templateLoaded: false, validationSucceeded: false, previewSucceeded: false, nextStep: 'Next: upload a workbook.' };
+const state = { workbook: null, workbookName: '', diagnostics: null, parsed: null, preview: null, applied: false, exportWarning: '', templateLoaded: false, validationSucceeded: false, previewSucceeded: false, nextStep: 'Upload a workbook to begin.' };
 const $ = (id) => document.getElementById(id);
 
 
@@ -21,13 +21,44 @@ if (typeof ExcelJS === 'undefined') {
 }
 
 
+function hasWorkbookWithDates() {
+  return !!(state.workbook && state.diagnostics && state.diagnostics.totalDateCells > 0);
+}
+
 function updateWorkflowButtons() {
-  const hasWorkbook = !!state.workbook;
+  const workbookReady = hasWorkbookWithDates();
   const hasTemplate = !!($('templateInput').value || '').trim();
-  $('validateBtn').disabled = !(hasWorkbook && hasTemplate);
+  $('validateBtn').disabled = !(workbookReady && hasTemplate);
   $('previewBtn').disabled = !state.validationSucceeded;
   $('applyBtn').disabled = !state.previewSucceeded;
   $('downloadBtn').disabled = !state.applied;
+}
+
+function updateWorkflowState() {
+  const workbookReady = hasWorkbookWithDates();
+  const hasTemplate = !!($('templateInput').value || '').trim();
+
+  if (!state.workbook) {
+    state.nextStep = 'Upload a workbook to begin.';
+  } else if (!workbookReady) {
+    state.nextStep = 'Workbook loaded, but no date cells were detected. Check workbook diagnostics.';
+  } else if (state.applied) {
+    state.nextStep = 'Changes applied. Next: download the edited workbook.';
+  } else if (state.previewSucceeded) {
+    state.nextStep = 'Preview ready. Review dates, then click Apply Changes.';
+  } else if (state.validationSucceeded) {
+    state.nextStep = 'Template valid. Next: click Generate Preview.';
+  } else if (hasTemplate) {
+    state.nextStep = 'Template loaded. Next: click Validate Template.';
+  } else {
+    state.nextStep = 'Workbook loaded. Next: load or paste a planning template.';
+  }
+
+  $('stepUploadIndicator').className = `workflow-step${workbookReady ? ' complete' : (!state.workbook ? ' current' : '')}`;
+  $('stepTemplateIndicator').className = `workflow-step${hasTemplate ? ' complete' : (workbookReady ? ' current' : '')}`;
+
+  updateWorkflowButtons();
+  renderStatusPanel();
 }
 
 function renderStatusPanel() {
@@ -184,9 +215,10 @@ function getMatchedSheets(sheetNames) {
 
 $('copyBlankBtn').onclick = async () => {
   await navigator.clipboard.writeText(BLANK_TEMPLATE);
+  updateWorkflowState();
 };
-$('loadExampleBtn').onclick = () => { $('templateInput').value = EXAMPLE_TEMPLATE; state.templateLoaded = true; state.validationSucceeded = false; state.previewSucceeded = false; setNextStep('Next: validate the template.'); updateWorkflowButtons(); };
-$('templateInput').addEventListener('input', () => { state.templateLoaded = !!$('templateInput').value.trim(); state.validationSucceeded = false; state.previewSucceeded = false; updateWorkflowButtons(); });
+$('loadExampleBtn').onclick = () => { $('templateInput').value = EXAMPLE_TEMPLATE; state.templateLoaded = true; state.validationSucceeded = false; state.previewSucceeded = false; updateWorkflowState(); };
+$('templateInput').addEventListener('input', () => { state.templateLoaded = !!$('templateInput').value.trim(); state.validationSucceeded = false; state.previewSucceeded = false; updateWorkflowState(); });
 
 $('fileInput').onchange = async (e) => {
   const file = e.target.files?.[0];
@@ -208,8 +240,7 @@ $('fileInput').onchange = async (e) => {
 
     state.diagnostics = detectWorkbookDates(state.workbook, file.name);
     renderDiagnostics(state.diagnostics);
-    setNextStep('Next: load or paste a planning template.');
-    updateWorkflowButtons();
+    updateWorkflowState();
   } catch (err) {
     setError(`Failed to read workbook: ${err.message}`);
   }
@@ -388,10 +419,9 @@ $('validateBtn').onclick = () => {
     } else {
       $('validationOutput').innerHTML = '<p class="ok">Template validation passed.</p>';
       state.validationSucceeded = true;
-      setNextStep('Next: generate the preview.');
     }
   }
-  updateWorkflowButtons();
+  updateWorkflowState();
 };
 
 $('previewBtn').onclick = () => {
@@ -481,8 +511,7 @@ $('previewBtn').onclick = () => {
   state.preview = previewRows;
   state.previewSucceeded = true;
   renderPreview(previewRows);
-  setNextStep('Next: review the dates, then apply changes.');
-  updateWorkflowButtons();
+  updateWorkflowState();
 };
 
 function renderPreview(rows) {
@@ -529,8 +558,7 @@ $('applyBtn').onclick = () => {
 
   state.applied = true;
   $('applyStatus').textContent = `Applied changes in memory. START labels: ${startLabels}; END labels: ${endLabels}; Date cells colored: ${dateCellsColored}; Note cells updated: ${noteCellsTouched.size}. Use Download Edited Workbook to save a new file.`;
-  setNextStep('Next: download the edited workbook.');
-  updateWorkflowButtons();
+  updateWorkflowState();
 };
 
 function appendNote(ws, addr, text) {
@@ -570,7 +598,4 @@ function setError(message) {
 }
 
 
-$('stepUploadBtn').disabled = false;
-$('stepTemplateBtn').disabled = false;
-renderStatusPanel();
-updateWorkflowButtons();
+updateWorkflowState();
