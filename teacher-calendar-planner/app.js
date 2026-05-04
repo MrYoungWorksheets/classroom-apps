@@ -11,13 +11,46 @@ const BLANK_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\n\nSKIP_WEEKENDS
 
 const EXAMPLE_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\nAlgebra 2\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\nFall Semester | 2026-08-12 | 2026-12-14\nSpring Semester | 2027-01-06 | 2027-05-14\n\nBLOCKED_DAYS:\nLabor Day | 2026-09-07\nFlex Day PD / Student Holiday | 2026-10-09\nProfessional Development / Student Holiday | 2026-10-12\nFall Break | 2026-11-23 | 2026-11-27\nWinter Break | 2026-12-21 | 2027-01-03\nTeacher Workday / Student Holiday | 2027-01-04\nProfessional Development / Student Holiday | 2027-01-05\nStudent / Staff Holiday | 2027-01-18\nProfessional Development / Student Holiday | 2027-02-12\nFlex Day PD / Student Holiday | 2027-02-15\nSpring Break | 2027-03-08 | 2027-03-12\nHoliday | 2027-03-26\nProfessional Development / Student Holiday | 2027-04-30\nFinal Exams | 2027-05-17 | 2027-05-20\nProfessional Development / Student Holiday | 2027-05-21\n\nEVENT_NOTES:\nGrowth Pre-Test | 2026-08-24 | 2026-08-27\nGrowth Pre-Test Choir/Band | 2026-09-02 | 2026-09-04\nTSIA2 English | 2026-09-28\nTSIA2 Math | 2026-10-06\nPSAT | 2026-10-22\nCBE | 2026-10-27 | 2026-10-30\nEng I & II Interim | 2026-11-03\nAlg I Interim | 2026-11-19\nEOC Retakes | 2026-12-01 | 2026-12-10\nMidterms | 2026-12-15 | 2026-12-18\nCBE / ASVAB | 2027-01-19 | 2027-01-22\nEng I & II Interim | 2027-01-26 | 2027-01-27\nBio & US Hist Interim | 2027-02-10\nAlg I Interim | 2027-02-23\nTELPAS | 2027-03-02 | 2027-03-04\nTSIA2 English | 2027-03-18\nTSIA2 Math | 2027-03-25\nSAT Day for Juniors | 2027-03-30\nEnglish I & II EOC | 2027-04-08\nBio & US Hist EOC | 2027-04-15\nAlg I EOC | 2027-04-27\nGrowth Post Test | 2027-04-28 | 2027-05-03\nAP / IBC Testing Window | 2027-05-04 | 2027-05-14\n\nUNIT_PLAN:\nFall Semester | Unit 00 Fundamentals | 13\nFall Semester | Unit 01 Linear F(x) | 13\nFall Semester | Unit 02 Systems | 13\nFall Semester | Unit 03 Quadratics | 13\nFall Semester | Unit 04 Quadratics Pt 2 | 16\nFall Semester | Unit 04.5 | 11\nSpring Semester | Unit 05 Polynomials | 17\nSpring Semester | Unit 06 Rational Exponents / Radical Functions | 16\nSpring Semester | Unit 07 Exponential / Logarithms | 24\nSpring Semester | Unit 08 Rational Functions | 20\nSpring Semester | Unit 09 Regressions and Review | 7\n`;
 
-const state = { workbook: null, workbookName: '', diagnostics: null, parsed: null, preview: null, applied: false, exportWarning: '' };
+const state = { workbook: null, workbookName: '', diagnostics: null, parsed: null, preview: null, applied: false, exportWarning: '', templateLoaded: false, validationSucceeded: false, previewSucceeded: false, nextStep: 'Next: upload a workbook.' };
 const $ = (id) => document.getElementById(id);
 
 
 if (typeof ExcelJS === 'undefined') {
   state.exportWarning = 'Warning: this export method may not preserve original workbook formatting.';
   $('fileStatus').textContent = state.exportWarning;
+}
+
+
+function updateWorkflowButtons() {
+  const hasWorkbook = !!state.workbook;
+  const hasTemplate = !!($('templateInput').value || '').trim();
+  $('validateBtn').disabled = !(hasWorkbook && hasTemplate);
+  $('previewBtn').disabled = !state.validationSucceeded;
+  $('applyBtn').disabled = !state.previewSucceeded;
+  $('downloadBtn').disabled = !state.applied;
+}
+
+function renderStatusPanel() {
+  const d = state.diagnostics;
+  const workbookLoaded = state.workbook ? 'Yes' : 'No';
+  const sheetsMatched = d && d.missingSheets.length === 0 ? 'Yes' : 'No';
+  const dateCellsDetected = d ? d.totalDateCells : 0;
+  const firstDate = d?.firstDate || 'N/A';
+  const lastDate = d?.lastDate || 'N/A';
+  $('statusPanel').innerHTML = `
+    <ul>
+      <li><strong>Workbook loaded:</strong> ${workbookLoaded}</li>
+      <li><strong>Sheets matched:</strong> ${d ? sheetsMatched : 'No'}</li>
+      <li><strong>Date cells detected:</strong> ${dateCellsDetected}</li>
+      <li><strong>First detected date:</strong> ${firstDate}</li>
+      <li><strong>Last detected date:</strong> ${lastDate}</li>
+      <li><strong>Next step:</strong> ${state.nextStep}</li>
+    </ul>`;
+}
+
+function setNextStep(message) {
+  state.nextStep = message;
+  renderStatusPanel();
 }
 
 function isoDate(value) { return new Date(value).toISOString().slice(0, 10); }
@@ -152,7 +185,8 @@ function getMatchedSheets(sheetNames) {
 $('copyBlankBtn').onclick = async () => {
   await navigator.clipboard.writeText(BLANK_TEMPLATE);
 };
-$('loadExampleBtn').onclick = () => { $('templateInput').value = EXAMPLE_TEMPLATE; };
+$('loadExampleBtn').onclick = () => { $('templateInput').value = EXAMPLE_TEMPLATE; state.templateLoaded = true; state.validationSucceeded = false; state.previewSucceeded = false; setNextStep('Next: validate the template.'); updateWorkflowButtons(); };
+$('templateInput').addEventListener('input', () => { state.templateLoaded = !!$('templateInput').value.trim(); state.validationSucceeded = false; state.previewSucceeded = false; updateWorkflowButtons(); });
 
 $('fileInput').onchange = async (e) => {
   const file = e.target.files?.[0];
@@ -168,12 +202,14 @@ $('fileInput').onchange = async (e) => {
     state.workbookName = file.name;
     state.applied = false;
     state.preview = null;
-    $('downloadBtn').disabled = true;
-    $('applyBtn').disabled = true;
+    state.validationSucceeded = false;
+    state.previewSucceeded = false;
     $('fileStatus').textContent = `Loaded: ${file.name}`;
 
     state.diagnostics = detectWorkbookDates(state.workbook, file.name);
     renderDiagnostics(state.diagnostics);
+    setNextStep('Next: load or paste a planning template.');
+    updateWorkflowButtons();
   } catch (err) {
     setError(`Failed to read workbook: ${err.message}`);
   }
@@ -342,6 +378,8 @@ function parseTemplate(text) {
 $('validateBtn').onclick = () => {
   const parsed = parseTemplate($('templateInput').value);
   state.parsed = parsed.ok ? parsed.data : null;
+  state.validationSucceeded = false;
+  state.previewSucceeded = false;
   if (!parsed.ok) {
     $('validationOutput').innerHTML = `<p class="error">Validation errors:</p><ul>${parsed.errors.map((e) => `<li>${e}</li>`).join('')}</ul>`;
   } else {
@@ -349,8 +387,11 @@ $('validateBtn').onclick = () => {
       $('validationOutput').innerHTML = '<p class="error">Workbook loaded, but no usable date cells were detected. Check workbook diagnostics.</p>';
     } else {
       $('validationOutput').innerHTML = '<p class="ok">Template validation passed.</p>';
+      state.validationSucceeded = true;
+      setNextStep('Next: generate the preview.');
     }
   }
+  updateWorkflowButtons();
 };
 
 $('previewBtn').onclick = () => {
@@ -359,6 +400,7 @@ $('previewBtn').onclick = () => {
     return;
   }
   const parsed = parseTemplate($('templateInput').value);
+  state.previewSucceeded = false;
   if (!parsed.ok) {
     $('validationOutput').innerHTML = `<p class="error">Fix template errors first.</p><ul>${parsed.errors.map((e) => `<li>${e}</li>`).join('')}</ul>`;
     return;
@@ -437,8 +479,10 @@ $('previewBtn').onclick = () => {
 
   state.parsed = parsed.data;
   state.preview = previewRows;
+  state.previewSucceeded = true;
   renderPreview(previewRows);
-  $('applyBtn').disabled = false;
+  setNextStep('Next: review the dates, then apply changes.');
+  updateWorkflowButtons();
 };
 
 function renderPreview(rows) {
@@ -484,8 +528,9 @@ $('applyBtn').onclick = () => {
   }
 
   state.applied = true;
-  $('downloadBtn').disabled = false;
   $('applyStatus').textContent = `Applied changes in memory. START labels: ${startLabels}; END labels: ${endLabels}; Date cells colored: ${dateCellsColored}; Note cells updated: ${noteCellsTouched.size}. Use Download Edited Workbook to save a new file.`;
+  setNextStep('Next: download the edited workbook.');
+  updateWorkflowButtons();
 };
 
 function appendNote(ws, addr, text) {
@@ -523,3 +568,9 @@ $('downloadBtn').onclick = async () => {
 function setError(message) {
   $('validationOutput').innerHTML = `<p class="error">${message}</p>`;
 }
+
+
+$('stepUploadBtn').disabled = false;
+$('stepTemplateBtn').disabled = false;
+renderStatusPanel();
+updateWorkflowButtons();

@@ -19,3 +19,8 @@ table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 th, td { border: 1px solid #cbd5e1; padding: .4rem; vertical-align: top; }
 th { background: #e2e8f0; }
 code { background: #e5e7eb; padding: .1rem .25rem; border-radius: 4px; }
+
+.workflow-row button { flex: 1 1 150px; }
+#statusPanel ul { margin: 0; padding-left: 1.2rem; }
+#statusPanel li { margin-bottom: .25rem; }
+details > summary { cursor: pointer; font-weight: 600; margin-bottom: .5rem; }
