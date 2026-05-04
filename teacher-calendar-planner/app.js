@@ -4,15 +4,21 @@ const GRADING_PERIOD_LABELS = ['1st', '2nd', '3rd', '4th'];
 const DATE_COLUMNS = ['A', 'C', 'E', 'G', 'I'];
 const NOTE_COLUMNS = ['B', 'D', 'F', 'H', 'J'];
 
-const START_FILL = { patternType: 'solid', fgColor: { rgb: 'C6EFCE' } }; // green
-const END_FILL = { patternType: 'solid', fgColor: { rgb: 'F4CCCC' } };   // light red
+const START_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } }; // light green
+const END_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4CCCC' } };   // light red
 
 const BLANK_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\nFall Semester | YYYY-MM-DD | YYYY-MM-DD\nSpring Semester | YYYY-MM-DD | YYYY-MM-DD\n\nBLOCKED_DAYS:\nName | YYYY-MM-DD\nName | YYYY-MM-DD | YYYY-MM-DD\n\nEVENT_NOTES:\nName | YYYY-MM-DD\nName | YYYY-MM-DD | YYYY-MM-DD\n\nUNIT_PLAN:\nFall Semester | Unit Name | Number of Instructional Days\nSpring Semester | Unit Name | Number of Instructional Days\n`;
 
 const EXAMPLE_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\nAlgebra 2\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\nFall Semester | 2026-08-12 | 2026-12-14\nSpring Semester | 2027-01-06 | 2027-05-14\n\nBLOCKED_DAYS:\nLabor Day | 2026-09-07\nFlex Day PD / Student Holiday | 2026-10-09\nProfessional Development / Student Holiday | 2026-10-12\nFall Break | 2026-11-23 | 2026-11-27\nWinter Break | 2026-12-21 | 2027-01-03\nTeacher Workday / Student Holiday | 2027-01-04\nProfessional Development / Student Holiday | 2027-01-05\nStudent / Staff Holiday | 2027-01-18\nProfessional Development / Student Holiday | 2027-02-12\nFlex Day PD / Student Holiday | 2027-02-15\nSpring Break | 2027-03-08 | 2027-03-12\nHoliday | 2027-03-26\nProfessional Development / Student Holiday | 2027-04-30\nFinal Exams | 2027-05-17 | 2027-05-20\nProfessional Development / Student Holiday | 2027-05-21\n\nEVENT_NOTES:\nGrowth Pre-Test | 2026-08-24 | 2026-08-27\nGrowth Pre-Test Choir/Band | 2026-09-02 | 2026-09-04\nTSIA2 English | 2026-09-28\nTSIA2 Math | 2026-10-06\nPSAT | 2026-10-22\nCBE | 2026-10-27 | 2026-10-30\nEng I & II Interim | 2026-11-03\nAlg I Interim | 2026-11-19\nEOC Retakes | 2026-12-01 | 2026-12-10\nMidterms | 2026-12-15 | 2026-12-18\nCBE / ASVAB | 2027-01-19 | 2027-01-22\nEng I & II Interim | 2027-01-26 | 2027-01-27\nBio & US Hist Interim | 2027-02-10\nAlg I Interim | 2027-02-23\nTELPAS | 2027-03-02 | 2027-03-04\nTSIA2 English | 2027-03-18\nTSIA2 Math | 2027-03-25\nSAT Day for Juniors | 2027-03-30\nEnglish I & II EOC | 2027-04-08\nBio & US Hist EOC | 2027-04-15\nAlg I EOC | 2027-04-27\nGrowth Post Test | 2027-04-28 | 2027-05-03\nAP / IBC Testing Window | 2027-05-04 | 2027-05-14\n\nUNIT_PLAN:\nFall Semester | Unit 00 Fundamentals | 13\nFall Semester | Unit 01 Linear F(x) | 13\nFall Semester | Unit 02 Systems | 13\nFall Semester | Unit 03 Quadratics | 13\nFall Semester | Unit 04 Quadratics Pt 2 | 16\nFall Semester | Unit 04.5 | 11\nSpring Semester | Unit 05 Polynomials | 17\nSpring Semester | Unit 06 Rational Exponents / Radical Functions | 16\nSpring Semester | Unit 07 Exponential / Logarithms | 24\nSpring Semester | Unit 08 Rational Functions | 20\nSpring Semester | Unit 09 Regressions and Review | 7\n`;
 
-const state = { workbook: null, workbookName: '', diagnostics: null, parsed: null, preview: null, applied: false };
+const state = { workbook: null, workbookName: '', diagnostics: null, parsed: null, preview: null, applied: false, exportWarning: '' };
 const $ = (id) => document.getElementById(id);
+
+
+if (typeof ExcelJS === 'undefined') {
+  state.exportWarning = 'Warning: this export method may not preserve original workbook formatting.';
+  $('fileStatus').textContent = state.exportWarning;
+}
 
 function isoDate(value) { return new Date(value).toISOString().slice(0, 10); }
 function parseIso(dateStr) {
@@ -56,18 +62,18 @@ function inferSchoolYearForPeriod(periodLabel, schoolYear) {
 
 function readExcelDate(cell, context = {}) {
   if (!cell) return { ok: false };
-  if (cell.v instanceof Date && !Number.isNaN(cell.v.getTime())) {
-    return { ok: true, iso: isoDate(cell.v), raw: cell.v, type: 'Date object' };
+  const rawValue = getCellRawValue(cell);
+  if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) {
+    return { ok: true, iso: isoDate(rawValue), raw: rawValue, type: 'Date object' };
   }
-  if (typeof cell.v === 'number') {
-    const parsed = XLSX.SSF.parse_date_code(cell.v);
-    if (parsed && parsed.y && parsed.m && parsed.d) {
-      const dt = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
-      return { ok: true, iso: isoDate(dt), raw: cell.v, type: 'Excel serial date' };
+  if (typeof rawValue === 'number') {
+    const dt = excelSerialToDate(rawValue);
+    if (dt) {
+      return { ok: true, iso: isoDate(dt), raw: rawValue, type: 'Excel serial date' };
     }
   }
-  if (typeof cell.v === 'string') {
-    const trimmed = cell.v.trim();
+  if (typeof rawValue === 'string') {
+    const trimmed = rawValue.trim();
     const mdOnly = trimmed.match(/^(\d{1,2})\/(\d{1,2})$/);
     if (mdOnly) {
       const month = Number(mdOnly[1]);
@@ -78,28 +84,50 @@ function readExcelDate(cell, context = {}) {
       if (!inferredYear) {
         return {
           ok: false,
-          raw: cell.v,
+          raw: rawValue,
           type: 'non-date',
           warning: `Unable to infer year for month/day text "${trimmed}" in ${context.sheetName || 'unknown sheet'} (${context.periodLabel || 'unknown period'}).`
         };
       }
       const dt = new Date(Date.UTC(inferredYear, month - 1, day));
       if (dt.getUTCFullYear() !== inferredYear || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
-        return { ok: false, raw: cell.v, type: 'non-date' };
+        return { ok: false, raw: rawValue, type: 'non-date' };
       }
       return {
         ok: true,
         iso: isoDate(dt),
-        raw: cell.v,
+        raw: rawValue,
         type: sheetYear ? 'date-like text with sheet-year inference' : 'date-like text with school-year inference'
       };
     }
     const directIso = parseIso(trimmed);
-    if (directIso) return { ok: true, iso: isoDate(directIso), raw: cell.v, type: 'full date text' };
+    if (directIso) return { ok: true, iso: isoDate(directIso), raw: rawValue, type: 'full date text' };
     const attempt = new Date(trimmed);
-    if (!Number.isNaN(attempt.getTime())) return { ok: true, iso: isoDate(attempt), raw: cell.v, type: 'full date text' };
+    if (!Number.isNaN(attempt.getTime())) return { ok: true, iso: isoDate(attempt), raw: rawValue, type: 'full date text' };
   }
-  return { ok: false, raw: cell.v, type: 'non-date' };
+  return { ok: false, raw: rawValue, type: 'non-date' };
+}
+
+function excelSerialToDate(serial) {
+  if (!Number.isFinite(serial)) return null;
+  const excelEpoch = Date.UTC(1899, 11, 30);
+  const millis = Math.round(serial * 86400000);
+  const dt = new Date(excelEpoch + millis);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function getCellRawValue(cell) {
+  if (!cell) return null;
+  const value = cell.value;
+  if (value == null) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (value && typeof value === 'object') {
+    if (value.result != null) return value.result;
+    if (value.text != null) return value.text;
+    if (Array.isArray(value.richText)) return value.richText.map((rt) => rt.text || '').join('');
+  }
+  return null;
 }
 
 function getMatchedSheets(sheetNames) {
@@ -134,7 +162,9 @@ $('fileInput').onchange = async (e) => {
   }
   try {
     const buf = await file.arrayBuffer();
-    state.workbook = XLSX.read(buf, { type: 'array', cellStyles: true, cellDates: true, raw: true });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+    state.workbook = wb;
     state.workbookName = file.name;
     state.applied = false;
     state.preview = null;
@@ -153,7 +183,7 @@ function detectWorkbookDates(workbook, workbookName) {
   const templateSchoolYear = parseTemplate($('templateInput')?.value || '').data?.schoolYear || '';
   const diagnostics = {
     workbookName,
-    sheetNames: workbook.SheetNames,
+    sheetNames: workbook.worksheets.map((ws) => ws.name),
     missingSheets: [],
     perSheet: {},
     totalDateCells: 0,
@@ -165,7 +195,7 @@ function detectWorkbookDates(workbook, workbookName) {
     matchedSheets: []
   };
 
-  diagnostics.matchedSheets = getMatchedSheets(workbook.SheetNames);
+  diagnostics.matchedSheets = getMatchedSheets(diagnostics.sheetNames);
   diagnostics.missingSheets = diagnostics.matchedSheets.filter((m) => !m.actualName).map((m) => m.expectedName);
   if (diagnostics.missingSheets.length > 0) {
     diagnostics.warnings.push(`Missing expected sheets: ${diagnostics.missingSheets.join(', ')}`);
@@ -173,28 +203,25 @@ function detectWorkbookDates(workbook, workbookName) {
 
   for (const match of diagnostics.matchedSheets) {
     const sheetKey = `${match.expectedName} (${match.periodLabel})`;
-    const ws = match.actualName ? workbook.Sheets[match.actualName] : null;
+    const ws = match.actualName ? workbook.getWorksheet(match.actualName) : null;
     if (!ws) {
       diagnostics.perSheet[sheetKey] = [];
       continue;
     }
 
-    const ref = ws['!ref'];
-    if (!ref) {
+    if (!ws.actualRowCount) {
       diagnostics.skipped.push(`${match.actualName}: empty worksheet range`);
       diagnostics.perSheet[sheetKey] = [];
       continue;
     }
-
-    const range = XLSX.utils.decode_range(ref);
     const matches = [];
-
-    for (let r = range.s.r; r <= range.e.r; r++) {
+    const endRow = ws.actualRowCount || ws.rowCount;
+    for (let r = 1; r <= endRow; r++) {
       for (let i = 0; i < DATE_COLUMNS.length; i++) {
-        const dateAddr = `${DATE_COLUMNS[i]}${r + 1}`;
-        const noteAddr = `${NOTE_COLUMNS[i]}${r + 1}`;
-        const cell = ws[dateAddr];
-        if (!cell) continue;
+        const dateAddr = `${DATE_COLUMNS[i]}${r}`;
+        const noteAddr = `${NOTE_COLUMNS[i]}${r}`;
+        const cell = ws.getCell(dateAddr);
+        if (cell.value == null || cell.value === '') continue;
 
         const parsed = readExcelDate(cell, { sheetName: match.actualName, periodLabel: match.periodLabel, schoolYear: templateSchoolYear });
         if (!parsed.ok) {
@@ -205,7 +232,7 @@ function detectWorkbookDates(workbook, workbookName) {
         matches.push({
           sheetName: match.actualName,
           matchedPeriod: match.periodLabel,
-          row: r + 1,
+          row: r,
           dateAddr,
           noteAddr,
           date: parsed.iso,
@@ -432,41 +459,62 @@ $('applyBtn').onclick = () => {
     byDate.set(row.date, row);
   }
 
+  let startLabels = 0;
+  let endLabels = 0;
+  let dateCellsColored = 0;
+  const noteCellsTouched = new Set();
+
   for (const item of state.preview) {
     if (!item.startDate || item.startDate === 'N/A' || !item.endDate || item.endDate === 'N/A') continue;
     const start = byDate.get(item.startDate);
     const end = byDate.get(item.endDate);
     if (!start || !end) continue;
 
-    const startWs = state.workbook.Sheets[start.sheetName];
-    const endWs = state.workbook.Sheets[end.sheetName];
+    const startWs = state.workbook.getWorksheet(start.sheetName);
+    const endWs = state.workbook.getWorksheet(end.sheetName);
     appendNote(startWs, start.noteAddr, `START: ${item.unit}`);
     appendNote(endWs, end.noteAddr, `END: ${item.unit}`);
     colorDateCell(startWs, start.dateAddr, START_FILL);
     colorDateCell(endWs, end.dateAddr, END_FILL);
+    startLabels += 1;
+    endLabels += 1;
+    dateCellsColored += 2;
+    noteCellsTouched.add(`${start.sheetName}!${start.noteAddr}`);
+    noteCellsTouched.add(`${end.sheetName}!${end.noteAddr}`);
   }
 
   state.applied = true;
   $('downloadBtn').disabled = false;
-  $('applyStatus').textContent = 'Applied changes in memory. Use Download Edited Workbook to save a new file.';
+  $('applyStatus').textContent = `Applied changes in memory. START labels: ${startLabels}; END labels: ${endLabels}; Date cells colored: ${dateCellsColored}; Note cells updated: ${noteCellsTouched.size}. Use Download Edited Workbook to save a new file.`;
 };
 
 function appendNote(ws, addr, text) {
-  const existing = ws[addr]?.v?.toString() || '';
-  ws[addr] = { ...(ws[addr] || {}), t: 's', v: existing ? `${existing}\n\n${text}` : text };
+  const cell = ws.getCell(addr);
+  const existing = String(getCellRawValue(cell) || '').replace(/\s+$/g, '');
+  cell.value = existing ? `${existing}\n\n${text}` : text;
+  cell.alignment = { ...(cell.alignment || {}), wrapText: true };
 }
 function colorDateCell(ws, addr, fill) {
-  ws[addr] = { ...(ws[addr] || {}), s: { ...((ws[addr] && ws[addr].s) || {}), fill } };
+  const cell = ws.getCell(addr);
+  cell.fill = { ...fill };
 }
 
-$('downloadBtn').onclick = () => {
+$('downloadBtn').onclick = async () => {
   if (!state.workbook || !state.applied) {
     setError('No applied changes to export.');
     return;
   }
   try {
     const outputName = state.workbookName.replace(/\.(xlsx|xlsm|xls)$/i, '') + '-paced.xlsx';
-    XLSX.writeFile(state.workbook, outputName, { bookType: 'xlsx' });
+    const buf = await state.workbook.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = outputName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
   } catch (err) {
     setError(`Export failed: ${err.message}`);
   }
