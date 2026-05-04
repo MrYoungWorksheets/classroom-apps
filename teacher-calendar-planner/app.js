@@ -1,5 +1,6 @@
 // Workbook structure constants (configurable)
 const EXPECTED_SHEET_NAMES = ['1st 9 Weeks', '2nd 9 Weeks', '3rd 9 Weeks', '4th 9 Weeks'];
+const GRADING_PERIOD_LABELS = ['1st', '2nd', '3rd', '4th'];
 const DATE_COLUMNS = ['A', 'C', 'E', 'G', 'I'];
 const NOTE_COLUMNS = ['B', 'D', 'F', 'H', 'J'];
 
@@ -56,6 +57,25 @@ function readExcelDate(cell) {
   return { ok: false, raw: cell.v, type: 'non-date' };
 }
 
+function getMatchedSheets(sheetNames) {
+  const taken = new Set();
+  const matches = [];
+  for (let i = 0; i < EXPECTED_SHEET_NAMES.length; i++) {
+    const expectedName = EXPECTED_SHEET_NAMES[i];
+    const periodLabel = GRADING_PERIOD_LABELS[i];
+    let actualName = sheetNames.find((name) => name === expectedName);
+    let matchType = 'exact';
+    if (!actualName) {
+      const pattern = new RegExp(`\\b${periodLabel}\\b`, 'i');
+      actualName = sheetNames.find((name) => !taken.has(name) && pattern.test(name));
+      matchType = actualName ? 'pattern' : 'missing';
+    }
+    if (actualName) taken.add(actualName);
+    matches.push({ expectedName, periodLabel, actualName: actualName || null, matchType });
+  }
+  return matches;
+}
+
 $('copyBlankBtn').onclick = async () => {
   await navigator.clipboard.writeText(BLANK_TEMPLATE);
 };
@@ -64,7 +84,7 @@ $('loadExampleBtn').onclick = () => { $('templateInput').value = EXAMPLE_TEMPLAT
 $('fileInput').onchange = async (e) => {
   const file = e.target.files?.[0];
   if (!file) {
-    setError('No workbook selected. Please upload a .xlsx file.');
+    if (!state.workbook) setError('No workbook selected. Please upload a .xlsx file.');
     return;
   }
   try {
@@ -95,27 +115,28 @@ function detectWorkbookDates(workbook, workbookName) {
     lastDate: null,
     allAddresses: [],
     skipped: [],
-    warnings: []
+    warnings: [],
+    matchedSheets: []
   };
 
-  for (const expectedSheet of EXPECTED_SHEET_NAMES) {
-    if (!workbook.SheetNames.includes(expectedSheet)) diagnostics.missingSheets.push(expectedSheet);
-  }
+  diagnostics.matchedSheets = getMatchedSheets(workbook.SheetNames);
+  diagnostics.missingSheets = diagnostics.matchedSheets.filter((m) => !m.actualName).map((m) => m.expectedName);
   if (diagnostics.missingSheets.length > 0) {
     diagnostics.warnings.push(`Missing expected sheets: ${diagnostics.missingSheets.join(', ')}`);
   }
 
-  for (const sheetName of EXPECTED_SHEET_NAMES) {
-    const ws = workbook.Sheets[sheetName];
+  for (const match of diagnostics.matchedSheets) {
+    const sheetKey = `${match.expectedName} (${match.periodLabel})`;
+    const ws = match.actualName ? workbook.Sheets[match.actualName] : null;
     if (!ws) {
-      diagnostics.perSheet[sheetName] = [];
+      diagnostics.perSheet[sheetKey] = [];
       continue;
     }
 
     const ref = ws['!ref'];
     if (!ref) {
-      diagnostics.skipped.push(`${sheetName}: empty worksheet range`);
-      diagnostics.perSheet[sheetName] = [];
+      diagnostics.skipped.push(`${match.actualName}: empty worksheet range`);
+      diagnostics.perSheet[sheetKey] = [];
       continue;
     }
 
@@ -133,7 +154,8 @@ function detectWorkbookDates(workbook, workbookName) {
         if (!parsed.ok) continue;
 
         matches.push({
-          sheetName,
+          sheetName: match.actualName,
+          matchedPeriod: match.periodLabel,
           row: r + 1,
           dateAddr,
           noteAddr,
@@ -142,14 +164,14 @@ function detectWorkbookDates(workbook, workbookName) {
           interpretedAs: parsed.type
         });
         diagnostics.totalDateCells += 1;
-        diagnostics.allAddresses.push(`${sheetName}!${dateAddr}`);
+        diagnostics.allAddresses.push(`${match.actualName}!${dateAddr}`);
         if (!diagnostics.firstDate || parsed.iso < diagnostics.firstDate) diagnostics.firstDate = parsed.iso;
         if (!diagnostics.lastDate || parsed.iso > diagnostics.lastDate) diagnostics.lastDate = parsed.iso;
       }
     }
 
-    diagnostics.perSheet[sheetName] = matches;
-    if (!matches.length) diagnostics.warnings.push(`No date cells detected in ${sheetName} for date columns ${DATE_COLUMNS.join(', ')}`);
+    diagnostics.perSheet[sheetKey] = matches;
+    if (!matches.length) diagnostics.warnings.push(`No date cells detected in ${match.actualName} (matched ${match.periodLabel}) for date columns ${DATE_COLUMNS.join(', ')}`);
   }
 
   if (!diagnostics.totalDateCells) diagnostics.warnings.push('No date cells were detected in expected sheets/columns.');
@@ -165,6 +187,7 @@ function renderDiagnostics(diagnostics) {
       <li><strong>Workbook name:</strong> ${diagnostics.workbookName}</li>
       <li><strong>Sheet names found:</strong> ${diagnostics.sheetNames.join(', ') || 'None'}</li>
       <li><strong>Expected sheets found:</strong> ${expectedFound ? 'Yes' : 'No'}</li>
+      <li><strong>Sheet matching:</strong> ${diagnostics.matchedSheets.map((m) => `${m.expectedName} (${m.periodLabel}) → ${m.actualName || 'Not found'} [${m.matchType}]`).join(' | ')}</li>
       <li><strong>Date cells detected per sheet:</strong> ${Object.entries(diagnostics.perSheet).map(([s, arr]) => `${s}: ${arr.length}`).join(' | ')}</li>
       <li><strong>Total date cells detected:</strong> ${diagnostics.totalDateCells}</li>
       <li><strong>First detected date:</strong> ${diagnostics.firstDate || 'N/A'}</li>
@@ -174,8 +197,8 @@ function renderDiagnostics(diagnostics) {
       <li><strong>Warnings:</strong> ${diagnostics.warnings.join('; ') || 'None'}</li>
     </ul>
     <p><strong>Detection details (first 200): raw value → interpreted date, with paired note cell</strong></p>
-    <table><thead><tr><th>Sheet</th><th>Date Cell</th><th>Note Cell</th><th>Raw Value</th><th>Interpreted Date</th><th>Parse Type</th></tr></thead>
-    <tbody>${detailRows.map(x => `<tr><td>${x.sheetName}</td><td>${x.dateAddr}</td><td>${x.noteAddr}</td><td>${x.rawValue}</td><td>${x.date}</td><td>${x.interpretedAs}</td></tr>`).join('')}</tbody></table>`;
+    <table><thead><tr><th>Sheet</th><th>Matched Period</th><th>Date Cell</th><th>Note Cell</th><th>Raw Value</th><th>Interpreted Date</th><th>Parse Type</th></tr></thead>
+    <tbody>${detailRows.map(x => `<tr><td>${x.sheetName}</td><td>${x.matchedPeriod}</td><td>${x.dateAddr}</td><td>${x.noteAddr}</td><td>${x.rawValue}</td><td>${x.date}</td><td>${x.interpretedAs}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function parseTemplate(text) {
@@ -246,7 +269,11 @@ $('validateBtn').onclick = () => {
   if (!parsed.ok) {
     $('validationOutput').innerHTML = `<p class="error">Validation errors:</p><ul>${parsed.errors.map((e) => `<li>${e}</li>`).join('')}</ul>`;
   } else {
-    $('validationOutput').innerHTML = '<p class="ok">Template validation passed.</p>';
+    if (state.workbook && state.diagnostics && state.diagnostics.totalDateCells === 0) {
+      $('validationOutput').innerHTML = '<p class="error">Workbook loaded, but no usable date cells were detected. Check workbook diagnostics.</p>';
+    } else {
+      $('validationOutput').innerHTML = '<p class="ok">Template validation passed.</p>';
+    }
   }
 };
 
