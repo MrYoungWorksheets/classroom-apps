@@ -13,14 +13,30 @@
     <h1>Teacher Pacing Calendar Planner (Private / Local)</h1>
 
     <section>
+      <h2>Mode</h2>
+      <div class="button-row">
+        <label><input type="radio" name="plannerMode" id="modeGuided" value="guided" checked /> Guided PLC Mode</label>
+        <label><input type="radio" name="plannerMode" id="modeAdvanced" value="advanced" /> Advanced Template Mode</label>
+      </div>
+    </section>
+
+    <section>
       <h2>Workflow</h2>
-      <div class="button-row workflow-row">
+      <div class="button-row workflow-row" id="guidedWorkflowRow">
+        <div id="step1Indicator" class="workflow-step">Step 1: Upload Calendar</div>
+        <div id="step2Indicator" class="workflow-step">Step 2: Course Setup</div>
+        <div id="step3Indicator" class="workflow-step">Step 3: Unit List</div>
+        <button id="previewBtn" type="button" disabled>Step 4: Generate Preview</button>
+        <button id="applyBtn" type="button" disabled>Step 5: Apply Changes</button>
+        <button id="downloadBtn" type="button" disabled>Download Edited Workbook</button>
+      </div>
+      <div class="button-row workflow-row hidden" id="advancedWorkflowRow">
         <div id="stepUploadIndicator" class="workflow-step">1. Upload</div>
         <div id="stepTemplateIndicator" class="workflow-step">2. Load/Paste Template</div>
         <button id="validateBtn" type="button" disabled>3. Validate</button>
-        <button id="previewBtn" type="button" disabled>4. Generate Preview</button>
-        <button id="applyBtn" type="button" disabled>5. Apply Changes</button>
-        <button id="downloadBtn" type="button" disabled>6. Download Workbook</button>
+        <button id="advPreviewBtn" type="button" disabled>4. Generate Preview</button>
+        <button id="advApplyBtn" type="button" disabled>5. Apply Changes</button>
+        <button id="advDownloadBtn" type="button" disabled>6. Download Workbook</button>
       </div>
     </section>
 
@@ -30,22 +46,38 @@
     </section>
 
     <section>
-      <h2>Upload Calendar File</h2>
+      <h2>Step 1: Upload Calendar File</h2>
       <input id="fileInput" type="file" accept=".xlsx,.xlsm,.xls" />
       <p id="fileStatus" class="status">No workbook loaded.</p>
     </section>
 
-    <section>
+    <section id="guidedSection">
+      <h2>Step 2: Course Setup</h2>
+      <div class="button-row">
+        <input id="courseNameInput" type="text" placeholder="Course Name" />
+        <input id="unitCountInput" type="number" min="1" placeholder="Number of Units" />
+        <button id="createUnitTableBtn" type="button">Create Unit Table</button>
+      </div>
+      <h2>Step 3: Unit List</h2>
+      <div class="button-row">
+        <button id="addUnitRowBtn" type="button">Add Unit Row</button>
+        <button id="removeUnitRowBtn" type="button">Remove Last Unit Row</button>
+        <button id="clearUnitTableBtn" type="button">Clear Unit Table</button>
+      </div>
+      <div id="unitTableOutput" class="panel">Create a unit table to begin.</div>
+    </section>
+
+    <section id="advancedSection" class="hidden">
       <h2>Paste Planning Template</h2>
       <div class="button-row">
         <button id="copyBlankBtn" type="button">Copy Blank Template</button>
-        <button id="loadExampleBtn" type="button">Load Example Template</button>
+        <button id="loadExampleBtn" type="button">Load Algebra 2 Example Template</button>
       </div>
       <textarea id="templateInput" rows="20" placeholder="Paste Planning Template here..."></textarea>
     </section>
 
     <section>
-      <h2>Validate Template</h2>
+      <h2>Validation</h2>
       <div id="validationOutput" class="panel">Validation output appears here.</div>
     </section>
 
