@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teacher Calendar Planner</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <main class="container">
+    <h1>Teacher Pacing Calendar Planner (Private / Local)</h1>
+
+    <section>
+      <h2>Upload Calendar File</h2>
+      <input id="fileInput" type="file" accept=".xlsx,.xlsm,.xls" />
+      <p id="fileStatus" class="status">No workbook loaded.</p>
+    </section>
+
+    <section>
+      <h2>Workbook Diagnostics</h2>
+      <div id="diagnostics" class="panel">Upload a workbook to view diagnostics.</div>
+    </section>
+
+    <section>
+      <h2>Paste Planning Template</h2>
+      <div class="button-row">
+        <button id="copyBlankBtn" type="button">Copy Blank Template</button>
+        <button id="loadExampleBtn" type="button">Load Example Template</button>
+      </div>
+      <textarea id="templateInput" rows="20" placeholder="Paste Planning Template here..."></textarea>
+    </section>
+
+    <section>
+      <h2>Validate Template</h2>
+      <button id="validateBtn" type="button">Validate Template</button>
+      <div id="validationOutput" class="panel">Validation output appears here.</div>
+    </section>
+
+    <section>
+      <h2>Generate Pacing Plan</h2>
+      <button id="previewBtn" type="button">Generate Preview</button>
+    </section>
+
+    <section>
+      <h2>Preview</h2>
+      <div id="previewOutput" class="panel">Preview table appears here.</div>
+    </section>
+
+    <section>
+      <h2>Apply to Workbook</h2>
+      <button id="applyBtn" type="button" disabled>Apply Changes</button>
+      <p id="applyStatus" class="status"></p>
+    </section>
+
+    <section>
+      <h2>Export Edited Calendar</h2>
+      <button id="downloadBtn" type="button" disabled>Download Edited Workbook</button>
+    </section>
+  </main>
+</body>
+</html>
