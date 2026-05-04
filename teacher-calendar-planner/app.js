@@ -35,7 +35,26 @@ function datesInRange(startIso, endIso) {
   return out;
 }
 
-function readExcelDate(cell) {
+function parseSchoolYearRange(schoolYear) {
+  const m = String(schoolYear || '').trim().match(/^(\d{4})\s*-\s*(\d{4})$/);
+  if (!m) return null;
+  return { firstYear: Number(m[1]), secondYear: Number(m[2]) };
+}
+
+function inferSheetYear(sheetName) {
+  const m = String(sheetName || '').match(/\b(19|20)\d{2}\b/);
+  return m ? Number(m[0]) : null;
+}
+
+function inferSchoolYearForPeriod(periodLabel, schoolYear) {
+  const parsed = parseSchoolYearRange(schoolYear);
+  if (!parsed) return null;
+  if (periodLabel === '1st' || periodLabel === '2nd') return parsed.firstYear;
+  if (periodLabel === '3rd' || periodLabel === '4th') return parsed.secondYear;
+  return null;
+}
+
+function readExcelDate(cell, context = {}) {
   if (!cell) return { ok: false };
   if (cell.v instanceof Date && !Number.isNaN(cell.v.getTime())) {
     return { ok: true, iso: isoDate(cell.v), raw: cell.v, type: 'Date object' };
@@ -44,15 +63,41 @@ function readExcelDate(cell) {
     const parsed = XLSX.SSF.parse_date_code(cell.v);
     if (parsed && parsed.y && parsed.m && parsed.d) {
       const dt = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
-      return { ok: true, iso: isoDate(dt), raw: cell.v, type: 'Excel serial number' };
+      return { ok: true, iso: isoDate(dt), raw: cell.v, type: 'Excel serial date' };
     }
   }
   if (typeof cell.v === 'string') {
     const trimmed = cell.v.trim();
+    const mdOnly = trimmed.match(/^(\d{1,2})\/(\d{1,2})$/);
+    if (mdOnly) {
+      const month = Number(mdOnly[1]);
+      const day = Number(mdOnly[2]);
+      const sheetYear = inferSheetYear(context.sheetName);
+      const schoolYear = inferSchoolYearForPeriod(context.periodLabel, context.schoolYear);
+      const inferredYear = sheetYear || schoolYear;
+      if (!inferredYear) {
+        return {
+          ok: false,
+          raw: cell.v,
+          type: 'non-date',
+          warning: `Unable to infer year for month/day text "${trimmed}" in ${context.sheetName || 'unknown sheet'} (${context.periodLabel || 'unknown period'}).`
+        };
+      }
+      const dt = new Date(Date.UTC(inferredYear, month - 1, day));
+      if (dt.getUTCFullYear() !== inferredYear || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
+        return { ok: false, raw: cell.v, type: 'non-date' };
+      }
+      return {
+        ok: true,
+        iso: isoDate(dt),
+        raw: cell.v,
+        type: sheetYear ? 'date-like text with sheet-year inference' : 'date-like text with school-year inference'
+      };
+    }
     const directIso = parseIso(trimmed);
-    if (directIso) return { ok: true, iso: isoDate(directIso), raw: cell.v, type: 'ISO text' };
+    if (directIso) return { ok: true, iso: isoDate(directIso), raw: cell.v, type: 'full date text' };
     const attempt = new Date(trimmed);
-    if (!Number.isNaN(attempt.getTime())) return { ok: true, iso: isoDate(attempt), raw: cell.v, type: 'date-like text' };
+    if (!Number.isNaN(attempt.getTime())) return { ok: true, iso: isoDate(attempt), raw: cell.v, type: 'full date text' };
   }
   return { ok: false, raw: cell.v, type: 'non-date' };
 }
@@ -105,6 +150,7 @@ $('fileInput').onchange = async (e) => {
 };
 
 function detectWorkbookDates(workbook, workbookName) {
+  const templateSchoolYear = parseTemplate($('templateInput')?.value || '').data?.schoolYear || '';
   const diagnostics = {
     workbookName,
     sheetNames: workbook.SheetNames,
@@ -150,8 +196,11 @@ function detectWorkbookDates(workbook, workbookName) {
         const cell = ws[dateAddr];
         if (!cell) continue;
 
-        const parsed = readExcelDate(cell);
-        if (!parsed.ok) continue;
+        const parsed = readExcelDate(cell, { sheetName: match.actualName, periodLabel: match.periodLabel, schoolYear: templateSchoolYear });
+        if (!parsed.ok) {
+          if (parsed.warning) diagnostics.warnings.push(parsed.warning);
+          continue;
+        }
 
         matches.push({
           sheetName: match.actualName,
