@@ -10,122 +10,171 @@
 </head>
 <body>
   <main class="container">
-    <h1>Teacher Pacing Calendar Planner (Private / Local)</h1>
+    <h1>Teacher Calendar Planner <span class="privacy-note">Private / Local Browser Tool</span></h1>
 
-    <section>
-      <h2>Mode</h2>
-      <div class="button-row">
-        <label><input type="radio" name="plannerMode" id="modeGuided" value="guided" checked /> Guided PLC Mode</label>
-        <label><input type="radio" name="plannerMode" id="modeAdvanced" value="advanced" /> Advanced Template Mode</label>
+    <section class="mode-card" aria-label="Planner mode selection">
+      <h2>Choose Mode</h2>
+      <p>PLC Mode is the default teacher workflow. Advanced Mode keeps the manual tools available for fine-tuning and unusual files.</p>
+      <div class="button-row mode-row">
+        <label class="mode-choice"><input type="radio" name="plannerMode" id="modePlc" value="plc" checked /> PLC Mode</label>
+        <label class="mode-choice"><input type="radio" name="plannerMode" id="modeAdvanced" value="advanced" /> Advanced Mode</label>
       </div>
     </section>
 
     <section id="workflowSection" class="sticky-workflow" aria-label="Sticky workflow controls">
       <div class="workflow-heading-row">
-        <h2>Workflow</h2>
-        <p id="nextStepMessage" class="next-step-message">Next: upload a calendar.</p>
+        <h2 id="workflowTitle">PLC Mode Workflow</h2>
+        <p id="nextStepMessage" class="next-step-message">Next: upload a district YAG and blank curriculum map.</p>
       </div>
-      <div class="button-row workflow-row" id="guidedWorkflowRow">
-        <button id="wfUploadBtn" class="workflow-step workflow-control current" type="button">Step 1: Upload Calendar</button>
-        <button id="wfCourseBtn" class="workflow-step workflow-control" type="button">Step 2: Course Setup</button>
-        <button id="wfUnitBtn" class="workflow-step workflow-control" type="button">Step 3: Unit List</button>
-        <button id="previewBtn" class="workflow-control" type="button">Step 4: Generate Preview</button>
-        <button id="applyBtn" class="workflow-control" type="button">Step 5: Apply Changes</button>
-        <button id="downloadBtn" class="workflow-control" type="button">Download Edited Workbook</button>
+      <div class="button-row workflow-row" id="plcWorkflowRow">
+        <button id="wfPlcUploadBtn" class="workflow-step workflow-control current" type="button">1. Upload Files</button>
+        <button id="wfPlcExtractBtn" class="workflow-step workflow-control" type="button">2. Extract Units</button>
+        <button id="wfPlcReviewBtn" class="workflow-step workflow-control" type="button">3. Review Units</button>
+        <button id="wfPlcPreviewBtn" class="workflow-step workflow-control" type="button">4. Generate Preview</button>
+        <button id="wfPlcApplyBtn" class="workflow-step workflow-control" type="button">5. Apply</button>
+        <button id="wfPlcDownloadBtn" class="workflow-step workflow-control" type="button">6. Download</button>
       </div>
       <div class="button-row workflow-row hidden" id="advancedWorkflowRow">
-        <button id="wfAdvUploadBtn" class="workflow-step workflow-control current" type="button">1. Upload</button>
-        <button id="wfTemplateBtn" class="workflow-step workflow-control" type="button">2. Load/Paste Template</button>
-        <button id="validateBtn" class="workflow-control" type="button">3. Validate</button>
-        <button id="advPreviewBtn" class="workflow-control" type="button">4. Generate Preview from Template</button>
-        <button id="advApplyBtn" class="workflow-control" type="button">5. Apply Changes</button>
-        <button id="advDownloadBtn" class="workflow-control" type="button">6. Download Edited Workbook</button>
+        <button id="wfAdvDiagnosticsBtn" class="workflow-step workflow-control current" type="button">1. Diagnostics</button>
+        <button id="wfAdvSetupBtn" class="workflow-step workflow-control" type="button">2. Setup</button>
+        <button id="wfAdvUnitsBtn" class="workflow-step workflow-control" type="button">3. Units</button>
+        <button id="wfAdvFitBtn" class="workflow-step workflow-control" type="button">4. Fit Issues</button>
+        <button id="wfAdvPreviewBtn" class="workflow-step workflow-control" type="button">5. Preview</button>
+        <button id="wfAdvApplyDownloadBtn" class="workflow-step workflow-control" type="button">6. Apply/Download</button>
       </div>
     </section>
 
     <section>
-      <h2>Status</h2>
-      <div id="statusPanel" class="panel">Upload a workbook to begin.</div>
+      <h2>Status Summary</h2>
+      <div id="statusPanel" class="panel">Upload files to begin. Files stay in this browser; nothing is sent to a server.</div>
     </section>
 
-    <section id="uploadSection">
-      <h2>Step 1: Upload Calendar File</h2>
-      <input id="fileInput" type="file" accept=".xlsx,.xlsm,.xls" />
-      <p id="fileStatus" class="status">No workbook loaded.</p>
-    </section>
-
-    <section id="guidedSection">
-      <div id="courseSetupSection">
-        <h2>Step 2: Course Setup</h2>
-        <div class="button-row">
-          <input id="courseNameInput" type="text" placeholder="Course Name" />
-          <input id="unitCountInput" type="number" min="1" placeholder="Number of Units" />
+    <div id="plcModeSections">
+      <section id="plcUploadSection">
+        <h2>PLC Mode: Upload Files</h2>
+        <div class="two-column">
+          <div>
+            <label for="yagFileInput"><strong>Upload completed/balanced district YAG workbook</strong></label>
+            <input id="yagFileInput" type="file" accept=".xlsx,.xlsm,.xls" />
+            <p id="yagStatus" class="status">No YAG loaded.</p>
+          </div>
+          <div>
+            <label for="mapFileInput"><strong>Upload blank curriculum map workbook</strong></label>
+            <input id="mapFileInput" type="file" accept=".xlsx,.xlsm,.xls" />
+            <p id="mapStatus" class="status">No curriculum map loaded.</p>
+          </div>
         </div>
+        <p class="local-note">Privacy: this tool uses the Excel file only in memory in your browser. It does not upload files or call APIs.</p>
         <div class="button-row section-action-row">
-          <button id="createUnitTableBtn" type="button">Create Unit Table</button>
+          <button id="extractUnitsBtn" type="button">Extract Units from YAG</button>
+          <button id="openAdvancedFromPlcBtn" type="button">Open in Advanced Mode</button>
         </div>
-      </div>
-      <div id="unitListSection">
-        <h2>Step 3: Unit List</h2>
-        <div class="panel">
-          <label><input id="allowCrossTermInput" type="checkbox" checked /> Allow units to continue across semester or grading-period boundaries when needed.</label>
-          <p class="status">If checked, a unit may start in one term and finish in the next. Breaks and blocked days are still skipped. The preview will warn you when this happens.</p>
-        </div>
-        <div id="unitTableOutput" class="panel">Create a unit table to begin.</div>
+      </section>
+
+      <section id="plcUnitPlanSection">
+        <h2>PLC Mode: Extracted Unit Plan</h2>
+        <p>Review the extracted units by grading period. Make small edits here, or open Advanced Mode for detailed cleanup.</p>
+        <div id="plcExtractionSummary" class="compact-summary">No YAG extraction has been run.</div>
+        <div id="plcUnitTableOutput" class="panel">Extract units from the YAG to begin.</div>
         <div class="button-row section-action-row">
-          <button id="addUnitRowBtn" type="button">Add Unit Row</button>
-          <button id="removeUnitRowBtn" type="button">Remove Last Unit Row</button>
-          <button id="clearUnitTableBtn" type="button">Clear Unit Table</button>
-          <button id="validateUnitsBtn" type="button">Validate Units</button>
-          <button id="generatePreviewFromUnitsBtn" type="button">Generate Preview</button>
+          <button id="addPlcUnitRowBtn" type="button">Add Row</button>
+          <button id="generatePlcPreviewBtn" type="button">Generate Preview</button>
+          <button id="openAdvancedFromReviewBtn" type="button">Open in Advanced Mode</button>
         </div>
-      </div>
+      </section>
+
+    </div>
+
+    <section id="previewSection">
+      <h2><span class="plc-only-label">PLC Mode: </span>Preview Generated Curriculum Map</h2>
+        <div id="previewOutput" class="panel">Generate a preview to see unit start/end dates, warnings, and unused days.</div>
+        <div class="button-row section-action-row">
+          <button id="copyPreviewBtn" type="button">Copy Preview to Clipboard</button>
+          <button id="downloadPreviewCsvBtn" type="button">Download Preview CSV</button>
+          <button id="applyChangesBtn" type="button">Apply Changes</button>
+        </div>
+      </section>
+
+    <section id="applySection">
+      <h2><span class="plc-only-label">PLC Mode: </span>Apply and Download</h2>
+        <label class="danger-confirm"><input id="confirmUnscheduledInput" type="checkbox" /> I understand there are unscheduled units or serious warnings and still want to apply scheduled rows.</label>
+        <p id="applyStatus" class="status">No changes applied yet. The original uploaded workbook is never overwritten.</p>
+        <div class="button-row section-action-row">
+          <button id="downloadEditedBtn" type="button">Download Edited Curriculum Map</button>
+        </div>
     </section>
 
-    <section id="advancedSection" class="hidden">
-      <h2>Advanced Template Mode</h2>
-      <div id="templateSection">
-        <h3>Paste Planning Template</h3>
+    <div id="advancedModeSections" class="hidden">
+      <section id="advDiagnosticsSection">
+        <h2>Advanced Mode: Calendar / Workbook Diagnostics</h2>
+        <details>
+          <summary>Show full diagnostic details</summary>
+          <div id="diagnostics" class="panel">Upload a blank curriculum map workbook to view diagnostics.</div>
+        </details>
+      </section>
+
+      <section id="advSetupSection">
+        <h2>Advanced Mode: Grading Period Setup</h2>
+        <div id="gradingPeriodTableOutput" class="panel"></div>
+        <div class="button-row section-action-row">
+          <button id="resetGpDatesBtn" type="button">Reset Default Grading-Period Dates</button>
+          <button id="syncTemplateBtn" type="button">Update Planning Template from Tables</button>
+        </div>
+      </section>
+
+      <section id="advBlockedSection">
+        <h2>Advanced Mode: Blocked Days</h2>
+        <div id="blockedDaysTableOutput" class="panel"></div>
+        <div class="button-row section-action-row">
+          <button id="addBlockedDayBtn" type="button">Add Blocked Day</button>
+          <button id="exportBlockedDaysBtn" type="button">Export Blocked Days</button>
+        </div>
+      </section>
+
+      <section id="advEventsSection">
+        <h2>Advanced Mode: Event Notes</h2>
+        <div id="eventNotesTableOutput" class="panel"></div>
+        <div class="button-row section-action-row">
+          <button id="addEventNoteBtn" type="button">Add Event Note</button>
+        </div>
+      </section>
+
+      <section id="advUnitsSection">
+        <h2>Advanced Mode: Unit Plan Editor</h2>
+        <div id="advancedUnitTableOutput" class="panel">No unit rows yet. Extract in PLC Mode or add rows manually.</div>
+        <div class="button-row section-action-row">
+          <button id="addAdvUnitRowBtn" type="button">Add Unit Row</button>
+          <button id="moveAdvUnitUpBtn" type="button">Move Selected Up</button>
+          <button id="moveAdvUnitDownBtn" type="button">Move Selected Down</button>
+          <button id="generateAdvPreviewBtn" type="button">Generate Preview</button>
+        </div>
+      </section>
+
+      <section id="advFitSection">
+        <h2>Advanced Mode: Unused Days / Fit Issues</h2>
+        <div id="fitIssuesOutput" class="panel">Generate a preview to see unused days and fit issues.</div>
+        <div class="button-row section-action-row">
+          <button id="addUnusedToPreviousBtn" type="button">Add unused days to previous unit</button>
+          <button id="addUnusedToNextBtn" type="button">Add unused days to next unit</button>
+          <button id="distributeUnusedBtn" type="button">Distribute unused days across units in this grading period</button>
+          <button id="moveIssueNextGpBtn" type="button">Move this unit to next grading period</button>
+          <button id="allowIssueCrossGpBtn" type="button">Allow this unit to continue into next grading period</button>
+          <button id="reduceIssueUnitBtn" type="button">Reduce this unit by 1 day</button>
+          <button id="increaseNearbyUnitBtn" type="button">Increase nearby unit by 1 day</button>
+        </div>
+      </section>
+
+      <section id="advTemplateSection">
+        <h2>Advanced Mode: Planning Template Import / Export</h2>
+        <p>This is available for manual editing, backup, or unusual extraction results.</p>
         <div class="button-row">
           <button id="copyBlankBtn" type="button">Copy Blank Template</button>
           <button id="loadExampleBtn" type="button">Load Algebra 2 Example Template</button>
+          <button id="importTemplateBtn" type="button">Import Template into Tables</button>
         </div>
-        <textarea id="templateInput" rows="20" placeholder="Paste Planning Template here..."></textarea>
-        <div class="button-row section-action-row">
-          <button id="validateTemplateInContextBtn" type="button">Validate Template</button>
-          <button id="generateTemplatePreviewBtn" type="button">Generate Preview from Template</button>
-        </div>
-      </div>
-    </section>
-
-    <section id="validationSection">
-      <h2>Validation</h2>
-      <div id="validationOutput" class="panel">Validation output appears here.</div>
-    </section>
-
-    <section id="previewSection">
-      <h2>Preview</h2>
-      <div id="previewOutput" class="panel">Preview table appears here.</div>
-      <div class="button-row section-action-row">
-        <button id="applyFromPreviewBtn" type="button">Apply Changes</button>
-      </div>
-    </section>
-
-    <section id="applySection">
-      <h2>Apply to Workbook</h2>
-      <p id="applyStatus" class="status"></p>
-      <div class="button-row section-action-row">
-        <button id="downloadFromApplyBtn" type="button">Download Edited Workbook</button>
-      </div>
-    </section>
-
-    <section>
-      <h2>Advanced Diagnostics</h2>
-      <details>
-        <summary>Advanced Diagnostics</summary>
-        <div id="diagnostics" class="panel">Upload a workbook to view diagnostics.</div>
-      </details>
-    </section>
+        <textarea id="templateInput" rows="16" placeholder="Paste Planning Template here..."></textarea>
+      </section>
+    </div>
   </main>
 </body>
 </html>
