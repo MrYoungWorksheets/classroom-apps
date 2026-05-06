@@ -37,9 +37,9 @@
         <button id="wfAdvUploadBtn" class="workflow-step workflow-control current" type="button">1. Upload</button>
         <button id="wfTemplateBtn" class="workflow-step workflow-control" type="button">2. Load/Paste Template</button>
         <button id="validateBtn" class="workflow-control" type="button">3. Validate</button>
-        <button id="advPreviewBtn" class="workflow-control" type="button">4. Generate Preview</button>
+        <button id="advPreviewBtn" class="workflow-control" type="button">4. Generate Preview from Template</button>
         <button id="advApplyBtn" class="workflow-control" type="button">5. Apply Changes</button>
-        <button id="advDownloadBtn" class="workflow-control" type="button">6. Download Workbook</button>
+        <button id="advDownloadBtn" class="workflow-control" type="button">6. Download Edited Workbook</button>
       </div>
     </section>
 
@@ -60,23 +60,25 @@
         <div class="button-row">
           <input id="courseNameInput" type="text" placeholder="Course Name" />
           <input id="unitCountInput" type="number" min="1" placeholder="Number of Units" />
+        </div>
+        <div class="button-row section-action-row">
           <button id="createUnitTableBtn" type="button">Create Unit Table</button>
         </div>
       </div>
       <div id="unitListSection">
         <h2>Step 3: Unit List</h2>
-        <div class="button-row">
+        <div class="panel">
+          <label><input id="allowCrossTermInput" type="checkbox" checked /> Allow units to continue across semester or grading-period boundaries when needed.</label>
+          <p class="status">If checked, a unit may start in one term and finish in the next. Breaks and blocked days are still skipped. The preview will warn you when this happens.</p>
+        </div>
+        <div id="unitTableOutput" class="panel">Create a unit table to begin.</div>
+        <div class="button-row section-action-row">
           <button id="addUnitRowBtn" type="button">Add Unit Row</button>
           <button id="removeUnitRowBtn" type="button">Remove Last Unit Row</button>
           <button id="clearUnitTableBtn" type="button">Clear Unit Table</button>
           <button id="validateUnitsBtn" type="button">Validate Units</button>
           <button id="generatePreviewFromUnitsBtn" type="button">Generate Preview</button>
         </div>
-        <div class="panel">
-          <label><input id="allowCrossTermInput" type="checkbox" checked /> Allow units to continue across semester or grading-period boundaries when needed.</label>
-          <p class="status">If checked, a unit may start in one term and finish in the next. Breaks and blocked days are still skipped. The preview will warn you when this happens.</p>
-        </div>
-        <div id="unitTableOutput" class="panel">Create a unit table to begin.</div>
       </div>
     </section>
 
@@ -87,10 +89,12 @@
         <div class="button-row">
           <button id="copyBlankBtn" type="button">Copy Blank Template</button>
           <button id="loadExampleBtn" type="button">Load Algebra 2 Example Template</button>
-          <button id="validateTemplateInContextBtn" type="button">Validate Template</button>
-          <button id="generateTemplatePreviewBtn" type="button">Generate Preview</button>
         </div>
         <textarea id="templateInput" rows="20" placeholder="Paste Planning Template here..."></textarea>
+        <div class="button-row section-action-row">
+          <button id="validateTemplateInContextBtn" type="button">Validate Template</button>
+          <button id="generateTemplatePreviewBtn" type="button">Generate Preview from Template</button>
+        </div>
       </div>
     </section>
 
@@ -101,18 +105,18 @@
 
     <section id="previewSection">
       <h2>Preview</h2>
-      <div class="button-row">
+      <div id="previewOutput" class="panel">Preview table appears here.</div>
+      <div class="button-row section-action-row">
         <button id="applyFromPreviewBtn" type="button">Apply Changes</button>
       </div>
-      <div id="previewOutput" class="panel">Preview table appears here.</div>
     </section>
 
     <section id="applySection">
       <h2>Apply to Workbook</h2>
-      <div class="button-row">
+      <p id="applyStatus" class="status"></p>
+      <div class="button-row section-action-row">
         <button id="downloadFromApplyBtn" type="button">Download Edited Workbook</button>
       </div>
-      <p id="applyStatus" class="status"></p>
     </section>
 
     <section>

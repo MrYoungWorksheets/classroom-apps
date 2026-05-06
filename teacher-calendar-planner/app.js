@@ -45,8 +45,8 @@ function updateWorkflowButtons() {
   const unitReason = $('courseNameInput').value.trim() ? 'Fill in unit names and instructional days.' : 'Enter the course name and create a unit table first.';
   const guidedPreviewReason = !workbookLoaded
     ? 'Upload a calendar before generating preview.'
-    : (!guidedValid ? 'Complete the course setup and unit table before generating preview.' : 'Generate the pacing preview.');
-  const applyReason = state.previewSucceeded ? 'Apply the previewed changes to the workbook.' : 'Generate a successful preview before applying changes.';
+    : (!guidedValid ? 'Finish all unit names and instructional day counts before generating preview.' : 'Generate the pacing preview.');
+  const applyReason = state.previewSucceeded ? 'Apply the previewed changes to the workbook.' : 'Generate and review the preview before applying changes.';
   const downloadReason = state.applied ? 'Download the edited workbook.' : 'Apply changes before downloading the edited workbook.';
   const templateReason = workbookReady ? 'Paste or load a planning template.' : 'Upload a workbook with detected date cells first.';
   const validateReason = workbookLoaded && hasTemplate ? 'Validate the template.' : 'Upload a workbook and load or paste a template before validating.';
@@ -57,6 +57,7 @@ function updateWorkflowButtons() {
   setActionState('wfCourseBtn', workbookReady, courseReason);
   setActionState('wfUnitBtn', !!$('courseNameInput').value.trim(), unitReason);
   setActionState('wfTemplateBtn', workbookReady, templateReason);
+  setActionState('createUnitTableBtn', workbookReady, courseReason);
   setActionState('validateBtn', workbookLoaded && hasTemplate, validateReason);
   setActionState('validateTemplateInContextBtn', workbookLoaded && hasTemplate, validateReason);
   setActionState('previewBtn', state.mode === 'guided' && workbookLoaded && guidedValid, guidedPreviewReason);
@@ -164,8 +165,18 @@ function actionReady(id, fallbackMessage) {
   const el = $(id);
   if (!el || el.dataset.ready !== 'false') return true;
   const message = el.title || fallbackMessage;
+  setError(message);
   setNextStep(message);
   return false;
+}
+
+function reportActionError(actionName, err) {
+  if (window.console && typeof window.console.error === 'function') {
+    window.console.error(`${actionName} failed`, err);
+  }
+  const detail = err && err.message ? ` ${err.message}` : '';
+  setError(`${actionName} failed.${detail}`);
+  setNextStep(`${actionName} failed. Check the status message, then try again.`);
 }
 
 function handleUploadShortcut() {
@@ -806,7 +817,7 @@ function colorDateCell(ws, addr, fill) {
 async function downloadEditedWorkbook() {
   if (!state.workbook || !state.applied) {
     setError('No applied changes to export.');
-    return;
+    return false;
   }
   try {
     const outputName = state.workbookName.replace(/\.(xlsx|xlsm|xls)$/i, '') + '-paced.xlsx';
@@ -819,8 +830,11 @@ async function downloadEditedWorkbook() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
+    return true;
   } catch (err) {
     setError(`Export failed: ${err.message}`);
+    setNextStep('Download failed. Check the status message, then try again.');
+    return false;
   }
 }
 
@@ -904,23 +918,118 @@ function renderUnitTable(){
 }
 $('modeGuided').onchange=()=>{state.mode='guided'; updateWorkflowState();};
 $('modeAdvanced').onchange=()=>{state.mode='advanced'; updateWorkflowState();};
-$('createUnitTableBtn').onclick=()=>{const n=Number($('unitCountInput').value); if(!Number.isInteger(n)||n<1){$('validationOutput').innerHTML='<p class="error">Number of units must be at least 1.</p>';return;} state.guidedUnits=[]; for(let i=0;i<n;i++){state.guidedUnits.push({termName:i<Math.ceil(n/2)?'Fall Semester':'Spring Semester',unitName:'',days:1});} renderUnitTable(); setNextStep('Next: fill in each unit name and instructional day count.');};
-$('addUnitRowBtn').onclick=()=>{state.guidedUnits.push({termName:'Spring Semester',unitName:'',days:1}); renderUnitTable();};
-$('removeUnitRowBtn').onclick=()=>{state.guidedUnits.pop(); renderUnitTable();};
-$('clearUnitTableBtn').onclick=()=>{state.guidedUnits=[]; renderUnitTable();};
-function generateGuidedPreview(){ if(!actionReady('previewBtn', 'Complete the course setup and unit table before generating preview.')) return; if(!state.workbook||!state.diagnostics){setError('No workbook uploaded. Upload a workbook before generating preview.'); return;} const v=validateGuided(true); if(!v.ok) return; $('templateInput').value=getDefaultTemplateFromGuided(); const parsed=parseTemplate($('templateInput').value); state.validationSucceeded=true; state.previewSucceeded=false; if(!parsed.ok){ setError('Internal guided template generation failed.'); return;} generateAdvancedPreview(); scrollToSection('previewSection'); setNextStep('Next: review preview and apply changes.');}
-function handleApplyChanges(){ if(!actionReady(state.mode === 'advanced' ? 'advApplyBtn' : 'applyBtn', 'Generate a successful preview before applying changes.')) return; applyPreviewChanges(); if(state.applied){ scrollToSection('applySection'); setNextStep('Next: download edited workbook.'); }}
-async function handleDownloadWorkbook(){ if(!actionReady(state.mode === 'advanced' ? 'advDownloadBtn' : 'downloadBtn', 'Apply changes before downloading the edited workbook.')) return; await downloadEditedWorkbook();}
+function createUnitTable() {
+  try {
+    if (!actionReady('createUnitTableBtn', 'Upload a workbook with detected date cells first.')) return;
+    const n = Number($('unitCountInput').value);
+    if (!Number.isInteger(n) || n < 1) {
+      setError('Number of units must be at least 1.');
+      setNextStep('Next: enter the number of units, then create the unit table.');
+      return;
+    }
+    state.guidedUnits = [];
+    for (let i = 0; i < n; i++) {
+      state.guidedUnits.push({ termName: i < Math.ceil(n / 2) ? 'Fall Semester' : 'Spring Semester', unitName: '', days: 1 });
+    }
+    renderUnitTable();
+    setNextStep('Next: fill in each unit name, term, and instructional day count.');
+  } catch (err) {
+    reportActionError('Create Unit Table', err);
+  }
+}
+function addUnitRow() {
+  try {
+    state.guidedUnits.push({termName:'Spring Semester',unitName:'',days:1});
+    renderUnitTable();
+    setNextStep('Next: fill in each unit name, term, and instructional day count.');
+  } catch (err) {
+    reportActionError('Add Unit Row', err);
+  }
+}
+function removeUnitRow() {
+  try {
+    state.guidedUnits.pop();
+    renderUnitTable();
+    setNextStep(state.guidedUnits.length ? 'Next: review the remaining unit rows.' : 'Next: enter number of units and create unit table.');
+  } catch (err) {
+    reportActionError('Remove Last Unit Row', err);
+  }
+}
+function clearUnitTable() {
+  try {
+    state.guidedUnits=[];
+    renderUnitTable();
+    setNextStep('Next: enter number of units and create unit table.');
+  } catch (err) {
+    reportActionError('Clear Unit Table', err);
+  }
+}
+function validateGuidedUnits() {
+  try {
+    validateGuided(true);
+    scrollToSection('validationSection');
+    updateWorkflowState();
+  } catch (err) {
+    reportActionError('Validate Units', err);
+  }
+}
+function generateGuidedPreview(){
+  try {
+    if(!actionReady('previewBtn', 'Finish all unit names and instructional day counts before generating preview.')) return;
+    if(!state.workbook||!state.diagnostics){setError('No workbook uploaded. Upload a workbook before generating preview.'); setNextStep('Upload a calendar before generating preview.'); return;}
+    const v=validateGuided(true);
+    if(!v.ok){setNextStep('Finish all unit names and instructional day counts before generating preview.'); return;}
+    $('templateInput').value=getDefaultTemplateFromGuided();
+    const parsed=parseTemplate($('templateInput').value);
+    state.validationSucceeded=true;
+    state.previewSucceeded=false;
+    if(!parsed.ok){ setError('Internal guided template generation failed.'); setNextStep('Preview could not be generated. Check the status message.'); return;}
+    generateAdvancedPreview();
+    scrollToSection('previewSection');
+    if (state.previewSucceeded) setNextStep('Preview ready. Review the start and end dates, then apply changes.');
+    else setNextStep('Preview generated with issues. Review the preview status before applying changes.');
+  } catch (err) {
+    reportActionError('Generate Preview', err);
+  }
+}
+function handleApplyChanges(){
+  try {
+    if(!actionReady(state.mode === 'advanced' ? 'advApplyBtn' : 'applyBtn', 'Generate and review the preview before applying changes.')) return;
+    applyPreviewChanges();
+    if(state.applied){ scrollToSection('applySection'); setNextStep('Changes applied. Next: download the edited workbook.'); }
+  } catch (err) {
+    reportActionError('Apply Changes', err);
+  }
+}
+async function handleDownloadWorkbook(){
+  try {
+    if(!actionReady(state.mode === 'advanced' ? 'advDownloadBtn' : 'downloadBtn', 'Apply changes before downloading the edited workbook.')) return;
+    const downloaded = await downloadEditedWorkbook();
+    if (downloaded) setNextStep('Download started for the edited workbook.');
+  } catch (err) {
+    reportActionError('Download Edited Workbook', err);
+  }
+}
 function handleValidateTemplate() {
-  if (!actionReady('validateBtn', 'Upload a workbook and load or paste a template before validating.')) return;
-  validateTemplate();
-  scrollToSection('validationSection');
+  try {
+    if (!actionReady('validateBtn', 'Upload a workbook and load or paste a template before validating.')) return;
+    validateTemplate();
+    scrollToSection('validationSection');
+  } catch (err) {
+    reportActionError('Validate Template', err);
+  }
 }
 
 function handleAdvancedPreview() {
-  if (!actionReady('advPreviewBtn', 'Validate the template before generating preview.')) return;
-  generateAdvancedPreview();
-  scrollToSection('previewSection');
+  try {
+    if (!actionReady('advPreviewBtn', 'Validate the template before generating preview.')) return;
+    generateAdvancedPreview();
+    scrollToSection('previewSection');
+    if (state.previewSucceeded) setNextStep('Preview ready. Review the start and end dates, then apply changes.');
+    else setNextStep('Preview generated with issues. Review the preview status before applying changes.');
+  } catch (err) {
+    reportActionError('Generate Preview from Template', err);
+  }
 }
 
 $('wfUploadBtn').onclick = handleUploadShortcut;
@@ -928,6 +1037,10 @@ $('wfAdvUploadBtn').onclick = handleUploadShortcut;
 $('wfCourseBtn').onclick = handleCourseShortcut;
 $('wfUnitBtn').onclick = handleUnitShortcut;
 $('wfTemplateBtn').onclick = handleTemplateShortcut;
+$('createUnitTableBtn').onclick = createUnitTable;
+$('addUnitRowBtn').onclick = addUnitRow;
+$('removeUnitRowBtn').onclick = removeUnitRow;
+$('clearUnitTableBtn').onclick = clearUnitTable;
 $('validateBtn').onclick = handleValidateTemplate;
 $('validateTemplateInContextBtn').onclick = handleValidateTemplate;
 $('previewBtn').onclick = generateGuidedPreview;
@@ -940,11 +1053,7 @@ $('applyFromPreviewBtn').onclick = handleApplyChanges;
 $('downloadBtn').onclick = handleDownloadWorkbook;
 $('advDownloadBtn').onclick = handleDownloadWorkbook;
 $('downloadFromApplyBtn').onclick = handleDownloadWorkbook;
-$('validateUnitsBtn').onclick = () => {
-  validateGuided(true);
-  scrollToSection('validationSection');
-  updateWorkflowState();
-};
+$('validateUnitsBtn').onclick = validateGuidedUnits;
 
 $('courseNameInput').addEventListener('input',()=>{updateWorkflowState();});
 $('unitCountInput').addEventListener('input',()=>{updateWorkflowState();});
