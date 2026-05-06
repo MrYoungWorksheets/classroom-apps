@@ -23,8 +23,14 @@
 
     <section id="workflowSection" class="sticky-workflow" aria-label="Sticky workflow controls">
       <div class="workflow-heading-row">
-        <h2 id="workflowTitle">PLC Mode Workflow</h2>
-        <p id="nextStepMessage" class="next-step-message">Next: upload a district YAG and blank curriculum map.</p>
+        <div>
+          <h2 id="workflowTitle">PLC Mode Workflow</h2>
+          <p id="nextStepMessage" class="next-step-message">Next: upload a district YAG and blank curriculum map.</p>
+        </div>
+        <div class="reset-control" aria-label="Start over controls">
+          <button id="startOverBtn" class="start-over-button" type="button">Ugh! Start Over</button>
+          <p class="reset-helper">Clears this session and returns the tool to a blank start.</p>
+        </div>
       </div>
       <div class="button-row workflow-row" id="plcWorkflowRow">
         <button id="wfPlcUploadBtn" class="workflow-step workflow-control current" type="button">1. Upload Files</button>

@@ -47,6 +47,11 @@ input[type="file"] { display: block; margin-top: .5rem; }
   backdrop-filter: blur(4px);
 }
 .workflow-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .5rem; }
+
+.reset-control { display: flex; flex-direction: column; align-items: flex-end; gap: .25rem; flex: 0 0 auto; }
+.start-over-button { background: #fff7ed; border-color: #fca5a5; color: #991b1b; }
+.start-over-button:hover { background: #fee2e2; border-color: #f87171; }
+.reset-helper { margin: 0; max-width: 18rem; color: #7f1d1d; font-size: .85rem; text-align: right; }
 .workflow-heading-row h2 { margin: 0; }
 .next-step-message { margin: 0; color: #1d4ed8; font-weight: 700; }
 .workflow-row button { flex: 1 1 145px; }
@@ -63,6 +68,8 @@ details > summary { cursor: pointer; font-weight: 600; margin-bottom: .5rem; }
   section { scroll-margin-top: 12rem; }
   .sticky-workflow { top: 0; border-radius: 0 0 8px 8px; }
   .workflow-heading-row { align-items: flex-start; flex-direction: column; gap: .25rem; }
+  .reset-control { align-items: flex-start; width: 100%; }
+  .reset-helper { text-align: left; max-width: none; }
   .workflow-row button { flex: 1 1 135px; }
   .two-column { grid-template-columns: 1fr; }
 }
