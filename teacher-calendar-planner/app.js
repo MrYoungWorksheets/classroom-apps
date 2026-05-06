@@ -9,6 +9,12 @@ const EXPECTED_SHEET_NAMES = ['1st 9 Weeks', '2nd 9 Weeks', '3rd 9 Weeks', '4th 
 const GRADING_PERIOD_LABELS = ['1st', '2nd', '3rd', '4th'];
 const DATE_COLUMNS = ['A', 'C', 'E', 'G', 'I'];
 const NOTE_COLUMNS = ['B', 'D', 'F', 'H', 'J'];
+const FALL_PERIODS = new Set(['1st', '2nd']);
+const SPRING_PERIODS = new Set(['3rd', '4th']);
+const BLOCKED_NOTE_PATTERN = /(student\s+holiday|staff\s+holiday|teacher\s+workday|professional\s+development|\bPD\b|holiday|fall\s+break|winter\s+break|spring\s+break|\bbreak\b|finals?|midterms?|early\s+release)/i;
+const EVENT_NOTE_PATTERN = /(testing|\bEOC\b|interim|benchmark|\bCBE\b|\bPSAT\b|\bSAT\b|TELPAS|TSIA|growth\s+pre[-\s]?test|growth\s+post[-\s]?test|\bAP\b|\bIBC\b|ASVAB)/i;
+const NON_INSTRUCTIONAL_SECTION_PATTERN = /(anticipated\s+non[-\s]?instructional\s+days|non[-\s]?instructional\s+days|student\s+holiday|staff\s+holiday|teacher\s+workday|professional\s+development|\bPD\b|holiday|fall\s+break|winter\s+break|spring\s+break|\bbreak\b|finals?|midterms?|early\s+release)/i;
+
 
 const DEFAULT_BLOCKED_DAYS = [
   { name: 'Labor Day', start: '2026-09-07', end: '2026-09-07' },
@@ -117,6 +123,12 @@ const state = {
   mapWorkbook: null,
   mapName: '',
   diagnostics: null,
+  schoolYear: '2026-2027',
+  schoolYearSource: 'Fallback/demo default',
+  mapSchoolYear: '',
+  yagSchoolYear: '',
+  inferenceWarnings: ['Using fallback 2026-2027 dates. Upload a curriculum map or review Advanced Mode settings.'],
+  usingFallbackDates: true,
   courseName: '',
   gradingPeriods: cloneRows(PLC_GRADING_PERIOD_CONFIG),
   blockedDays: cloneRows(DEFAULT_BLOCKED_DAYS),
@@ -125,6 +137,8 @@ const state = {
   extractionWarnings: [],
   extractionSummary: '',
   yagCapacitySummary: [],
+  yagDetectedBlockedDays: [],
+  yagDetectedEventNotes: [],
   yagSheetDiagnostics: null,
   preview: [],
   previewSucceeded: false,
@@ -210,6 +224,130 @@ function cellText(cell) {
   return String(raw).replace(/\s+/g, ' ').trim();
 }
 
+
+function normalizeSchoolYear(startYear, endYear = startYear + 1) {
+  if (!Number.isInteger(startYear) || !Number.isInteger(endYear)) return '';
+  return `${startYear}-${endYear}`;
+}
+
+function parseSchoolYearText(text) {
+  const s = String(text || '');
+  const full = s.match(/\b(20\d{2})\s*[-–—/]\s*(20\d{2})\b/);
+  if (full) return normalizeSchoolYear(Number(full[1]), Number(full[2]));
+  const short = s.match(/\b(20\d{2})\s*[-–—/]\s*(\d{2})\b/);
+  if (short) {
+    const start = Number(short[1]);
+    const end = Number(`${String(start).slice(0, 2)}${short[2]}`);
+    return normalizeSchoolYear(start, end);
+  }
+  return '';
+}
+
+function yearFromSchoolYear(schoolYear, periodLabel) {
+  const m = String(schoolYear || '').match(/^(20\d{2})-(20\d{2})$/);
+  if (!m) return null;
+  if (FALL_PERIODS.has(periodLabel)) return Number(m[1]);
+  if (SPRING_PERIODS.has(periodLabel)) return Number(m[2]);
+  return null;
+}
+
+function getSheetCalendarYear(sheetName, periodLabel, yagSchoolYear = '') {
+  const text = String(sheetName || '');
+  const yearMatch = text.match(/\b(20\d{2})\b/);
+  if (yearMatch) return Number(yearMatch[1]);
+  return yearFromSchoolYear(yagSchoolYear, periodLabel);
+}
+
+function inferMapSchoolYearFromSheets(matchedSheets) {
+  const fallYears = [];
+  const springYears = [];
+  matchedSheets.forEach((m) => {
+    const yearMatch = String(m.actualName || '').match(/\b(20\d{2})\b/);
+    if (!yearMatch) return;
+    const year = Number(yearMatch[1]);
+    if (/fall/i.test(m.actualName) || FALL_PERIODS.has(m.periodLabel)) fallYears.push(year);
+    if (/spring/i.test(m.actualName) || SPRING_PERIODS.has(m.periodLabel)) springYears.push(year);
+  });
+  const fall = fallYears.length ? Math.min(...fallYears) : null;
+  const spring = springYears.length ? Math.max(...springYears) : null;
+  if (fall && spring) return normalizeSchoolYear(fall, spring);
+  if (fall) return normalizeSchoolYear(fall, fall + 1);
+  if (spring) return normalizeSchoolYear(spring - 1, spring);
+  return '';
+}
+
+function inferSchoolYearFromDates(firstDate, lastDate) {
+  if (!firstDate || !lastDate) return '';
+  const firstYear = Number(firstDate.slice(0, 4));
+  const lastYear = Number(lastDate.slice(0, 4));
+  if (!Number.isFinite(firstYear) || !Number.isFinite(lastYear)) return '';
+  if (firstYear < lastYear) return normalizeSchoolYear(firstYear, lastYear);
+  const firstMonth = Number(firstDate.slice(5, 7));
+  return firstMonth >= 7 ? normalizeSchoolYear(firstYear, firstYear + 1) : normalizeSchoolYear(firstYear - 1, firstYear);
+}
+
+function inferYagSchoolYear(workbook) {
+  const chunks = [];
+  workbook?.eachSheet((ws) => {
+    chunks.push(ws.name);
+    const maxRows = Math.min(ws.actualRowCount || ws.rowCount || 0, 20);
+    for (let r = 1; r <= maxRows; r += 1) {
+      const row = ws.getRow(r);
+      const lastCell = Math.min(Math.max(row.actualCellCount || 0, 12), 12);
+      for (let c = 1; c <= lastCell; c += 1) {
+        const text = cellText(row.getCell(c));
+        if (text) chunks.push(text);
+      }
+    }
+  });
+  return parseSchoolYearText(chunks.join(' | '));
+}
+
+function mergeCalendarInference() {
+  const warnings = [];
+  const detected = state.mapSchoolYear || state.yagSchoolYear || inferSchoolYearFromDates(state.diagnostics?.firstDate, state.diagnostics?.lastDate) || '2026-2027';
+  state.schoolYear = detected;
+  state.schoolYearSource = state.mapSchoolYear ? 'Curriculum map sheet names' : (state.yagSchoolYear ? 'YAG visible text' : (state.diagnostics?.firstDate ? 'Curriculum map dates' : 'Fallback/demo default'));
+  state.usingFallbackDates = !state.mapWorkbook || !(state.diagnostics?.inferredPeriods?.every((p) => p.start && p.end) || state.gradingPeriods.every((p) => parseIso(p.start) && parseIso(p.end) && /Advanced Mode manual edit|Curriculum map/.test(String(p.source || ''))));
+  if (state.usingFallbackDates) warnings.push('Using fallback 2026-2027 dates. Upload a curriculum map or review Advanced Mode settings.');
+  if (state.mapSchoolYear && state.yagSchoolYear && state.mapSchoolYear !== state.yagSchoolYear) warnings.push('YAG school year and curriculum map school year may not match. Review before applying.');
+  warnings.push(...(state.diagnostics?.warnings || []));
+  state.inferenceWarnings = Array.from(new Set(warnings));
+}
+
+function describeSource(prefix, sheetName, addr = '') {
+  return `${prefix}: ${sheetName || 'Unknown'}${addr ? `!${addr}` : ''}`;
+}
+
+function upsertRange(rows, item) {
+  if (!item?.name || !parseIso(item.start) || !parseIso(item.end)) return;
+  const key = `${item.name.toLowerCase()}|${item.start}|${item.end}`;
+  if (rows.some((r) => `${String(r.name || '').toLowerCase()}|${r.start}|${r.end}` === key)) return;
+  rows.push({ source: '', ...item });
+}
+
+function extractDateMentions(text, defaultYear) {
+  const out = [];
+  const s = String(text || '');
+  const fullRe = /\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/g;
+  let match = fullRe.exec(s);
+  while (match) {
+    const dt = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+    if (!Number.isNaN(dt.getTime())) out.push(isoDate(dt));
+    match = fullRe.exec(s);
+  }
+  const mdRe = /\b(\d{1,2})\/(\d{1,2})\b/g;
+  match = mdRe.exec(s);
+  while (match) {
+    if (defaultYear) {
+      const dt = new Date(Date.UTC(defaultYear, Number(match[1]) - 1, Number(match[2])));
+      if (!Number.isNaN(dt.getTime())) out.push(isoDate(dt));
+    }
+    match = mdRe.exec(s);
+  }
+  return Array.from(new Set(out));
+}
+
 function readExcelDate(cell, context = {}) {
   const rawValue = getCellRawValue(cell);
   if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) return { ok: true, iso: isoDate(rawValue), raw: rawValue, type: 'Date object' };
@@ -223,9 +361,10 @@ function readExcelDate(cell, context = {}) {
     if (directIso) return { ok: true, iso: isoDate(directIso), raw: rawValue, type: 'full date text' };
     const mdOnly = trimmed.match(/^(\d{1,2})\/(\d{1,2})$/);
     if (mdOnly) {
-      const inferredYear = context.periodLabel === '1st' || context.periodLabel === '2nd' ? 2026 : 2027;
+      const inferredYear = context.sheetYear || yearFromSchoolYear(context.schoolYear, context.periodLabel);
+      if (!inferredYear) return { ok: false, raw: rawValue, type: 'month/day text without inferable year' };
       const dt = new Date(Date.UTC(inferredYear, Number(mdOnly[1]) - 1, Number(mdOnly[2])));
-      if (!Number.isNaN(dt.getTime())) return { ok: true, iso: isoDate(dt), raw: rawValue, type: 'date-like text with grading-period inference' };
+      if (!Number.isNaN(dt.getTime())) return { ok: true, iso: isoDate(dt), raw: rawValue, type: 'month/day text with file-year inference' };
     }
     const attempt = new Date(trimmed);
     if (!Number.isNaN(attempt.getTime())) return { ok: true, iso: isoDate(attempt), raw: rawValue, type: 'full date text' };
@@ -253,7 +392,7 @@ function getMatchedSheets(sheetNames) {
   });
 }
 
-function detectWorkbookDates(workbook, workbookName) {
+function detectWorkbookDates(workbook, workbookName, options = {}) {
   const diagnostics = {
     workbookName,
     sheetNames: workbook.worksheets.map((ws) => ws.name),
@@ -264,36 +403,85 @@ function detectWorkbookDates(workbook, workbookName) {
     lastDate: null,
     allAddresses: [],
     warnings: [],
-    matchedSheets: []
+    matchedSheets: [],
+    inferredPeriods: [],
+    blockedDays: [],
+    eventNotes: [],
+    mapSchoolYear: ''
   };
   diagnostics.matchedSheets = getMatchedSheets(diagnostics.sheetNames);
   diagnostics.missingSheets = diagnostics.matchedSheets.filter((m) => !m.actualName).map((m) => m.expectedName);
   if (diagnostics.missingSheets.length) diagnostics.warnings.push(`Missing expected curriculum map sheets: ${diagnostics.missingSheets.join(', ')}`);
+  diagnostics.mapSchoolYear = inferMapSchoolYearFromSheets(diagnostics.matchedSheets);
+  const fallbackSchoolYear = diagnostics.mapSchoolYear || options.yagSchoolYear || '';
 
   for (const match of diagnostics.matchedSheets) {
     const key = `${match.expectedName} (${match.periodLabel})`;
     const ws = match.actualName ? workbook.getWorksheet(match.actualName) : null;
     diagnostics.perSheet[key] = [];
-    if (!ws) continue;
+    const periodDates = [];
+    const sheetYear = ws ? getSheetCalendarYear(ws.name, match.periodLabel, fallbackSchoolYear) : null;
+    if (ws && !sheetYear) diagnostics.warnings.push(`${ws.name}: month/day-only dates need a year in the sheet name or YAG school year. Use Advanced Mode if dates cannot be inferred.`);
+    if (!ws) {
+      diagnostics.inferredPeriods.push({ name: `${match.periodLabel} Nine Weeks`, start: '', end: '', source: 'Missing curriculum map sheet', warning: 'No matched sheet found.' });
+      continue;
+    }
     for (let r = 1; r <= (ws.actualRowCount || ws.rowCount); r += 1) {
       DATE_COLUMNS.forEach((dateCol, idx) => {
         const dateAddr = `${dateCol}${r}`;
-        const parsed = readExcelDate(ws.getCell(dateAddr), { periodLabel: match.periodLabel });
+        const parsed = readExcelDate(ws.getCell(dateAddr), { periodLabel: match.periodLabel, sheetYear, schoolYear: fallbackSchoolYear });
         if (!parsed.ok) return;
         const noteAddr = `${NOTE_COLUMNS[idx]}${r}`;
-        const row = { sheetName: match.actualName, matchedPeriod: match.periodLabel, dateAddr, noteAddr, date: parsed.iso, rawValue: String(parsed.raw), interpretedAs: parsed.type };
+        const note = cellText(ws.getCell(noteAddr));
+        const row = { sheetName: match.actualName, matchedPeriod: match.periodLabel, dateAddr, noteAddr, date: parsed.iso, rawValue: String(parsed.raw), interpretedAs: parsed.type, note };
         diagnostics.perSheet[key].push(row);
+        periodDates.push(parsed.iso);
         diagnostics.totalDateCells += 1;
         diagnostics.allAddresses.push(`${match.actualName}!${dateAddr}`);
         if (!diagnostics.firstDate || parsed.iso < diagnostics.firstDate) diagnostics.firstDate = parsed.iso;
         if (!diagnostics.lastDate || parsed.iso > diagnostics.lastDate) diagnostics.lastDate = parsed.iso;
+        if (note && BLOCKED_NOTE_PATTERN.test(note)) upsertRange(diagnostics.blockedDays, { name: note, start: parsed.iso, end: parsed.iso, source: describeSource('Curriculum map note', match.actualName, noteAddr) });
+        else if (note && EVENT_NOTE_PATTERN.test(note)) upsertRange(diagnostics.eventNotes, { name: note, start: parsed.iso, end: parsed.iso, source: describeSource('Curriculum map note', match.actualName, noteAddr) });
       });
     }
     if (!diagnostics.perSheet[key].length) diagnostics.warnings.push(`No date cells detected in ${match.actualName} for date columns ${DATE_COLUMNS.join(', ')}.`);
+    const sorted = periodDates.sort();
+    diagnostics.inferredPeriods.push({
+      name: `${match.periodLabel} Nine Weeks`,
+      start: sorted[0] || '',
+      end: sorted[sorted.length - 1] || '',
+      source: match.actualName,
+      warning: sorted.length ? '' : 'No usable date cells detected.'
+    });
   }
+  if (!diagnostics.mapSchoolYear) diagnostics.mapSchoolYear = inferSchoolYearFromDates(diagnostics.firstDate, diagnostics.lastDate);
   if (!diagnostics.totalDateCells) diagnostics.warnings.push('No date cells detected. Apply is disabled until a curriculum map with dates is uploaded.');
   return diagnostics;
 }
+
+function applyDetectedCalendarFromMap(diagnostics) {
+  if (!diagnostics) return;
+  const completePeriods = diagnostics.inferredPeriods.filter((p) => p.start && p.end);
+  if (completePeriods.length === PLC_GRADING_PERIOD_CONFIG.length) {
+    state.gradingPeriods = diagnostics.inferredPeriods.map((p) => ({ ...p }));
+    state.usingFallbackDates = false;
+  } else if (!state.mapWorkbook) {
+    state.gradingPeriods = cloneRows(PLC_GRADING_PERIOD_CONFIG);
+    state.usingFallbackDates = true;
+  }
+  state.mapSchoolYear = diagnostics.mapSchoolYear || '';
+  state.blockedDays = [];
+  state.eventNotes = [];
+  diagnostics.blockedDays.forEach((d) => upsertRange(state.blockedDays, d));
+  diagnostics.eventNotes.forEach((d) => upsertRange(state.eventNotes, d));
+  state.yagDetectedBlockedDays.forEach((d) => upsertRange(state.blockedDays, d));
+  state.yagDetectedEventNotes.forEach((d) => upsertRange(state.eventNotes, d));
+  mergeCalendarInference();
+  renderAdvancedTables();
+  syncTemplateFromState();
+  renderExtractionSummary();
+}
+
 
 function renderDiagnostics() {
   if (!state.diagnostics) {
@@ -309,6 +497,9 @@ function renderDiagnostics() {
     <li><strong>Date cells detected per sheet:</strong> ${escapeHtml(Object.entries(d.perSheet).map(([s, rows]) => `${s}: ${rows.length}`).join(' | '))}</li>
     <li><strong>Total date cells detected:</strong> ${d.totalDateCells}</li>
     <li><strong>First / last detected date:</strong> ${d.firstDate || 'N/A'} / ${d.lastDate || 'N/A'}</li>
+    <li><strong>Inferred map school year:</strong> ${escapeHtml(d.mapSchoolYear || 'Not detected')}</li>
+    <li><strong>Detected grading periods:</strong> ${escapeHtml((d.inferredPeriods || []).map((p) => `${p.name}: ${p.start || '?'} to ${p.end || '?'}`).join(' | ') || 'None')}</li>
+    <li><strong>Detected blocked days / event notes:</strong> ${(d.blockedDays || []).length} / ${(d.eventNotes || []).length}</li>
     <li><strong>Warnings:</strong> ${escapeHtml(d.warnings.join('; ') || 'None')}</li>
   </ul>
   <table><thead><tr><th>Sheet</th><th>Period</th><th>Date Cell</th><th>Note Cell</th><th>Raw Value</th><th>Interpreted Date</th><th>Parse Type</th></tr></thead>
@@ -329,6 +520,14 @@ async function handleYagUpload(e) {
     state.yagWorkbook = await readWorkbookFromFile(file);
     state.yagName = file.name;
     state.yagSheetDiagnostics = null;
+    state.yagSchoolYear = inferYagSchoolYear(state.yagWorkbook);
+    if (state.mapWorkbook) {
+      state.diagnostics = detectWorkbookDates(state.mapWorkbook, state.mapName, { yagSchoolYear: state.yagSchoolYear });
+      applyDetectedCalendarFromMap(state.diagnostics);
+      renderDiagnostics();
+    } else {
+      mergeCalendarInference();
+    }
     state.applied = false;
     $('yagStatus').textContent = `Loaded: ${file.name}`;
     setNextStep('Next: upload the blank curriculum map, then extract units from the YAG.');
@@ -343,7 +542,8 @@ async function handleMapUpload(e) {
   try {
     state.mapWorkbook = await readWorkbookFromFile(file);
     state.mapName = file.name;
-    state.diagnostics = detectWorkbookDates(state.mapWorkbook, file.name);
+    state.diagnostics = detectWorkbookDates(state.mapWorkbook, file.name, { yagSchoolYear: state.yagSchoolYear });
+    applyDetectedCalendarFromMap(state.diagnostics);
     state.applied = false;
     state.preview = [];
     state.previewSucceeded = false;
@@ -453,6 +653,8 @@ function extractUnitsFromYagWorkbook(workbook) {
   const units = [];
   const warnings = [];
   const capacitySummary = emptyYagCapacitySummary();
+  const detectedBlockedDays = [];
+  const detectedEventNotes = [];
   const sheetDiagnostics = emptyYagSheetDiagnostics(workbook);
   const sectionStats = new Map(PLC_GRADING_PERIOD_CONFIG.map((p) => [p.name, { seen: false, units: 0 }]));
   let courseName = '';
@@ -475,6 +677,16 @@ function extractUnitsFromYagWorkbook(workbook) {
       for (let c = 1; c <= lastCell; c += 1) texts.push(cellText(row.getCell(c)));
       const joined = texts.filter(Boolean).join(' | ');
       if (!joined) continue;
+
+      const rowYear = yearFromSchoolYear(state.schoolYear || state.yagSchoolYear, currentPeriod) || yearFromSchoolYear(state.yagSchoolYear, currentPeriod);
+      const mentionedDates = extractDateMentions(joined, rowYear);
+      if (mentionedDates.length && NON_INSTRUCTIONAL_SECTION_PATTERN.test(joined)) {
+        const sortedDates = mentionedDates.sort();
+        upsertRange(detectedBlockedDays, { name: joined.slice(0, 120), start: sortedDates[0], end: sortedDates[sortedDates.length - 1], source: describeSource('YAG non-instructional row', ws.name, row.getCell(1).address) });
+      } else if (mentionedDates.length && EVENT_NOTE_PATTERN.test(joined)) {
+        const sortedDates = mentionedDates.sort();
+        upsertRange(detectedEventNotes, { name: joined.slice(0, 120), start: sortedDates[0], end: sortedDates[sortedDates.length - 1], source: describeSource('YAG event row', ws.name, row.getCell(1).address) });
+      }
 
       const courseGuess = maybeCourseName(texts.filter(Boolean));
       if (!courseName && courseGuess) courseName = courseGuess;
@@ -538,7 +750,7 @@ function extractUnitsFromYagWorkbook(workbook) {
     if (stat.seen && stat.units === 0) warnings.push(`${period}: ${LOW_CONFIDENCE_WARNING}`);
   }
   if (!units.length) warnings.push('No units extracted. Use Advanced Mode to review or enter units manually.');
-  return { units, warnings, courseName, capacitySummary, sheetDiagnostics };
+  return { units, warnings, courseName, capacitySummary, sheetDiagnostics, detectedBlockedDays, detectedEventNotes };
 }
 
 function extractUnitsFromYag() {
@@ -551,7 +763,12 @@ function extractUnitsFromYag() {
   state.extractionWarnings = result.warnings;
   state.yagCapacitySummary = result.capacitySummary || [];
   state.yagSheetDiagnostics = result.sheetDiagnostics || null;
+  state.yagDetectedBlockedDays = result.detectedBlockedDays || [];
+  state.yagDetectedEventNotes = result.detectedEventNotes || [];
+  state.yagDetectedBlockedDays.forEach((d) => upsertRange(state.blockedDays, d));
+  state.yagDetectedEventNotes.forEach((d) => upsertRange(state.eventNotes, d));
   state.courseName = result.courseName || state.courseName;
+  mergeCalendarInference();
   state.preview = [];
   state.previewSucceeded = false;
   state.applied = false;
@@ -597,10 +814,33 @@ function renderYagCapacitySummary() {
     ${balanceMessages ? `<ul>${balanceMessages}</ul>` : ''}`;
 }
 
+function renderDetectedGpSummary() {
+  const rows = state.gradingPeriods || [];
+  if (!rows.length) return '<p>No grading periods detected yet.</p>';
+  return `<h3>Detected Grading Periods</h3><table><thead><tr><th>Grading Period</th><th>Start Date</th><th>End Date</th><th>Source</th><th>Warning</th></tr></thead><tbody>
+    ${rows.map((p) => `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.start)}</td><td>${escapeHtml(p.end)}</td><td>${escapeHtml(p.source || (state.usingFallbackDates ? 'Fallback 2026-2027 demo dates' : 'Curriculum map'))}</td><td>${escapeHtml(p.warning || '')}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+
+function renderRangeReviewSummary(title, rows, emptyText) {
+  if (!rows.length) return `<h3>${title}</h3><p>${emptyText}</p>`;
+  return `<h3>${title}</h3><table><thead><tr><th>Description</th><th>Start Date</th><th>End Date</th><th>Source</th></tr></thead><tbody>
+    ${rows.map((d) => `<tr><td>${escapeHtml(d.name)}</td><td>${escapeHtml(d.start)}</td><td>${escapeHtml(d.end)}</td><td>${escapeHtml(d.source || 'Manual/Fallback')}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+
 function renderExtractionSummary() {
-  const byPeriod = PLC_GRADING_PERIOD_CONFIG.map((p) => `${p.name}: ${state.units.filter((u) => u.gradingPeriod === p.name).length} unit(s)`).join(' | ');
-  const warnings = state.extractionWarnings.length ? `<ul>${state.extractionWarnings.map((w) => `<li class="warn">${escapeHtml(w)}</li>`).join('')}</ul>` : '<p class="ok">Extraction completed with no balance or confidence warnings.</p>';
-  $('plcExtractionSummary').innerHTML = `<p><strong>Course:</strong> ${escapeHtml(state.courseName || 'Not detected')}</p><p>${escapeHtml(byPeriod)}</p>${renderYagSheetDiagnostics()}${renderYagCapacitySummary()}${warnings}`;
+  const periodBasis = state.gradingPeriods.length ? state.gradingPeriods : PLC_GRADING_PERIOD_CONFIG;
+  const byPeriod = periodBasis.map((p) => `${p.name}: ${state.units.filter((u) => u.gradingPeriod === p.name).length} unit(s)`).join(' | ');
+  const warnings = state.extractionWarnings.concat(state.inferenceWarnings || []);
+  const warningHtml = warnings.length ? `<ul>${Array.from(new Set(warnings)).map((w) => `<li class="warn">${escapeHtml(w)}</li>`).join('')}</ul>` : '<p class="ok">Extraction completed with no balance, confidence, or calendar warnings.</p>';
+  $('plcExtractionSummary').innerHTML = `<p><strong>Course:</strong> ${escapeHtml(state.courseName || 'Not detected')}</p>
+    <p><strong>Inferred school year:</strong> ${escapeHtml(state.schoolYear || 'Not detected')} <span class="muted">(${escapeHtml(state.schoolYearSource || 'Unknown source')})</span></p>
+    <p>${escapeHtml(byPeriod)}</p>
+    ${renderDetectedGpSummary()}
+    ${renderRangeReviewSummary('Detected Blocked Days', state.blockedDays, 'No blocked days detected yet. Review Advanced Mode if your files contain non-instructional days.')}
+    ${renderRangeReviewSummary('Detected Event Notes', state.eventNotes, 'No event notes detected yet.')}
+    ${renderYagSheetDiagnostics()}${renderYagCapacitySummary()}${warningHtml}`;
 }
 
 function periodOptions(selected) {
@@ -696,20 +936,41 @@ function renderUnitTables() {
 }
 
 function renderGpTable() {
-  $('gradingPeriodTableOutput').innerHTML = `<table><thead><tr><th>Grading Period</th><th>Start Date</th><th>End Date</th></tr></thead><tbody>
-    ${state.gradingPeriods.map((p, i) => `<tr><td>${escapeHtml(p.name)}</td><td><input type="date" data-gp="${i}" data-k="start" value="${p.start}" /></td><td><input type="date" data-gp="${i}" data-k="end" value="${p.end}" /></td></tr>`).join('')}</tbody></table>`;
+  $('gradingPeriodTableOutput').innerHTML = `<label><strong>School Year</strong> <input id="advancedSchoolYearInput" value="${escapeHtml(state.schoolYear || '')}" placeholder="YYYY-YYYY" /></label>
+    <table><thead><tr><th>Grading Period</th><th>Start Date</th><th>End Date</th><th>Source</th><th>Warning</th></tr></thead><tbody>
+    ${state.gradingPeriods.map((p, i) => `<tr><td>${escapeHtml(p.name)}</td><td><input type="date" data-gp="${i}" data-k="start" value="${p.start}" /></td><td><input type="date" data-gp="${i}" data-k="end" value="${p.end}" /></td><td>${escapeHtml(p.source || (state.usingFallbackDates ? 'Fallback/demo' : 'Curriculum map'))}</td><td>${escapeHtml(p.warning || '')}</td></tr>`).join('')}</tbody></table>`;
+  $('advancedSchoolYearInput').addEventListener('input', (e) => {
+    state.schoolYear = e.target.value;
+    state.schoolYearSource = 'Advanced Mode manual edit';
+    markPreviewStale();
+  });
   $('gradingPeriodTableOutput').querySelectorAll('[data-gp]').forEach((el) => el.addEventListener('input', (e) => {
     state.gradingPeriods[Number(e.target.dataset.gp)][e.target.dataset.k] = e.target.value;
+    state.gradingPeriods[Number(e.target.dataset.gp)].source = 'Advanced Mode manual edit';
+    state.usingFallbackDates = !state.gradingPeriods.every((p) => parseIso(p.start) && parseIso(p.end));
+    mergeCalendarInference();
     markPreviewStale();
   }));
 }
 
 function renderRangeTable(containerId, rows, type) {
-  $(containerId).innerHTML = `<table><thead><tr><th>Name</th><th>Start Date</th><th>End Date</th><th>Action</th></tr></thead><tbody>
-    ${rows.map((row, i) => `<tr><td><input data-range-type="${type}" data-i="${i}" data-k="name" value="${escapeHtml(row.name)}" /></td><td><input type="date" data-range-type="${type}" data-i="${i}" data-k="start" value="${row.start}" /></td><td><input type="date" data-range-type="${type}" data-i="${i}" data-k="end" value="${row.end}" /></td><td><button type="button" data-delete-range="${type}:${i}">Delete</button></td></tr>`).join('')}</tbody></table>`;
+  const isBlocked = type === 'blocked';
+  $(containerId).innerHTML = `<table><thead><tr><th>Description</th><th>Start Date</th><th>End Date</th><th>Source</th><th>Action</th></tr></thead><tbody>
+    ${rows.map((row, i) => `<tr><td><input data-range-type="${type}" data-i="${i}" data-k="name" value="${escapeHtml(row.name)}" /></td><td><input type="date" data-range-type="${type}" data-i="${i}" data-k="start" value="${row.start}" /></td><td><input type="date" data-range-type="${type}" data-i="${i}" data-k="end" value="${row.end}" /></td><td>${escapeHtml(row.source || 'Manual')}</td><td><button type="button" data-convert-range="${type}:${i}">${isBlocked ? 'Treat as Event' : 'Treat as Blocked'}</button> <button type="button" data-delete-range="${type}:${i}">Delete</button></td></tr>`).join('')}</tbody></table>`;
   $(containerId).querySelectorAll('[data-range-type]').forEach((el) => el.addEventListener('input', (e) => {
     const targetRows = e.target.dataset.rangeType === 'blocked' ? state.blockedDays : state.eventNotes;
-    targetRows[Number(e.target.dataset.i)][e.target.dataset.k] = e.target.value;
+    const row = targetRows[Number(e.target.dataset.i)];
+    row[e.target.dataset.k] = e.target.value;
+    row.source = row.source || 'Advanced Mode manual edit';
+    markPreviewStale();
+  }));
+  $(containerId).querySelectorAll('[data-convert-range]').forEach((btn) => btn.addEventListener('click', () => {
+    const [rangeType, idx] = btn.dataset.convertRange.split(':');
+    const from = rangeType === 'blocked' ? state.blockedDays : state.eventNotes;
+    const to = rangeType === 'blocked' ? state.eventNotes : state.blockedDays;
+    const [row] = from.splice(Number(idx), 1);
+    if (row) to.push({ ...row, source: `${row.source || 'Manual'}; converted in Advanced Mode` });
+    renderAdvancedTables();
     markPreviewStale();
   }));
   $(containerId).querySelectorAll('[data-delete-range]').forEach((btn) => btn.addEventListener('click', () => {
@@ -731,6 +992,7 @@ function renderAdvancedTables() {
 function validatePlanningState() {
   const errors = [];
   if (!state.mapWorkbook) errors.push('No curriculum map uploaded. Upload a blank curriculum map workbook before generating preview.');
+  if (state.mapWorkbook && state.usingFallbackDates) errors.push('Grading-period dates could not be inferred from the uploaded curriculum map. Review Advanced Mode settings before generating preview.');
   if (!state.units.length) errors.push('No units found. Extract units from a YAG or add units manually.');
   state.gradingPeriods.forEach((p) => {
     if (!parseIso(p.start) || !parseIso(p.end)) errors.push(`${p.name}: missing or invalid start/end date.`);
@@ -847,9 +1109,16 @@ function renderFitIssues() {
 }
 
 function previewRowsForExport() {
+  const meta = [
+    ['Inferred School Year', state.schoolYear || 'Not detected'],
+    ['Detected Grading Periods', state.gradingPeriods.map((p) => `${p.name}: ${p.start} to ${p.end}`).join('; ')],
+    ['Blocked Day Warnings', state.blockedDays.map((d) => `${d.name}: ${d.start}${d.end !== d.start ? ` to ${d.end}` : ''}`).join('; ') || 'None'],
+    ['Event-Note Warnings', state.eventNotes.map((d) => `${d.name}: ${d.start}${d.end !== d.start ? ` to ${d.end}` : ''}`).join('; ') || 'None'],
+    [],
+  ];
   const headers = ['Grading Period', 'Unit Name', 'Instructional Days Required', 'Generated Start Date', 'Generated End Date', 'Skipped Blocked Days', 'Event-Note Warnings', 'Status or Warning'];
   const body = state.preview.map((r) => [r.term, r.unit, r.days, r.startDate, r.endDate, r.skippedBlockedDays, r.eventWarnings, r.status]);
-  return [headers, ...body];
+  return [...meta, headers, ...body];
 }
 
 function previewToDelimited(delimiter) {
@@ -958,11 +1227,11 @@ function showValidationError(message) {
 }
 
 function syncTemplateFromState() {
-  $('templateInput').value = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\n${state.courseName || ''}\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\n${state.gradingPeriods.map((p) => `${p.name} | ${p.start} | ${p.end}`).join('\n')}\n\nBLOCKED_DAYS:\n${state.blockedDays.map((d) => `${d.name} | ${d.start}${d.end !== d.start ? ` | ${d.end}` : ''}`).join('\n')}\n\nEVENT_NOTES:\n${state.eventNotes.map((d) => `${d.name} | ${d.start}${d.end !== d.start ? ` | ${d.end}` : ''}`).join('\n')}\n\nUNIT_PLAN:\n${state.units.map((u) => `${u.gradingPeriod} | ${u.unitName} | ${u.days}${u.allowCrossPeriod ? ' | allow-cross-period' : ''}`).join('\n')}\n`;
+  $('templateInput').value = `SCHOOL_YEAR:\n${state.schoolYear || '2026-2027'}\n\nCOURSE_NAME:\n${state.courseName || ''}\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\n${state.gradingPeriods.map((p) => `${p.name} | ${p.start} | ${p.end}`).join('\n')}\n\nBLOCKED_DAYS:\n${state.blockedDays.map((d) => `${d.name} | ${d.start}${d.end !== d.start ? ` | ${d.end}` : ''}`).join('\n')}\n\nEVENT_NOTES:\n${state.eventNotes.map((d) => `${d.name} | ${d.start}${d.end !== d.start ? ` | ${d.end}` : ''}`).join('\n')}\n\nUNIT_PLAN:\n${state.units.map((u) => `${u.gradingPeriod} | ${u.unitName} | ${u.days}${u.allowCrossPeriod ? ' | allow-cross-period' : ''}`).join('\n')}\n`;
 }
 
 function parseTemplate(text) {
-  const data = { courseName: '', terms: [], blocked: [], events: [], units: [] };
+  const data = { schoolYear: '', courseName: '', terms: [], blocked: [], events: [], units: [] };
   const errors = [];
   let section = '';
   text.split(/\r?\n/).forEach((raw, idx) => {
@@ -974,14 +1243,15 @@ function parseTemplate(text) {
     }
     const parts = line.split('|').map((p) => p.trim());
     const lineNo = idx + 1;
-    if (section === 'COURSE_NAME') data.courseName = line;
+    if (section === 'SCHOOL_YEAR') data.schoolYear = line;
+    else if (section === 'COURSE_NAME') data.courseName = line;
     else if (section === 'TERMS' && parts.length === 3) data.terms.push({ name: parts[0], start: parts[1], end: parts[2] });
     else if ((section === 'BLOCKED_DAYS' || section === 'EVENT_NOTES') && (parts.length === 2 || parts.length === 3)) {
       const row = { name: parts[0], start: parts[1], end: parts[2] || parts[1] };
       (section === 'BLOCKED_DAYS' ? data.blocked : data.events).push(row);
     } else if (section === 'UNIT_PLAN' && (parts.length === 3 || parts.length === 4)) {
       data.units.push({ gradingPeriod: parts[0], unitName: parts[1], days: Number(parts[2]), sourceSheet: 'Template', sourceCell: '', warning: Number.isInteger(Number(parts[2])) ? '' : HALF_DAY_WARNING, allowCrossPeriod: /allow/i.test(parts[3] || '') });
-    } else if (!['SCHOOL_YEAR', 'SKIP_WEEKENDS'].includes(section)) errors.push(`Line ${lineNo}: cannot read this template row.`);
+    } else if (!['SKIP_WEEKENDS'].includes(section)) errors.push(`Line ${lineNo}: cannot read this template row.`);
   });
   return { ok: errors.length === 0, errors, data };
 }
@@ -992,6 +1262,8 @@ function importTemplateIntoTables() {
     showValidationError(`Template import failed: ${parsed.errors.join('; ')}`);
     return;
   }
+  state.schoolYear = parsed.data.schoolYear || state.schoolYear;
+  if (parsed.data.schoolYear) state.schoolYearSource = 'Planning template import';
   state.courseName = parsed.data.courseName || state.courseName;
   if (parsed.data.terms.length) state.gradingPeriods = parsed.data.terms;
   state.blockedDays = parsed.data.blocked;
@@ -1133,6 +1405,10 @@ function exportBlockedDays() {
   setNextStep('Blocked days export started.');
 }
 
+function defaultManualDate() {
+  return state.gradingPeriods.find((p) => parseIso(p.start))?.start || `${(state.schoolYear || '2026-2027').slice(0, 4)}-08-01`;
+}
+
 function updateWorkflowState() {
   const mode = state.mode;
   $('workflowTitle').textContent = mode === 'plc' ? 'PLC Mode Workflow' : 'Advanced Mode Workflow';
@@ -1147,8 +1423,13 @@ function updateWorkflowState() {
     <li><strong>Mode:</strong> ${mode === 'plc' ? 'PLC Mode' : 'Advanced Mode'}</li>
     <li><strong>YAG loaded:</strong> ${state.yagWorkbook ? escapeHtml(state.yagName) : 'No'}</li>
     <li><strong>Curriculum map loaded:</strong> ${state.mapWorkbook ? escapeHtml(state.mapName) : 'No'}</li>
+    <li><strong>Inferred school year:</strong> ${escapeHtml(state.schoolYear || 'Not detected')} (${escapeHtml(state.schoolYearSource || 'Unknown source')})</li>
+    <li><strong>Detected grading periods:</strong> ${escapeHtml(state.gradingPeriods.map((p) => `${p.name}: ${p.start || '?'} to ${p.end || '?'}`).join(' | '))}</li>
     <li><strong>Date cells detected:</strong> ${d ? d.totalDateCells : 0}</li>
     <li><strong>Extracted/manual units:</strong> ${state.units.length}</li>
+    <li><strong>Detected blocked days:</strong> ${state.blockedDays.length}</li>
+    <li><strong>Detected event notes:</strong> ${state.eventNotes.length}</li>
+    <li><strong>Warnings:</strong> ${escapeHtml((state.inferenceWarnings || []).join('; ') || 'None')}</li>
     <li><strong>Preview rows:</strong> ${state.preview.length}</li>
     <li><strong>Applied in memory:</strong> ${state.applied ? 'Yes' : 'No'}</li>
     <li><strong>Next step:</strong> ${escapeHtml(state.nextStep)}</li>
@@ -1196,8 +1477,8 @@ function bindEvents() {
   $('modeAdvanced').onchange = openAdvancedMode;
   $('resetGpDatesBtn').onclick = resetDefaults;
   $('syncTemplateBtn').onclick = () => { syncTemplateFromState(); setNextStep('Planning template updated from Advanced Mode tables.'); };
-  $('addBlockedDayBtn').onclick = () => { state.blockedDays.push({ name: 'Blocked Day', start: '2026-08-12', end: '2026-08-12' }); renderAdvancedTables(); markPreviewStale(); };
-  $('addEventNoteBtn').onclick = () => { state.eventNotes.push({ name: 'Event Note', start: '2026-08-12', end: '2026-08-12' }); renderAdvancedTables(); markPreviewStale(); };
+  $('addBlockedDayBtn').onclick = () => { state.blockedDays.push({ name: 'Blocked Day', start: defaultManualDate(), end: defaultManualDate(), source: 'Advanced Mode manual add' }); renderAdvancedTables(); markPreviewStale(); };
+  $('addEventNoteBtn').onclick = () => { state.eventNotes.push({ name: 'Event Note', start: defaultManualDate(), end: defaultManualDate(), source: 'Advanced Mode manual add' }); renderAdvancedTables(); markPreviewStale(); };
   $('exportBlockedDaysBtn').onclick = exportBlockedDays;
   $('addAdvUnitRowBtn').onclick = () => addUnitRow();
   $('moveAdvUnitUpBtn').onclick = () => moveSelectedUnit(-1);
