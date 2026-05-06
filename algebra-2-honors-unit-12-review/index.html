@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Algebra 2 Honors Unit 12 Review</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="title-row">
+        <div>
+          <p class="eyebrow">Interactive study map</p>
+          <h1>Algebra 2 Honors Unit 12 Review</h1>
+          <p class="meta">Choose topics in any order, practice problems, use hints, and review worked solutions.</p>
+        </div>
+        <div class="header-tools">
+          <button class="btn secondary" id="dashboardBtn" type="button">Dashboard</button>
+          <button class="btn reset" id="startOverBtn" type="button">START OVER</button>
+        </div>
+      </div>
+      <div class="progress-wrap" aria-label="Overall completion">
+        <div class="progress-label"><span id="progressText">0 of 32 completed</span><span id="studentBadge">Not started</span></div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+    </header>
+
+    <section class="page short-page" id="landingView" aria-labelledby="landingTitle">
+      <h2 id="landingTitle">Start your review</h2>
+      <p>This long review is built for jumping around. Start with the topic that feels most useful, then return to the dashboard whenever you need a different skill.</p>
+      <div class="note-band">
+        <strong>How to use this app:</strong>
+        <ul>
+          <li>Try each problem before opening the worked solution.</li>
+          <li>One wrong attempt unlocks a stronger hint; two wrong attempts show the solution and mark the problem for review.</li>
+          <li>Graphing questions use feature checks instead of freehand drawing in this Stage 1 shell.</li>
+        </ul>
+      </div>
+      <form id="startForm" class="field-grid">
+        <div>
+          <label for="studentName">Student name</label>
+          <input id="studentName" name="studentName" type="text" autocomplete="name" required>
+        </div>
+        <div>
+          <label for="classPeriod">Class period</label>
+          <input id="classPeriod" name="classPeriod" type="text" required>
+        </div>
+        <div class="actions field-grid-full">
+          <button class="btn" type="submit">Start Review</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="page hidden" id="dashboardView" aria-labelledby="dashboardTitle">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Topic dashboard</p>
+          <h2 id="dashboardTitle">Choose a review section</h2>
+        </div>
+        <p class="meta">No locked path: select any card, then use Previous/Next inside that topic.</p>
+      </div>
+      <div class="dashboard-grid" id="topicGrid"></div>
+    </section>
+
+    <section class="page hidden" id="topicView" aria-labelledby="topicTitle">
+      <div class="topic-header">
+        <div>
+          <p class="eyebrow" id="topicKicker">Topic</p>
+          <h2 id="topicTitle"></h2>
+          <p class="meta" id="topicMeta"></p>
+        </div>
+        <button class="btn secondary" id="returnDashboardBtn" type="button">Return to Dashboard</button>
+      </div>
+      <div class="problem-grid" id="problemGrid"></div>
+      <div class="page-controls">
+        <button class="btn secondary" id="prevPageBtn" type="button">Previous page</button>
+        <span class="pill" id="topicPageLabel">Page 1 of 1</span>
+        <button class="btn secondary" id="nextPageBtn" type="button">Next page</button>
+      </div>
+    </section>
+
+    <section class="page hidden" id="summaryView" aria-labelledby="summaryTitle">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Final Summary</p>
+          <h2 id="summaryTitle">Review progress snapshot</h2>
+        </div>
+        <button class="btn secondary" id="summaryDashboardBtn" type="button">Return to Dashboard</button>
+      </div>
+      <div id="summaryContent"></div>
+    </section>
+  </main>
+
+  <script src="graph-data.js"></script>
+  <script src="solutions.js"></script>
+  <script src="problems.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
