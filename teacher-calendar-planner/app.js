@@ -59,6 +59,9 @@ const HALF_DAY_WARNING = 'Half-day count used. Placement uses whole calendar dat
 const LOW_CONFIDENCE_WARNING = 'Could not confidently extract this section. Use Advanced Mode to review or enter units manually.';
 
 const YAG_REAL_UNIT_PATTERN = /\bUnit\s*\d+(?:\.\d+)?\b/i;
+const YAG_SUMMARY_SHEET_PATTERN = /(^|\b)(rfisd\s+yag|summary|overview|year\s+at\s+a\s+glance|yag|cover|instructions?)(\b|$)/i;
+const YAG_TITLE_SCAN_ROWS = 12;
+const YAG_TITLE_SCAN_COLS = 12;
 
 function emptyYagCapacitySummary() {
   return PLC_GRADING_PERIOD_CONFIG.map((p) => ({
@@ -122,6 +125,7 @@ const state = {
   extractionWarnings: [],
   extractionSummary: '',
   yagCapacitySummary: [],
+  yagSheetDiagnostics: null,
   preview: [],
   previewSucceeded: false,
   applied: false,
@@ -324,6 +328,7 @@ async function handleYagUpload(e) {
   try {
     state.yagWorkbook = await readWorkbookFromFile(file);
     state.yagName = file.name;
+    state.yagSheetDiagnostics = null;
     state.applied = false;
     $('yagStatus').textContent = `Loaded: ${file.name}`;
     setNextStep('Next: upload the blank curriculum map, then extract units from the YAG.');
@@ -361,6 +366,52 @@ function normalizePeriodLabel(text) {
 
 function isPeriodText(text) {
   return /(1st|first|2nd|second|3rd|third|4th|fourth)\s*(nine|9)/i.test(String(text || ''));
+}
+
+function getYagPeriodMentions(text) {
+  const s = String(text || '');
+  const mentions = new Set();
+  const pattern = /\b(1st|2nd|3rd|4th)\s*(?:nine|9)\s*weeks?\b/gi;
+  let match = pattern.exec(s);
+  while (match) {
+    const period = normalizePeriodLabel(match[1]);
+    if (period) mentions.add(period);
+    match = pattern.exec(s);
+  }
+  return Array.from(mentions);
+}
+
+function getYagNearbyTitleText(ws) {
+  const pieces = [ws.name];
+  const maxRows = Math.min(ws.actualRowCount || ws.rowCount || 0, YAG_TITLE_SCAN_ROWS);
+  for (let r = 1; r <= maxRows; r += 1) {
+    const row = ws.getRow(r);
+    const lastCell = Math.min(Math.max(row.actualCellCount || 0, YAG_TITLE_SCAN_COLS), YAG_TITLE_SCAN_COLS);
+    for (let c = 1; c <= lastCell; c += 1) {
+      const text = cellText(row.getCell(c));
+      if (text) pieces.push(text);
+    }
+  }
+  return pieces.join(' | ');
+}
+
+function classifyYagSheetForExtraction(ws) {
+  if (YAG_SUMMARY_SHEET_PATTERN.test(String(ws.name || ''))) {
+    return { period: '', ignored: true, reason: 'summary/overview sheet' };
+  }
+
+  const mentions = getYagPeriodMentions(getYagNearbyTitleText(ws));
+  if (mentions.length === 1) return { period: mentions[0], ignored: false, reason: '' };
+  if (mentions.length > 1) return { period: '', ignored: true, reason: `matches multiple grading periods (${mentions.join(', ')})` };
+  return { period: '', ignored: true, reason: 'no clear grading-period title' };
+}
+
+function emptyYagSheetDiagnostics(workbook) {
+  return {
+    sheetsScanned: workbook?.worksheets?.length || 0,
+    sheetsUsed: [],
+    sheetsIgnored: []
+  };
 }
 
 function isSkipYagText(text) {
@@ -402,11 +453,20 @@ function extractUnitsFromYagWorkbook(workbook) {
   const units = [];
   const warnings = [];
   const capacitySummary = emptyYagCapacitySummary();
+  const sheetDiagnostics = emptyYagSheetDiagnostics(workbook);
   const sectionStats = new Map(PLC_GRADING_PERIOD_CONFIG.map((p) => [p.name, { seen: false, units: 0 }]));
   let courseName = '';
 
   workbook.eachSheet((ws) => {
-    let currentPeriod = '';
+    const sheetClass = classifyYagSheetForExtraction(ws);
+    if (sheetClass.ignored || !sheetClass.period) {
+      sheetDiagnostics.sheetsIgnored.push({ sheetName: ws.name, reason: sheetClass.reason || 'no clear grading-period title' });
+      return;
+    }
+
+    sheetDiagnostics.sheetsUsed.push({ sheetName: ws.name, gradingPeriod: sheetClass.period });
+    let currentPeriod = sheetClass.period;
+    sectionStats.get(currentPeriod).seen = true;
     let header = { titleCol: null, daysCol: null };
     for (let r = 1; r <= (ws.actualRowCount || ws.rowCount); r += 1) {
       const row = ws.getRow(r);
@@ -420,7 +480,8 @@ function extractUnitsFromYagWorkbook(workbook) {
       if (!courseName && courseGuess) courseName = courseGuess;
 
       if (isPeriodText(joined)) {
-        currentPeriod = normalizePeriodLabel(joined);
+        const detectedPeriod = normalizePeriodLabel(joined);
+        currentPeriod = detectedPeriod === sheetClass.period ? detectedPeriod : '';
         if (currentPeriod) sectionStats.get(currentPeriod).seen = true;
         header = { titleCol: null, daysCol: null };
         continue;
@@ -437,7 +498,7 @@ function extractUnitsFromYagWorkbook(workbook) {
         if (summaryMetric === 'balance' && value != null && Math.abs(value) > 0.0001) warnings.push(`${currentPeriod} balance is ${value}; expected 0.`);
         continue;
       }
-      if (!currentPeriod) continue;
+      if (!currentPeriod || currentPeriod !== sheetClass.period) continue;
 
       const daysCandidates = nums.filter((n) => n.value > 0 && n.value < 200);
       if (!daysCandidates.length) continue;
@@ -477,7 +538,7 @@ function extractUnitsFromYagWorkbook(workbook) {
     if (stat.seen && stat.units === 0) warnings.push(`${period}: ${LOW_CONFIDENCE_WARNING}`);
   }
   if (!units.length) warnings.push('No units extracted. Use Advanced Mode to review or enter units manually.');
-  return { units, warnings, courseName, capacitySummary };
+  return { units, warnings, courseName, capacitySummary, sheetDiagnostics };
 }
 
 function extractUnitsFromYag() {
@@ -489,6 +550,7 @@ function extractUnitsFromYag() {
   state.units = result.units;
   state.extractionWarnings = result.warnings;
   state.yagCapacitySummary = result.capacitySummary || [];
+  state.yagSheetDiagnostics = result.sheetDiagnostics || null;
   state.courseName = result.courseName || state.courseName;
   state.preview = [];
   state.previewSucceeded = false;
@@ -505,6 +567,20 @@ function formatYagSummaryValue(value) {
 
 function hasYagSummaryValues(row) {
   return row && ['calendarDaysAvailable', 'nonInstructionalDays', 'instructionalDaysAvailable', 'totalUnitDays', 'balance'].some((key) => row[key] != null);
+}
+
+function renderYagSheetDiagnostics() {
+  const d = state.yagSheetDiagnostics;
+  if (!d) return '';
+  const used = d.sheetsUsed.length ? d.sheetsUsed.map((s) => `${s.sheetName} → ${s.gradingPeriod}`).join(' | ') : 'None';
+  const ignoredRows = d.sheetsIgnored.length ? `<ul>${d.sheetsIgnored.map((s) => `<li>Ignored ${escapeHtml(s.sheetName)}: ${escapeHtml(s.reason)}</li>`).join('')}</ul>` : '<p class="ok">No sheets ignored.</p>';
+  return `<h3>YAG Sheet Diagnostics</h3>
+    <ul>
+      <li><strong>Sheets scanned:</strong> ${d.sheetsScanned}</li>
+      <li><strong>Sheets used for extraction:</strong> ${escapeHtml(used)}</li>
+      <li><strong>Sheets ignored:</strong> ${d.sheetsIgnored.length}</li>
+    </ul>
+    ${ignoredRows}`;
 }
 
 function renderYagCapacitySummary() {
@@ -524,7 +600,7 @@ function renderYagCapacitySummary() {
 function renderExtractionSummary() {
   const byPeriod = PLC_GRADING_PERIOD_CONFIG.map((p) => `${p.name}: ${state.units.filter((u) => u.gradingPeriod === p.name).length} unit(s)`).join(' | ');
   const warnings = state.extractionWarnings.length ? `<ul>${state.extractionWarnings.map((w) => `<li class="warn">${escapeHtml(w)}</li>`).join('')}</ul>` : '<p class="ok">Extraction completed with no balance or confidence warnings.</p>';
-  $('plcExtractionSummary').innerHTML = `<p><strong>Course:</strong> ${escapeHtml(state.courseName || 'Not detected')}</p><p>${escapeHtml(byPeriod)}</p>${renderYagCapacitySummary()}${warnings}`;
+  $('plcExtractionSummary').innerHTML = `<p><strong>Course:</strong> ${escapeHtml(state.courseName || 'Not detected')}</p><p>${escapeHtml(byPeriod)}</p>${renderYagSheetDiagnostics()}${renderYagCapacitySummary()}${warnings}`;
 }
 
 function periodOptions(selected) {
