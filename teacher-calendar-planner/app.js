@@ -11,7 +11,7 @@ const BLANK_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\n\nSKIP_WEEKENDS
 
 const EXAMPLE_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\nAlgebra 2\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\nFall Semester | 2026-08-12 | 2026-12-14\nSpring Semester | 2027-01-06 | 2027-05-14\n\nBLOCKED_DAYS:\nLabor Day | 2026-09-07\nFlex Day PD / Student Holiday | 2026-10-09\nProfessional Development / Student Holiday | 2026-10-12\nFall Break | 2026-11-23 | 2026-11-27\nWinter Break | 2026-12-21 | 2027-01-03\nTeacher Workday / Student Holiday | 2027-01-04\nProfessional Development / Student Holiday | 2027-01-05\nStudent / Staff Holiday | 2027-01-18\nProfessional Development / Student Holiday | 2027-02-12\nFlex Day PD / Student Holiday | 2027-02-15\nSpring Break | 2027-03-08 | 2027-03-12\nHoliday | 2027-03-26\nProfessional Development / Student Holiday | 2027-04-30\nFinal Exams | 2027-05-17 | 2027-05-20\nProfessional Development / Student Holiday | 2027-05-21\n\nEVENT_NOTES:\nGrowth Pre-Test | 2026-08-24 | 2026-08-27\nGrowth Pre-Test Choir/Band | 2026-09-02 | 2026-09-04\nTSIA2 English | 2026-09-28\nTSIA2 Math | 2026-10-06\nPSAT | 2026-10-22\nCBE | 2026-10-27 | 2026-10-30\nEng I & II Interim | 2026-11-03\nAlg I Interim | 2026-11-19\nEOC Retakes | 2026-12-01 | 2026-12-10\nMidterms | 2026-12-15 | 2026-12-18\nCBE / ASVAB | 2027-01-19 | 2027-01-22\nEng I & II Interim | 2027-01-26 | 2027-01-27\nBio & US Hist Interim | 2027-02-10\nAlg I Interim | 2027-02-23\nTELPAS | 2027-03-02 | 2027-03-04\nTSIA2 English | 2027-03-18\nTSIA2 Math | 2027-03-25\nSAT Day for Juniors | 2027-03-30\nEnglish I & II EOC | 2027-04-08\nBio & US Hist EOC | 2027-04-15\nAlg I EOC | 2027-04-27\nGrowth Post Test | 2027-04-28 | 2027-05-03\nAP / IBC Testing Window | 2027-05-04 | 2027-05-14\n\nUNIT_PLAN:\nFall Semester | Unit 00 Fundamentals | 13\nFall Semester | Unit 01 Linear F(x) | 13\nFall Semester | Unit 02 Systems | 13\nFall Semester | Unit 03 Quadratics | 13\nFall Semester | Unit 04 Quadratics Pt 2 | 16\nFall Semester | Unit 04.5 | 11\nSpring Semester | Unit 05 Polynomials | 17\nSpring Semester | Unit 06 Rational Exponents / Radical Functions | 16\nSpring Semester | Unit 07 Exponential / Logarithms | 24\nSpring Semester | Unit 08 Rational Functions | 20\nSpring Semester | Unit 09 Regressions and Review | 7\n`;
 
-const state = { workbook: null, workbookName: '', diagnostics: null, parsed: null, preview: null, applied: false, exportWarning: '', templateLoaded: false, validationSucceeded: false, previewSucceeded: false, nextStep: 'Upload a workbook to begin.', mode: 'guided', guidedUnits: [] };
+const state = { workbook: null, workbookName: '', diagnostics: null, parsed: null, preview: null, applied: false, exportWarning: '', templateLoaded: false, validationSucceeded: false, previewSucceeded: false, nextStep: 'Upload a workbook to begin.', mode: 'guided', guidedUnits: [], allowCrossTermGuided: true };
 const $ = (id) => document.getElementById(id);
 
 
@@ -446,6 +446,178 @@ $('validateBtn').onclick = () => {
   updateWorkflowState();
 };
 
+
+function makeInstructionalDayFilter(parsed, blockedSet) {
+  return (d) => (!parsed.skipWeekends || !isWeekend(d.date)) && !blockedSet.has(d.date);
+}
+
+function countDatesInRange(range) {
+  return datesInRange(range.start, range.end).length;
+}
+
+function isCrossedRange(startDate, endDate, range) {
+  return startDate && endDate && startDate < range.start && endDate > range.end;
+}
+
+function findTermByDate(terms, date) {
+  return terms.find((t) => date >= t.start && date <= t.end) || null;
+}
+
+function boundaryWarningsForUnit(unit, startDate, endDate, parsed) {
+  const warnings = [];
+  const preferredTerm = parsed.terms.find((t) => t.name === unit.termName);
+  if (preferredTerm && startDate <= preferredTerm.end && endDate > preferredTerm.end) {
+    warnings.push(`Crosses ${preferredTerm.name} boundary`);
+    warnings.push('Scheduled across term boundary; review pacing');
+  }
+
+  const startTerm = findTermByDate(parsed.terms, startDate);
+  const endTerm = findTermByDate(parsed.terms, endDate);
+  if (startTerm && endTerm && startTerm.name !== endTerm.name) {
+    warnings.push(`Crosses ${startTerm.name} boundary`);
+    warnings.push('Scheduled across term boundary; review pacing');
+  }
+  for (const term of parsed.terms) {
+    if (startDate < term.start && endDate >= term.start) {
+      warnings.push(`Crosses ${term.name} boundary`);
+      warnings.push('Scheduled across term boundary; review pacing');
+    }
+  }
+
+  for (const blocked of parsed.blocked) {
+    if (!isCrossedRange(startDate, endDate, blocked)) continue;
+    const lowerName = blocked.name.toLowerCase();
+    if (lowerName.includes('winter break')) warnings.push('Crosses Winter Break');
+    else if (lowerName.includes('spring break')) warnings.push('Crosses Spring Break');
+    else if (countDatesInRange(blocked) >= 5) warnings.push(`Crosses ${blocked.name}`);
+  }
+
+  return [...new Set(warnings)];
+}
+
+function blockedRangesEncountered(startDate, endDate, parsed) {
+  return parsed.blocked
+    .filter((b) => startDate && endDate && b.start <= endDate && b.end >= startDate)
+    .map((b) => b.name);
+}
+
+function createScheduledPreviewRow({ termName, unit, days, slice, events, parsed, statusPrefix = 'Scheduled' }) {
+  const startDate = slice[0].date;
+  const endDate = slice[slice.length - 1].date;
+  const eventHits = events.filter((ev) => slice.some((d) => ev.dates.has(d.date))).map((ev) => ev.name);
+  const crossingWarnings = boundaryWarningsForUnit(unit, startDate, endDate, parsed);
+  const blockedHits = blockedRangesEncountered(startDate, endDate, parsed);
+  const statusMessages = [];
+  if (eventHits.length) statusMessages.push('Scheduled with event-note warnings');
+  else statusMessages.push(statusPrefix);
+  statusMessages.push(...crossingWarnings);
+
+  return {
+    term: termName,
+    unit: unit.unitName,
+    days,
+    startDate,
+    endDate,
+    skippedBlockedDays: blockedHits.length ? `Skipped: ${blockedHits.join('; ')}` : 'Skipped globally based on BLOCKED_DAYS',
+    eventWarnings: eventHits.join('; '),
+    status: [...new Set(statusMessages)].join('; ')
+  };
+}
+
+function buildStrictTermPreview(parsed, dateRows, blockedSet, events) {
+  const previewRows = [];
+  for (const term of parsed.terms) {
+    const termDays = dateRows.filter((d) => (
+      d.date >= term.start &&
+      d.date <= term.end &&
+      makeInstructionalDayFilter(parsed, blockedSet)(d)
+    ));
+
+    const termUnits = parsed.units.filter((u) => u.termName === term.name);
+    let cursor = 0;
+
+    for (const unit of termUnits) {
+      if (cursor + unit.days > termDays.length) {
+        previewRows.push({
+          term: term.name,
+          unit: unit.unitName,
+          days: unit.days,
+          startDate: 'N/A',
+          endDate: 'N/A',
+          skippedBlockedDays: 'N/A',
+          eventWarnings: '',
+          status: 'Not enough instructional days in term'
+        });
+        continue;
+      }
+
+      const slice = termDays.slice(cursor, cursor + unit.days);
+      cursor += unit.days;
+      previewRows.push(createScheduledPreviewRow({ termName: term.name, unit, days: unit.days, slice, events, parsed }));
+    }
+
+    if (cursor < termDays.length) {
+      previewRows.push({
+        term: term.name,
+        unit: '(unused term capacity)',
+        days: termDays.length - cursor,
+        startDate: '',
+        endDate: '',
+        skippedBlockedDays: '',
+        eventWarnings: '',
+        status: 'Unused instructional days remain'
+      });
+    }
+  }
+  return { rows: previewRows, okToApply: !previewRows.some((r) => r.startDate === 'N/A' || r.endDate === 'N/A') };
+}
+
+function buildFlexibleCrossTermPreview(parsed, dateRows, blockedSet, events) {
+  const instructionalDays = dateRows.filter(makeInstructionalDayFilter(parsed, blockedSet));
+  const previewRows = [];
+  let cursor = 0;
+
+  for (const unit of parsed.units) {
+    const preferredTerm = parsed.terms.find((t) => t.name === unit.termName);
+    const earliestStart = preferredTerm ? preferredTerm.start : dateRows[0].date;
+    while (cursor < instructionalDays.length && instructionalDays[cursor].date < earliestStart) cursor += 1;
+
+    if (cursor + unit.days > instructionalDays.length) {
+      const remaining = Math.max(0, instructionalDays.length - cursor);
+      previewRows.push({
+        term: unit.termName,
+        unit: unit.unitName,
+        days: unit.days,
+        startDate: remaining ? instructionalDays[cursor].date : 'N/A',
+        endDate: 'N/A',
+        skippedBlockedDays: 'N/A',
+        eventWarnings: '',
+        status: `Not enough instructional days remain in the detected school year (${remaining} available, ${unit.days} required). Apply Changes disabled.`
+      });
+      return { rows: previewRows, okToApply: false };
+    }
+
+    const slice = instructionalDays.slice(cursor, cursor + unit.days);
+    cursor += unit.days;
+    previewRows.push(createScheduledPreviewRow({ termName: unit.termName, unit, days: unit.days, slice, events, parsed }));
+  }
+
+  if (cursor < instructionalDays.length) {
+    previewRows.push({
+      term: 'School Year',
+      unit: '(remaining year capacity)',
+      days: instructionalDays.length - cursor,
+      startDate: '',
+      endDate: '',
+      skippedBlockedDays: '',
+      eventWarnings: '',
+      status: 'Available instructional days remain after all units are scheduled'
+    });
+  }
+
+  return { rows: previewRows, okToApply: true };
+}
+
 $('advPreviewBtn').onclick = () => {
   if (!state.workbook || !state.diagnostics) {
     setError('No workbook uploaded. Upload a workbook before generating preview.');
@@ -470,69 +642,15 @@ $('advPreviewBtn').onclick = () => {
 
   const blockedSet = new Set(parsed.data.blocked.flatMap((b) => datesInRange(b.start, b.end)));
   const events = parsed.data.events.map((e) => ({ name: e.name, dates: new Set(datesInRange(e.start, e.end)) }));
-
-  const previewRows = [];
-  for (const term of parsed.data.terms) {
-    const termDays = dateRows.filter((d) => (
-      d.date >= term.start &&
-      d.date <= term.end &&
-      (!parsed.data.skipWeekends || !isWeekend(d.date)) &&
-      !blockedSet.has(d.date)
-    ));
-
-    const termUnits = parsed.data.units.filter((u) => u.termName === term.name);
-    let cursor = 0;
-
-    for (const unit of termUnits) {
-      if (cursor + unit.days > termDays.length) {
-        previewRows.push({
-          term: term.name,
-          unit: unit.unitName,
-          days: unit.days,
-          startDate: 'N/A',
-          endDate: 'N/A',
-          skippedBlockedDays: 'N/A',
-          eventWarnings: '',
-          status: 'Not enough instructional days in term'
-        });
-        continue;
-      }
-
-      const slice = termDays.slice(cursor, cursor + unit.days);
-      cursor += unit.days;
-      const startDate = slice[0].date;
-      const endDate = slice[slice.length - 1].date;
-      const eventHits = events.filter((ev) => slice.some((d) => ev.dates.has(d.date))).map((ev) => ev.name);
-      previewRows.push({
-        term: term.name,
-        unit: unit.unitName,
-        days: unit.days,
-        startDate,
-        endDate,
-        skippedBlockedDays: 'Skipped globally based on BLOCKED_DAYS',
-        eventWarnings: eventHits.join('; '),
-        status: eventHits.length ? 'Scheduled with event-note warnings' : 'Scheduled'
-      });
-    }
-
-    if (cursor < termDays.length) {
-      previewRows.push({
-        term: term.name,
-        unit: '(unused term capacity)',
-        days: termDays.length - cursor,
-        startDate: '',
-        endDate: '',
-        skippedBlockedDays: '',
-        eventWarnings: '',
-        status: 'Unused instructional days remain'
-      });
-    }
-  }
+  const useFlexibleCrossTermScheduling = state.mode === 'guided' && state.allowCrossTermGuided;
+  const previewResult = useFlexibleCrossTermScheduling
+    ? buildFlexibleCrossTermPreview(parsed.data, dateRows, blockedSet, events)
+    : buildStrictTermPreview(parsed.data, dateRows, blockedSet, events);
 
   state.parsed = parsed.data;
-  state.preview = previewRows;
-  state.previewSucceeded = true;
-  renderPreview(previewRows);
+  state.preview = previewResult.rows;
+  state.previewSucceeded = previewResult.okToApply;
+  renderPreview(previewResult.rows);
   updateWorkflowState();
 };
 
@@ -703,6 +821,7 @@ $('previewBtn').onclick=()=>{ if(!state.workbook||!state.diagnostics){setError('
 $('applyBtn').onclick=()=>{$('advApplyBtn').onclick(); if(state.applied) setNextStep('Download the edited workbook.');};
 $('downloadBtn').onclick=async()=>{$('advDownloadBtn').onclick();};
 $('courseNameInput').addEventListener('input',()=>{updateWorkflowState();});
+$('allowCrossTermInput').addEventListener('change',()=>{state.allowCrossTermGuided=$('allowCrossTermInput').checked; state.previewSucceeded=false; state.applied=false; updateWorkflowState();});
 
 function setError(message) {
   $('validationOutput').innerHTML = `<p class="error">${message}</p>`;
