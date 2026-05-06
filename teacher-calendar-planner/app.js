@@ -1,224 +1,126 @@
-// Workbook structure constants (configurable)
+// PLC defaults and workbook structure constants (configurable)
+const PLC_GRADING_PERIOD_CONFIG = [
+  { name: '1st Nine Weeks', start: '2026-08-12', end: '2026-10-08' },
+  { name: '2nd Nine Weeks', start: '2026-10-13', end: '2026-12-18' },
+  { name: '3rd Nine Weeks', start: '2027-01-06', end: '2027-03-05' },
+  { name: '4th Nine Weeks', start: '2027-03-15', end: '2027-05-20' }
+];
 const EXPECTED_SHEET_NAMES = ['1st 9 Weeks', '2nd 9 Weeks', '3rd 9 Weeks', '4th 9 Weeks'];
 const GRADING_PERIOD_LABELS = ['1st', '2nd', '3rd', '4th'];
 const DATE_COLUMNS = ['A', 'C', 'E', 'G', 'I'];
 const NOTE_COLUMNS = ['B', 'D', 'F', 'H', 'J'];
 
-const START_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } }; // light green
-const END_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4CCCC' } };   // light red
+const DEFAULT_BLOCKED_DAYS = [
+  { name: 'Labor Day', start: '2026-09-07', end: '2026-09-07' },
+  { name: 'Flex Day PD / Student Holiday', start: '2026-10-09', end: '2026-10-09' },
+  { name: 'Professional Development / Student Holiday', start: '2026-10-12', end: '2026-10-12' },
+  { name: 'Fall Break', start: '2026-11-23', end: '2026-11-27' },
+  { name: 'Winter Break', start: '2026-12-21', end: '2027-01-03' },
+  { name: 'Teacher Workday / Student Holiday', start: '2027-01-04', end: '2027-01-04' },
+  { name: 'Professional Development / Student Holiday', start: '2027-01-05', end: '2027-01-05' },
+  { name: 'Student / Staff Holiday', start: '2027-01-18', end: '2027-01-18' },
+  { name: 'Professional Development / Student Holiday', start: '2027-02-12', end: '2027-02-12' },
+  { name: 'Flex Day PD / Student Holiday', start: '2027-02-15', end: '2027-02-15' },
+  { name: 'Spring Break', start: '2027-03-08', end: '2027-03-12' },
+  { name: 'Holiday', start: '2027-03-26', end: '2027-03-26' },
+  { name: 'Professional Development / Student Holiday', start: '2027-04-30', end: '2027-04-30' },
+  { name: 'Final Exams', start: '2027-05-17', end: '2027-05-20' },
+  { name: 'Professional Development / Student Holiday', start: '2027-05-21', end: '2027-05-21' }
+];
+const DEFAULT_EVENT_NOTES = [
+  { name: 'Growth Pre-Test', start: '2026-08-24', end: '2026-08-27' },
+  { name: 'Growth Pre-Test Choir/Band', start: '2026-09-02', end: '2026-09-04' },
+  { name: 'TSIA2 English', start: '2026-09-28', end: '2026-09-28' },
+  { name: 'TSIA2 Math', start: '2026-10-06', end: '2026-10-06' },
+  { name: 'PSAT', start: '2026-10-22', end: '2026-10-22' },
+  { name: 'CBE', start: '2026-10-27', end: '2026-10-30' },
+  { name: 'Eng I & II Interim', start: '2026-11-03', end: '2026-11-03' },
+  { name: 'Alg I Interim', start: '2026-11-19', end: '2026-11-19' },
+  { name: 'EOC Retakes', start: '2026-12-01', end: '2026-12-10' },
+  { name: 'Midterms', start: '2026-12-15', end: '2026-12-18' },
+  { name: 'CBE / ASVAB', start: '2027-01-19', end: '2027-01-22' },
+  { name: 'Eng I & II Interim', start: '2027-01-26', end: '2027-01-27' },
+  { name: 'Bio & US Hist Interim', start: '2027-02-10', end: '2027-02-10' },
+  { name: 'Alg I Interim', start: '2027-02-23', end: '2027-02-23' },
+  { name: 'TELPAS', start: '2027-03-02', end: '2027-03-04' },
+  { name: 'TSIA2 English', start: '2027-03-18', end: '2027-03-18' },
+  { name: 'TSIA2 Math', start: '2027-03-25', end: '2027-03-25' },
+  { name: 'SAT Day for Juniors', start: '2027-03-30', end: '2027-03-30' },
+  { name: 'English I & II EOC', start: '2027-04-08', end: '2027-04-08' },
+  { name: 'Bio & US Hist EOC', start: '2027-04-15', end: '2027-04-15' },
+  { name: 'Alg I EOC', start: '2027-04-27', end: '2027-04-27' },
+  { name: 'Growth Post Test', start: '2027-04-28', end: '2027-05-03' },
+  { name: 'AP / IBC Testing Window', start: '2027-05-04', end: '2027-05-14' }
+];
 
-const BLANK_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\nFall Semester | YYYY-MM-DD | YYYY-MM-DD\nSpring Semester | YYYY-MM-DD | YYYY-MM-DD\n\nBLOCKED_DAYS:\nName | YYYY-MM-DD\nName | YYYY-MM-DD | YYYY-MM-DD\n\nEVENT_NOTES:\nName | YYYY-MM-DD\nName | YYYY-MM-DD | YYYY-MM-DD\n\nUNIT_PLAN:\nFall Semester | Unit Name | Number of Instructional Days\nSpring Semester | Unit Name | Number of Instructional Days\n`;
+const START_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } };
+const END_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4CCCC' } };
+const HALF_DAY_WARNING = 'Half-day count used. Placement uses whole calendar dates; verify manually.';
+const LOW_CONFIDENCE_WARNING = 'Could not confidently extract this section. Use Advanced Mode to review or enter units manually.';
 
-const EXAMPLE_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\nAlgebra 2\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\nFall Semester | 2026-08-12 | 2026-12-14\nSpring Semester | 2027-01-06 | 2027-05-14\n\nBLOCKED_DAYS:\nLabor Day | 2026-09-07\nFlex Day PD / Student Holiday | 2026-10-09\nProfessional Development / Student Holiday | 2026-10-12\nFall Break | 2026-11-23 | 2026-11-27\nWinter Break | 2026-12-21 | 2027-01-03\nTeacher Workday / Student Holiday | 2027-01-04\nProfessional Development / Student Holiday | 2027-01-05\nStudent / Staff Holiday | 2027-01-18\nProfessional Development / Student Holiday | 2027-02-12\nFlex Day PD / Student Holiday | 2027-02-15\nSpring Break | 2027-03-08 | 2027-03-12\nHoliday | 2027-03-26\nProfessional Development / Student Holiday | 2027-04-30\nFinal Exams | 2027-05-17 | 2027-05-20\nProfessional Development / Student Holiday | 2027-05-21\n\nEVENT_NOTES:\nGrowth Pre-Test | 2026-08-24 | 2026-08-27\nGrowth Pre-Test Choir/Band | 2026-09-02 | 2026-09-04\nTSIA2 English | 2026-09-28\nTSIA2 Math | 2026-10-06\nPSAT | 2026-10-22\nCBE | 2026-10-27 | 2026-10-30\nEng I & II Interim | 2026-11-03\nAlg I Interim | 2026-11-19\nEOC Retakes | 2026-12-01 | 2026-12-10\nMidterms | 2026-12-15 | 2026-12-18\nCBE / ASVAB | 2027-01-19 | 2027-01-22\nEng I & II Interim | 2027-01-26 | 2027-01-27\nBio & US Hist Interim | 2027-02-10\nAlg I Interim | 2027-02-23\nTELPAS | 2027-03-02 | 2027-03-04\nTSIA2 English | 2027-03-18\nTSIA2 Math | 2027-03-25\nSAT Day for Juniors | 2027-03-30\nEnglish I & II EOC | 2027-04-08\nBio & US Hist EOC | 2027-04-15\nAlg I EOC | 2027-04-27\nGrowth Post Test | 2027-04-28 | 2027-05-03\nAP / IBC Testing Window | 2027-05-04 | 2027-05-14\n\nUNIT_PLAN:\nFall Semester | Unit 00 Fundamentals | 13\nFall Semester | Unit 01 Linear F(x) | 13\nFall Semester | Unit 02 Systems | 13\nFall Semester | Unit 03 Quadratics | 13\nFall Semester | Unit 04 Quadratics Pt 2 | 16\nFall Semester | Unit 04.5 | 11\nSpring Semester | Unit 05 Polynomials | 17\nSpring Semester | Unit 06 Rational Exponents / Radical Functions | 16\nSpring Semester | Unit 07 Exponential / Logarithms | 24\nSpring Semester | Unit 08 Rational Functions | 20\nSpring Semester | Unit 09 Regressions and Review | 7\n`;
+const BLANK_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\n1st Nine Weeks | 2026-08-12 | 2026-10-08\n2nd Nine Weeks | 2026-10-13 | 2026-12-18\n3rd Nine Weeks | 2027-01-06 | 2027-03-05\n4th Nine Weeks | 2027-03-15 | 2027-05-20\n\nBLOCKED_DAYS:\nName | YYYY-MM-DD\nName | YYYY-MM-DD | YYYY-MM-DD\n\nEVENT_NOTES:\nName | YYYY-MM-DD\nName | YYYY-MM-DD | YYYY-MM-DD\n\nUNIT_PLAN:\n1st Nine Weeks | Unit Name | Number of Instructional Days\n`;
 
-const state = { workbook: null, workbookName: '', diagnostics: null, parsed: null, preview: null, applied: false, exportWarning: '', templateLoaded: false, validationSucceeded: false, previewSucceeded: false, nextStep: 'Upload a workbook to begin.', mode: 'guided', guidedUnits: [], allowCrossTermGuided: true };
+const EXAMPLE_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\nAlgebra 2\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\n1st Nine Weeks | 2026-08-12 | 2026-10-08\n2nd Nine Weeks | 2026-10-13 | 2026-12-18\n3rd Nine Weeks | 2027-01-06 | 2027-03-05\n4th Nine Weeks | 2027-03-15 | 2027-05-20\n\nBLOCKED_DAYS:\n${DEFAULT_BLOCKED_DAYS.map((d) => `${d.name} | ${d.start}${d.end !== d.start ? ` | ${d.end}` : ''}`).join('\n')}\n\nEVENT_NOTES:\n${DEFAULT_EVENT_NOTES.map((d) => `${d.name} | ${d.start}${d.end !== d.start ? ` | ${d.end}` : ''}`).join('\n')}\n\nUNIT_PLAN:\n1st Nine Weeks | Unit 00 Fundamentals | 13\n1st Nine Weeks | Unit 01 Linear F(x) | 13\n2nd Nine Weeks | Unit 02 Systems | 13\n2nd Nine Weeks | Unit 03 Quadratics | 15.5\n3rd Nine Weeks | Unit 04 Polynomials | 17\n4th Nine Weeks | Unit 05 Review | 7\n`;
+
+const state = {
+  mode: 'plc',
+  yagWorkbook: null,
+  yagName: '',
+  mapWorkbook: null,
+  mapName: '',
+  diagnostics: null,
+  courseName: '',
+  gradingPeriods: cloneRows(PLC_GRADING_PERIOD_CONFIG),
+  blockedDays: cloneRows(DEFAULT_BLOCKED_DAYS),
+  eventNotes: cloneRows(DEFAULT_EVENT_NOTES),
+  units: [],
+  extractionWarnings: [],
+  extractionSummary: '',
+  preview: [],
+  previewSucceeded: false,
+  applied: false,
+  selectedAdvancedUnit: 0,
+  fitIssues: [],
+  unusedDays: [],
+  nextStep: 'Next: upload a district YAG and blank curriculum map.'
+};
+
 const $ = (id) => document.getElementById(id);
-
+const escapeHtml = (text) => String(text ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 if (typeof ExcelJS === 'undefined') {
-  state.exportWarning = 'Warning: this export method may not preserve original workbook formatting.';
-  $('fileStatus').textContent = state.exportWarning;
+  setStatusMessage('ExcelJS did not load. Workbook import/export will not work until the local browser can load the bundled spreadsheet library.', true);
 }
 
-
-function hasWorkbookWithDates() {
-  return !!(state.workbook && state.diagnostics && state.diagnostics.totalDateCells > 0);
+function cloneRows(rows) {
+  return rows.map((row) => ({ ...row }));
 }
 
-function setActionState(id, ready, reason = '') {
-  const el = $(id);
-  if (!el) return;
-  el.disabled = false;
-  el.dataset.ready = ready ? 'true' : 'false';
-  el.setAttribute('aria-disabled', ready ? 'false' : 'true');
-  el.title = ready ? '' : reason;
-  el.classList.toggle('not-ready', !ready);
-}
-
-function updateWorkflowButtons() {
-  const workbookLoaded = !!state.workbook;
-  const workbookReady = hasWorkbookWithDates();
-  const hasTemplate = !!($('templateInput').value || '').trim();
-  const guidedValid = validateGuided(false).ok;
-  const uploadReason = state.workbook ? 'Workbook loaded. Upload a different file if needed.' : 'Upload a calendar workbook to begin.';
-  const courseReason = workbookReady ? 'Enter the course name and number of units.' : 'Upload a workbook with detected date cells first.';
-  const unitReason = $('courseNameInput').value.trim() ? 'Fill in unit names and instructional days.' : 'Enter the course name and create a unit table first.';
-  const guidedPreviewReason = !workbookLoaded
-    ? 'Upload a calendar before generating preview.'
-    : (!guidedValid ? 'Finish all unit names and instructional day counts before generating preview.' : 'Generate the pacing preview.');
-  const applyReason = state.previewSucceeded ? 'Apply the previewed changes to the workbook.' : 'Generate and review the preview before applying changes.';
-  const downloadReason = state.applied ? 'Download the edited workbook.' : 'Apply changes before downloading the edited workbook.';
-  const templateReason = workbookReady ? 'Paste or load a planning template.' : 'Upload a workbook with detected date cells first.';
-  const validateReason = workbookLoaded && hasTemplate ? 'Validate the template.' : 'Upload a workbook and load or paste a template before validating.';
-  const advancedPreviewReason = state.validationSucceeded ? 'Generate the pacing preview.' : 'Validate the template before generating preview.';
-
-  setActionState('wfUploadBtn', true, uploadReason);
-  setActionState('wfAdvUploadBtn', true, uploadReason);
-  setActionState('wfCourseBtn', workbookReady, courseReason);
-  setActionState('wfUnitBtn', !!$('courseNameInput').value.trim(), unitReason);
-  setActionState('wfTemplateBtn', workbookReady, templateReason);
-  setActionState('createUnitTableBtn', workbookReady, courseReason);
-  setActionState('validateBtn', workbookLoaded && hasTemplate, validateReason);
-  setActionState('validateTemplateInContextBtn', workbookLoaded && hasTemplate, validateReason);
-  setActionState('previewBtn', state.mode === 'guided' && workbookLoaded && guidedValid, guidedPreviewReason);
-  setActionState('generatePreviewFromUnitsBtn', state.mode === 'guided' && workbookLoaded && guidedValid, guidedPreviewReason);
-  setActionState('advPreviewBtn', state.validationSucceeded, advancedPreviewReason);
-  setActionState('generateTemplatePreviewBtn', state.validationSucceeded, advancedPreviewReason);
-  setActionState('applyBtn', state.previewSucceeded, applyReason);
-  setActionState('advApplyBtn', state.previewSucceeded, applyReason);
-  setActionState('applyFromPreviewBtn', state.previewSucceeded, applyReason);
-  setActionState('downloadBtn', state.applied, downloadReason);
-  setActionState('advDownloadBtn', state.applied, downloadReason);
-  setActionState('downloadFromApplyBtn', state.applied, downloadReason);
-}
-
-function setStepClass(id, stateName) {
-  const el = $(id);
-  if (!el) return;
-  el.classList.remove('complete', 'current', 'warning', 'error');
-  if (stateName) el.classList.add(stateName);
-}
-
-function updateWorkflowState() {
-  const workbookReady = hasWorkbookWithDates();
-  const hasTemplate = !!($('templateInput').value || '').trim();
-  const hasCourse = !!$('courseNameInput').value.trim();
-  const hasUnitRows = state.guidedUnits.length > 0;
-  const guidedValid = validateGuided(false).ok;
-
-  if (!state.workbook) {
-    state.nextStep = 'Next: upload a calendar.';
-  } else if (!workbookReady) {
-    state.nextStep = 'Next: check workbook diagnostics because no date cells were detected.';
-  } else if (state.applied) {
-    state.nextStep = 'Next: download edited workbook.';
-  } else if (state.previewSucceeded) {
-    state.nextStep = 'Next: review preview and apply changes.';
-  } else if (state.mode === 'guided') {
-    if (!hasCourse) state.nextStep = 'Next: enter course name and create unit table.';
-    else if (!hasUnitRows) state.nextStep = 'Next: enter number of units and create unit table.';
-    else if (!guidedValid) state.nextStep = 'Next: fill in unit names and days.';
-    else state.nextStep = 'Next: generate preview.';
-  } else if (state.validationSucceeded) {
-    state.nextStep = 'Next: generate preview.';
-  } else if (hasTemplate) {
-    state.nextStep = 'Next: validate template.';
-  } else {
-    state.nextStep = 'Next: load or paste a planning template.';
-  }
-
-  const uploadState = !state.workbook ? 'current' : (workbookReady ? 'complete' : 'error');
-  setStepClass('wfUploadBtn', uploadState);
-  setStepClass('wfAdvUploadBtn', uploadState);
-  setStepClass('wfCourseBtn', hasCourse ? 'complete' : (workbookReady ? 'current' : ''));
-  setStepClass('wfUnitBtn', guidedValid ? 'complete' : (hasUnitRows ? 'warning' : (hasCourse ? 'current' : '')));
-  setStepClass('wfTemplateBtn', hasTemplate ? 'complete' : (workbookReady ? 'current' : ''));
-  setStepClass('previewBtn', state.previewSucceeded ? 'complete' : (guidedValid && state.mode === 'guided' ? 'current' : ''));
-  setStepClass('applyBtn', state.applied ? 'complete' : (state.previewSucceeded && state.mode === 'guided' ? 'current' : ''));
-  setStepClass('downloadBtn', state.applied && state.mode === 'guided' ? 'current' : '');
-  setStepClass('validateBtn', state.validationSucceeded ? 'complete' : (hasTemplate && state.mode === 'advanced' ? 'current' : ''));
-  setStepClass('advPreviewBtn', state.previewSucceeded ? 'complete' : (state.validationSucceeded && state.mode === 'advanced' ? 'current' : ''));
-  setStepClass('advApplyBtn', state.applied ? 'complete' : (state.previewSucceeded && state.mode === 'advanced' ? 'current' : ''));
-  setStepClass('advDownloadBtn', state.applied && state.mode === 'advanced' ? 'current' : '');
-
-  $('guidedWorkflowRow').classList.toggle('hidden', state.mode !== 'guided');
-  $('advancedWorkflowRow').classList.toggle('hidden', state.mode !== 'advanced');
-  $('guidedSection').classList.toggle('hidden', state.mode !== 'guided');
-  $('advancedSection').classList.toggle('hidden', state.mode !== 'advanced');
-
-  updateWorkflowButtons();
-  renderStatusPanel();
-}
-
-function renderStatusPanel() {
-  const nextStepMessage = $('nextStepMessage');
-  if (nextStepMessage) nextStepMessage.textContent = state.nextStep;
-  const d = state.diagnostics;
-  const workbookLoaded = state.workbook ? 'Yes' : 'No';
-  const sheetsMatched = d && d.missingSheets.length === 0 ? 'Yes' : 'No';
-  const dateCellsDetected = d ? d.totalDateCells : 0;
-  const firstDate = d?.firstDate || 'N/A';
-  const lastDate = d?.lastDate || 'N/A';
-  $('statusPanel').innerHTML = `
-    <ul>
-      <li><strong>Workbook loaded:</strong> ${workbookLoaded}</li>
-      <li><strong>Sheets matched:</strong> ${d ? sheetsMatched : 'No'}</li>
-      <li><strong>Date cells detected:</strong> ${dateCellsDetected}</li>
-      <li><strong>First detected date:</strong> ${firstDate}</li>
-      <li><strong>Last detected date:</strong> ${lastDate}</li>
-      <li><strong>Next step:</strong> ${state.nextStep}</li>
-    </ul>`;
+function setStatusMessage(message, isError = false) {
+  const panel = $('statusPanel');
+  if (panel) panel.innerHTML = `<p class="${isError ? 'error' : 'status'}">${escapeHtml(message)}</p>`;
 }
 
 function setNextStep(message) {
   state.nextStep = message;
-  renderStatusPanel();
-}
-
-function scrollToSection(id) {
-  const target = $(id);
-  if (!target) return;
-  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function actionReady(id, fallbackMessage) {
-  const el = $(id);
-  if (!el || el.dataset.ready !== 'false') return true;
-  const message = el.title || fallbackMessage;
-  setError(message);
-  setNextStep(message);
-  return false;
-}
-
-function reportActionError(actionName, err) {
-  if (window.console && typeof window.console.error === 'function') {
-    window.console.error(`${actionName} failed`, err);
-  }
-  const detail = err && err.message ? ` ${err.message}` : '';
-  setError(`${actionName} failed.${detail}`);
-  setNextStep(`${actionName} failed. Check the status message, then try again.`);
-}
-
-function handleUploadShortcut() {
-  scrollToSection('uploadSection');
-  setNextStep(state.workbook ? 'Upload a different workbook if needed, or continue to the next workflow step.' : 'Next: upload a calendar.');
-}
-
-function handleCourseShortcut() {
-  if (!actionReady('wfCourseBtn', 'Upload a workbook with detected date cells first.')) return;
-  scrollToSection('courseSetupSection');
-}
-
-function handleUnitShortcut() {
-  if (!actionReady('wfUnitBtn', 'Enter the course name and create a unit table first.')) return;
-  scrollToSection('unitListSection');
-}
-
-function handleTemplateShortcut() {
-  if (!actionReady('wfTemplateBtn', 'Upload a workbook with detected date cells first.')) return;
-  scrollToSection('templateSection');
-}
-
-function refreshWorkbookDiagnostics() {
-  if (!state.workbook) {
-    updateWorkflowState();
-    return;
-  }
-  state.diagnostics = detectWorkbookDates(state.workbook, state.workbookName);
-  renderDiagnostics(state.diagnostics);
   updateWorkflowState();
 }
 
-function isoDate(value) { return new Date(value).toISOString().slice(0, 10); }
+function isoDate(value) {
+  return new Date(value).toISOString().slice(0, 10);
+}
+
 function parseIso(dateStr) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ''))) return null;
   const dt = new Date(`${dateStr}T00:00:00Z`);
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
+
 function isWeekend(dateStr) {
   const n = new Date(`${dateStr}T00:00:00Z`).getUTCDay();
   return n === 0 || n === 6;
 }
+
 function datesInRange(startIso, endIso) {
   const out = [];
   const d = new Date(`${startIso}T00:00:00Z`);
@@ -230,78 +132,10 @@ function datesInRange(startIso, endIso) {
   return out;
 }
 
-function parseSchoolYearRange(schoolYear) {
-  const m = String(schoolYear || '').trim().match(/^(\d{4})\s*-\s*(\d{4})$/);
-  if (!m) return null;
-  return { firstYear: Number(m[1]), secondYear: Number(m[2]) };
-}
-
-function inferSheetYear(sheetName) {
-  const m = String(sheetName || '').match(/\b(19|20)\d{2}\b/);
-  return m ? Number(m[0]) : null;
-}
-
-function inferSchoolYearForPeriod(periodLabel, schoolYear) {
-  const parsed = parseSchoolYearRange(schoolYear);
-  if (!parsed) return null;
-  if (periodLabel === '1st' || periodLabel === '2nd') return parsed.firstYear;
-  if (periodLabel === '3rd' || periodLabel === '4th') return parsed.secondYear;
-  return null;
-}
-
-function readExcelDate(cell, context = {}) {
-  if (!cell) return { ok: false };
-  const rawValue = getCellRawValue(cell);
-  if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) {
-    return { ok: true, iso: isoDate(rawValue), raw: rawValue, type: 'Date object' };
-  }
-  if (typeof rawValue === 'number') {
-    const dt = excelSerialToDate(rawValue);
-    if (dt) {
-      return { ok: true, iso: isoDate(dt), raw: rawValue, type: 'Excel serial date' };
-    }
-  }
-  if (typeof rawValue === 'string') {
-    const trimmed = rawValue.trim();
-    const mdOnly = trimmed.match(/^(\d{1,2})\/(\d{1,2})$/);
-    if (mdOnly) {
-      const month = Number(mdOnly[1]);
-      const day = Number(mdOnly[2]);
-      const sheetYear = inferSheetYear(context.sheetName);
-      const schoolYear = inferSchoolYearForPeriod(context.periodLabel, context.schoolYear);
-      const inferredYear = sheetYear || schoolYear;
-      if (!inferredYear) {
-        return {
-          ok: false,
-          raw: rawValue,
-          type: 'non-date',
-          warning: `Unable to infer year for month/day text "${trimmed}" in ${context.sheetName || 'unknown sheet'} (${context.periodLabel || 'unknown period'}).`
-        };
-      }
-      const dt = new Date(Date.UTC(inferredYear, month - 1, day));
-      if (dt.getUTCFullYear() !== inferredYear || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
-        return { ok: false, raw: rawValue, type: 'non-date' };
-      }
-      return {
-        ok: true,
-        iso: isoDate(dt),
-        raw: rawValue,
-        type: sheetYear ? 'date-like text with sheet-year inference' : 'date-like text with school-year inference'
-      };
-    }
-    const directIso = parseIso(trimmed);
-    if (directIso) return { ok: true, iso: isoDate(directIso), raw: rawValue, type: 'full date text' };
-    const attempt = new Date(trimmed);
-    if (!Number.isNaN(attempt.getTime())) return { ok: true, iso: isoDate(attempt), raw: rawValue, type: 'full date text' };
-  }
-  return { ok: false, raw: rawValue, type: 'non-date' };
-}
-
 function excelSerialToDate(serial) {
   if (!Number.isFinite(serial)) return null;
   const excelEpoch = Date.UTC(1899, 11, 30);
-  const millis = Math.round(serial * 86400000);
-  const dt = new Date(excelEpoch + millis);
+  const dt = new Date(excelEpoch + Math.round(serial * 86400000));
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
@@ -319,59 +153,57 @@ function getCellRawValue(cell) {
   return null;
 }
 
+function cellText(cell) {
+  const raw = getCellRawValue(cell);
+  if (raw == null) return '';
+  if (raw instanceof Date) return isoDate(raw);
+  return String(raw).replace(/\s+/g, ' ').trim();
+}
+
+function readExcelDate(cell, context = {}) {
+  const rawValue = getCellRawValue(cell);
+  if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) return { ok: true, iso: isoDate(rawValue), raw: rawValue, type: 'Date object' };
+  if (typeof rawValue === 'number') {
+    const dt = excelSerialToDate(rawValue);
+    if (dt) return { ok: true, iso: isoDate(dt), raw: rawValue, type: 'Excel serial date' };
+  }
+  if (typeof rawValue === 'string') {
+    const trimmed = rawValue.trim();
+    const directIso = parseIso(trimmed);
+    if (directIso) return { ok: true, iso: isoDate(directIso), raw: rawValue, type: 'full date text' };
+    const mdOnly = trimmed.match(/^(\d{1,2})\/(\d{1,2})$/);
+    if (mdOnly) {
+      const inferredYear = context.periodLabel === '1st' || context.periodLabel === '2nd' ? 2026 : 2027;
+      const dt = new Date(Date.UTC(inferredYear, Number(mdOnly[1]) - 1, Number(mdOnly[2])));
+      if (!Number.isNaN(dt.getTime())) return { ok: true, iso: isoDate(dt), raw: rawValue, type: 'date-like text with grading-period inference' };
+    }
+    const attempt = new Date(trimmed);
+    if (!Number.isNaN(attempt.getTime())) return { ok: true, iso: isoDate(attempt), raw: rawValue, type: 'full date text' };
+  }
+  return { ok: false, raw: rawValue, type: 'non-date' };
+}
+
+function columnLetterToNumber(letter) {
+  return String(letter).split('').reduce((sum, ch) => sum * 26 + ch.toUpperCase().charCodeAt(0) - 64, 0);
+}
+
 function getMatchedSheets(sheetNames) {
   const taken = new Set();
-  const matches = [];
-  for (let i = 0; i < EXPECTED_SHEET_NAMES.length; i++) {
-    const expectedName = EXPECTED_SHEET_NAMES[i];
-    const periodLabel = GRADING_PERIOD_LABELS[i];
+  return EXPECTED_SHEET_NAMES.map((expectedName, index) => {
+    const periodLabel = GRADING_PERIOD_LABELS[index];
     let actualName = sheetNames.find((name) => name === expectedName);
     let matchType = 'exact';
     if (!actualName) {
-      const pattern = new RegExp(`\\b${periodLabel}\\b`, 'i');
+      const pattern = new RegExp(`\\b${periodLabel}\\b|${periodLabel}\\s*(9|nine)`, 'i');
       actualName = sheetNames.find((name) => !taken.has(name) && pattern.test(name));
       matchType = actualName ? 'pattern' : 'missing';
     }
     if (actualName) taken.add(actualName);
-    matches.push({ expectedName, periodLabel, actualName: actualName || null, matchType });
-  }
-  return matches;
+    return { expectedName, periodLabel, actualName: actualName || null, matchType };
+  });
 }
 
-$('copyBlankBtn').onclick = async () => {
-  await navigator.clipboard.writeText(BLANK_TEMPLATE);
-  refreshWorkbookDiagnostics();
-    if (hasWorkbookWithDates()) setNextStep('Next: enter your course name and number of units.');
-};
-$('loadExampleBtn').onclick = () => { $('templateInput').value = EXAMPLE_TEMPLATE; state.templateLoaded = true; state.validationSucceeded = false; state.previewSucceeded = false; refreshWorkbookDiagnostics(); };
-$('templateInput').addEventListener('input', () => { state.templateLoaded = !!$('templateInput').value.trim(); state.validationSucceeded = false; state.previewSucceeded = false; refreshWorkbookDiagnostics(); });
-
-$('fileInput').onchange = async (e) => {
-  const file = e.target.files?.[0];
-  if (!file) {
-    if (!state.workbook) setError('No workbook selected. Please upload a .xlsx file.');
-    return;
-  }
-  try {
-    const buf = await file.arrayBuffer();
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf);
-    state.workbook = wb;
-    state.workbookName = file.name;
-    state.applied = false;
-    state.preview = null;
-    state.validationSucceeded = false;
-    state.previewSucceeded = false;
-    $('fileStatus').textContent = `Loaded: ${file.name}`;
-
-    refreshWorkbookDiagnostics();
-  } catch (err) {
-    setError(`Failed to read workbook: ${err.message}`);
-  }
-};
-
 function detectWorkbookDates(workbook, workbookName) {
-  const templateSchoolYear = parseTemplate($('templateInput')?.value || '').data?.schoolYear || '';
   const diagnostics = {
     workbookName,
     sheetNames: workbook.worksheets.map((ws) => ws.name),
@@ -381,412 +213,550 @@ function detectWorkbookDates(workbook, workbookName) {
     firstDate: null,
     lastDate: null,
     allAddresses: [],
-    skipped: [],
     warnings: [],
     matchedSheets: []
   };
-
   diagnostics.matchedSheets = getMatchedSheets(diagnostics.sheetNames);
   diagnostics.missingSheets = diagnostics.matchedSheets.filter((m) => !m.actualName).map((m) => m.expectedName);
-  if (diagnostics.missingSheets.length > 0) {
-    diagnostics.warnings.push(`Missing expected sheets: ${diagnostics.missingSheets.join(', ')}`);
-  }
+  if (diagnostics.missingSheets.length) diagnostics.warnings.push(`Missing expected curriculum map sheets: ${diagnostics.missingSheets.join(', ')}`);
 
   for (const match of diagnostics.matchedSheets) {
-    const sheetKey = `${match.expectedName} (${match.periodLabel})`;
+    const key = `${match.expectedName} (${match.periodLabel})`;
     const ws = match.actualName ? workbook.getWorksheet(match.actualName) : null;
-    if (!ws) {
-      diagnostics.perSheet[sheetKey] = [];
-      continue;
-    }
-
-    if (!ws.actualRowCount) {
-      diagnostics.skipped.push(`${match.actualName}: empty worksheet range`);
-      diagnostics.perSheet[sheetKey] = [];
-      continue;
-    }
-    const matches = [];
-    const endRow = ws.actualRowCount || ws.rowCount;
-    for (let r = 1; r <= endRow; r++) {
-      for (let i = 0; i < DATE_COLUMNS.length; i++) {
-        const dateAddr = `${DATE_COLUMNS[i]}${r}`;
-        const noteAddr = `${NOTE_COLUMNS[i]}${r}`;
-        const cell = ws.getCell(dateAddr);
-        if (cell.value == null || cell.value === '') continue;
-
-        const parsed = readExcelDate(cell, { sheetName: match.actualName, periodLabel: match.periodLabel, schoolYear: templateSchoolYear });
-        if (!parsed.ok) {
-          if (parsed.warning) diagnostics.warnings.push(parsed.warning);
-          continue;
-        }
-
-        matches.push({
-          sheetName: match.actualName,
-          matchedPeriod: match.periodLabel,
-          row: r,
-          dateAddr,
-          noteAddr,
-          date: parsed.iso,
-          rawValue: String(parsed.raw),
-          interpretedAs: parsed.type
-        });
+    diagnostics.perSheet[key] = [];
+    if (!ws) continue;
+    for (let r = 1; r <= (ws.actualRowCount || ws.rowCount); r += 1) {
+      DATE_COLUMNS.forEach((dateCol, idx) => {
+        const dateAddr = `${dateCol}${r}`;
+        const parsed = readExcelDate(ws.getCell(dateAddr), { periodLabel: match.periodLabel });
+        if (!parsed.ok) return;
+        const noteAddr = `${NOTE_COLUMNS[idx]}${r}`;
+        const row = { sheetName: match.actualName, matchedPeriod: match.periodLabel, dateAddr, noteAddr, date: parsed.iso, rawValue: String(parsed.raw), interpretedAs: parsed.type };
+        diagnostics.perSheet[key].push(row);
         diagnostics.totalDateCells += 1;
         diagnostics.allAddresses.push(`${match.actualName}!${dateAddr}`);
         if (!diagnostics.firstDate || parsed.iso < diagnostics.firstDate) diagnostics.firstDate = parsed.iso;
         if (!diagnostics.lastDate || parsed.iso > diagnostics.lastDate) diagnostics.lastDate = parsed.iso;
-      }
+      });
     }
-
-    diagnostics.perSheet[sheetKey] = matches;
-    if (!matches.length) diagnostics.warnings.push(`No date cells detected in ${match.actualName} (matched ${match.periodLabel}) for date columns ${DATE_COLUMNS.join(', ')}`);
+    if (!diagnostics.perSheet[key].length) diagnostics.warnings.push(`No date cells detected in ${match.actualName} for date columns ${DATE_COLUMNS.join(', ')}.`);
   }
-
-  if (!diagnostics.totalDateCells) diagnostics.warnings.push('No date cells were detected in expected sheets/columns.');
+  if (!diagnostics.totalDateCells) diagnostics.warnings.push('No date cells detected. Apply is disabled until a curriculum map with dates is uploaded.');
   return diagnostics;
 }
 
-function renderDiagnostics(diagnostics) {
-  const expectedFound = diagnostics.missingSheets.length === 0;
-  const detailRows = Object.values(diagnostics.perSheet).flat().slice(0, 200);
-
-  $('diagnostics').innerHTML = `
-    <ul>
-      <li><strong>Workbook name:</strong> ${diagnostics.workbookName}</li>
-      <li><strong>Sheet names found:</strong> ${diagnostics.sheetNames.join(', ') || 'None'}</li>
-      <li><strong>Expected sheets found:</strong> ${expectedFound ? 'Yes' : 'No'}</li>
-      <li><strong>Sheet matching:</strong> ${diagnostics.matchedSheets.map((m) => `${m.expectedName} (${m.periodLabel}) → ${m.actualName || 'Not found'} [${m.matchType}]`).join(' | ')}</li>
-      <li><strong>Date cells detected per sheet:</strong> ${Object.entries(diagnostics.perSheet).map(([s, arr]) => `${s}: ${arr.length}`).join(' | ')}</li>
-      <li><strong>Total date cells detected:</strong> ${diagnostics.totalDateCells}</li>
-      <li><strong>First detected date:</strong> ${diagnostics.firstDate || 'N/A'}</li>
-      <li><strong>Last detected date:</strong> ${diagnostics.lastDate || 'N/A'}</li>
-      <li><strong>Detected date addresses:</strong> ${diagnostics.allAddresses.join(', ') || 'None'}</li>
-      <li><strong>Rows/columns skipped:</strong> ${diagnostics.skipped.join('; ') || 'None'}</li>
-      <li><strong>Warnings:</strong> ${diagnostics.warnings.join('; ') || 'None'}</li>
-    </ul>
-    <p><strong>Detection details (first 200): raw value → interpreted date, with paired note cell</strong></p>
-    <table><thead><tr><th>Sheet</th><th>Matched Period</th><th>Date Cell</th><th>Note Cell</th><th>Raw Value</th><th>Interpreted Date</th><th>Parse Type</th></tr></thead>
-    <tbody>${detailRows.map(x => `<tr><td>${x.sheetName}</td><td>${x.matchedPeriod}</td><td>${x.dateAddr}</td><td>${x.noteAddr}</td><td>${x.rawValue}</td><td>${x.date}</td><td>${x.interpretedAs}</td></tr>`).join('')}</tbody></table>`;
+function renderDiagnostics() {
+  if (!state.diagnostics) {
+    $('diagnostics').textContent = 'Upload a blank curriculum map workbook to view diagnostics.';
+    return;
+  }
+  const d = state.diagnostics;
+  const detailRows = Object.values(d.perSheet).flat().slice(0, 200);
+  $('diagnostics').innerHTML = `<ul>
+    <li><strong>Workbook name:</strong> ${escapeHtml(d.workbookName)}</li>
+    <li><strong>Sheet names found:</strong> ${escapeHtml(d.sheetNames.join(', ') || 'None')}</li>
+    <li><strong>Sheet matching:</strong> ${escapeHtml(d.matchedSheets.map((m) => `${m.expectedName} → ${m.actualName || 'Not found'} [${m.matchType}]`).join(' | '))}</li>
+    <li><strong>Date cells detected per sheet:</strong> ${escapeHtml(Object.entries(d.perSheet).map(([s, rows]) => `${s}: ${rows.length}`).join(' | '))}</li>
+    <li><strong>Total date cells detected:</strong> ${d.totalDateCells}</li>
+    <li><strong>First / last detected date:</strong> ${d.firstDate || 'N/A'} / ${d.lastDate || 'N/A'}</li>
+    <li><strong>Warnings:</strong> ${escapeHtml(d.warnings.join('; ') || 'None')}</li>
+  </ul>
+  <table><thead><tr><th>Sheet</th><th>Period</th><th>Date Cell</th><th>Note Cell</th><th>Raw Value</th><th>Interpreted Date</th><th>Parse Type</th></tr></thead>
+  <tbody>${detailRows.map((x) => `<tr><td>${escapeHtml(x.sheetName)}</td><td>${escapeHtml(x.matchedPeriod)}</td><td>${x.dateAddr}</td><td>${x.noteAddr}</td><td>${escapeHtml(x.rawValue)}</td><td>${x.date}</td><td>${escapeHtml(x.interpretedAs)}</td></tr>`).join('')}</tbody></table>`;
 }
 
-function parseTemplate(text) {
-  const lines = text.split(/\r?\n/);
-  const errors = [];
-  const data = { terms: [], blocked: [], events: [], units: [], schoolYear: '', courseName: '', skipWeekends: true };
-  let section = '';
+async function readWorkbookFromFile(file) {
+  const buf = await file.arrayBuffer();
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+  return wb;
+}
 
-  lines.forEach((raw, idx) => {
-    const line = raw.trim();
-    if (!line) return;
-    if (line.endsWith(':')) {
-      section = line.slice(0, -1).trim().toUpperCase();
-      return;
-    }
+async function handleYagUpload(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    state.yagWorkbook = await readWorkbookFromFile(file);
+    state.yagName = file.name;
+    state.applied = false;
+    $('yagStatus').textContent = `Loaded: ${file.name}`;
+    setNextStep('Next: upload the blank curriculum map, then extract units from the YAG.');
+  } catch (err) {
+    $('yagStatus').innerHTML = `<span class="error">Failed to read YAG: ${escapeHtml(err.message)}</span>`;
+  }
+}
 
-    const lineNo = idx + 1;
-    const parts = line.split('|').map((p) => p.trim());
+async function handleMapUpload(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    state.mapWorkbook = await readWorkbookFromFile(file);
+    state.mapName = file.name;
+    state.diagnostics = detectWorkbookDates(state.mapWorkbook, file.name);
+    state.applied = false;
+    state.preview = [];
+    state.previewSucceeded = false;
+    $('mapStatus').textContent = `Loaded: ${file.name}`;
+    renderDiagnostics();
+    setNextStep(state.yagWorkbook ? 'Next: extract units from the YAG.' : 'Next: upload the completed district YAG.');
+  } catch (err) {
+    $('mapStatus').innerHTML = `<span class="error">Failed to read curriculum map: ${escapeHtml(err.message)}</span>`;
+  }
+}
 
-    if (section === 'SCHOOL_YEAR') data.schoolYear = line;
-    else if (section === 'COURSE_NAME') data.courseName = line;
-    else if (section === 'SKIP_WEEKENDS') data.skipWeekends = line.toLowerCase() === 'yes';
-    else if (section === 'TERMS') {
-      if (parts.length !== 3) {
-        errors.push(`Line ${lineNo}: TERMS must be "Term Name | YYYY-MM-DD | YYYY-MM-DD".`);
-      } else {
-        const [name, start, end] = parts;
-        if (!parseIso(start) || !parseIso(end)) errors.push(`Line ${lineNo}: malformed term date(s).`);
-        else if (start > end) errors.push(`Line ${lineNo}: term start date must be <= end date.`);
-        else data.terms.push({ name, start, end });
-      }
-    } else if (section === 'BLOCKED_DAYS' || section === 'EVENT_NOTES') {
-      if (parts.length !== 2 && parts.length !== 3) {
-        errors.push(`Line ${lineNo}: ${section} must be "Name | Date" or "Name | Start | End".`);
-      } else {
-        const [name, start, endRaw] = parts;
-        const end = endRaw || start;
-        if (!parseIso(start) || !parseIso(end)) errors.push(`Line ${lineNo}: malformed date(s) in ${section}.`);
-        else if (start > end) errors.push(`Line ${lineNo}: start date must be <= end date in ${section}.`);
-        else (section === 'BLOCKED_DAYS' ? data.blocked : data.events).push({ name, start, end });
-      }
-    } else if (section === 'UNIT_PLAN') {
-      if (parts.length !== 3) {
-        errors.push(`Line ${lineNo}: UNIT_PLAN must be "Term Name | Unit Name | Number".`);
-      } else {
-        const [termName, unitName, dayStr] = parts;
-        const days = Number(dayStr);
-        if (!Number.isInteger(days) || days <= 0) errors.push(`Line ${lineNo}: instructional days must be a positive integer.`);
-        else data.units.push({ termName, unitName, days });
-      }
-    } else {
-      errors.push(`Line ${lineNo}: text appears outside a known section header.`);
-    }
+function normalizePeriodLabel(text) {
+  const s = String(text || '').toLowerCase();
+  if (/\b1(st)?\b|first/.test(s)) return '1st Nine Weeks';
+  if (/\b2(nd)?\b|second/.test(s)) return '2nd Nine Weeks';
+  if (/\b3(rd)?\b|third/.test(s)) return '3rd Nine Weeks';
+  if (/\b4(th)?\b|fourth/.test(s)) return '4th Nine Weeks';
+  return '';
+}
+
+function isPeriodText(text) {
+  return /(1st|first|2nd|second|3rd|third|4th|fourth)\s*(nine|9)/i.test(String(text || ''));
+}
+
+function isSkipYagText(text) {
+  return /^(unit number\/title;?\s*teks|days in unit|instructional days available|total days in units|balance|unit title|unit number|teks)$/i.test(String(text || '').trim()) ||
+    /(instructional days available|total days in units|balance)/i.test(String(text || ''));
+}
+
+function extractNumberFromCell(cell) {
+  const raw = getCellRawValue(cell);
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/,/g, '').trim();
+    if (/^\d+(\.\d+)?$/.test(cleaned)) return Number(cleaned);
+  }
+  return null;
+}
+
+function maybeCourseName(rowText) {
+  const joined = rowText.join(' ').trim();
+  const courseMatch = joined.match(/course\s*(name)?\s*[:\-]\s*(.+)$/i);
+  if (courseMatch && courseMatch[2]) return courseMatch[2].trim();
+  if (joined && joined.length > 4 && joined.length < 90 && !isPeriodText(joined) && !isSkipYagText(joined) && !/days|balance|total|unit/i.test(joined)) return joined;
+  return '';
+}
+
+function detectYagHeader(rowText, currentHeader) {
+  const header = { ...currentHeader };
+  rowText.forEach((text, idx) => {
+    const col = idx + 1;
+    if (/unit number\/title|unit title|unit name/i.test(text)) header.titleCol = col;
+    if (/days in unit/i.test(text)) header.daysCol = col;
   });
-
-  if (!data.terms.length) errors.push('No TERMS entries found.');
-  if (!data.units.length) errors.push('No UNIT_PLAN entries found.');
-  const termNames = new Set(data.terms.map((t) => t.name));
-  const badUnits = data.units.filter((u) => !termNames.has(u.termName));
-  if (badUnits.length) errors.push(`UNIT_PLAN term mismatch: ${badUnits.map((u) => `${u.termName} (${u.unitName})`).join(', ')}`);
-
-  return { ok: errors.length === 0, errors, data };
+  return header;
 }
 
-function validateTemplate() {
-  const parsed = parseTemplate($('templateInput').value);
-  state.parsed = parsed.ok ? parsed.data : null;
-  state.validationSucceeded = false;
-  state.previewSucceeded = false;
-  if (!parsed.ok) {
-    $('validationOutput').innerHTML = `<p class="error">Validation errors:</p><ul>${parsed.errors.map((e) => `<li>${e}</li>`).join('')}</ul>`;
-  } else {
-    if (state.workbook && state.diagnostics && state.diagnostics.totalDateCells === 0) {
-      $('validationOutput').innerHTML = '<p class="error">Workbook loaded, but no usable date cells were detected. Check workbook diagnostics.</p>';
-    } else {
-      $('validationOutput').innerHTML = '<p class="ok">Template validation passed.</p>';
-      state.validationSucceeded = true;
-    }
-  }
-  updateWorkflowState();
-}
-
-
-function makeInstructionalDayFilter(parsed, blockedSet) {
-  return (d) => (!parsed.skipWeekends || !isWeekend(d.date)) && !blockedSet.has(d.date);
-}
-
-function countDatesInRange(range) {
-  return datesInRange(range.start, range.end).length;
-}
-
-function isCrossedRange(startDate, endDate, range) {
-  return startDate && endDate && startDate < range.start && endDate > range.end;
-}
-
-function findTermByDate(terms, date) {
-  return terms.find((t) => date >= t.start && date <= t.end) || null;
-}
-
-function boundaryWarningsForUnit(unit, startDate, endDate, parsed) {
+function extractUnitsFromYagWorkbook(workbook) {
+  const units = [];
   const warnings = [];
-  const preferredTerm = parsed.terms.find((t) => t.name === unit.termName);
-  if (preferredTerm && startDate <= preferredTerm.end && endDate > preferredTerm.end) {
-    warnings.push(`Crosses ${preferredTerm.name} boundary`);
-    warnings.push('Scheduled across term boundary; review pacing');
-  }
+  const sectionStats = new Map(PLC_GRADING_PERIOD_CONFIG.map((p) => [p.name, { seen: false, units: 0 }]));
+  let courseName = '';
 
-  const startTerm = findTermByDate(parsed.terms, startDate);
-  const endTerm = findTermByDate(parsed.terms, endDate);
-  if (startTerm && endTerm && startTerm.name !== endTerm.name) {
-    warnings.push(`Crosses ${startTerm.name} boundary`);
-    warnings.push('Scheduled across term boundary; review pacing');
-  }
-  for (const term of parsed.terms) {
-    if (startDate < term.start && endDate >= term.start) {
-      warnings.push(`Crosses ${term.name} boundary`);
-      warnings.push('Scheduled across term boundary; review pacing');
-    }
-  }
+  workbook.eachSheet((ws) => {
+    let currentPeriod = '';
+    let header = { titleCol: null, daysCol: null };
+    for (let r = 1; r <= (ws.actualRowCount || ws.rowCount); r += 1) {
+      const row = ws.getRow(r);
+      const lastCell = Math.max(row.actualCellCount || 0, 12);
+      const texts = [];
+      for (let c = 1; c <= lastCell; c += 1) texts.push(cellText(row.getCell(c)));
+      const joined = texts.filter(Boolean).join(' | ');
+      if (!joined) continue;
 
-  for (const blocked of parsed.blocked) {
-    if (!isCrossedRange(startDate, endDate, blocked)) continue;
-    const lowerName = blocked.name.toLowerCase();
-    if (lowerName.includes('winter break')) warnings.push('Crosses Winter Break');
-    else if (lowerName.includes('spring break')) warnings.push('Crosses Spring Break');
-    else if (countDatesInRange(blocked) >= 5) warnings.push(`Crosses ${blocked.name}`);
-  }
+      const courseGuess = maybeCourseName(texts.filter(Boolean));
+      if (!courseName && courseGuess) courseName = courseGuess;
 
-  return [...new Set(warnings)];
-}
-
-function blockedRangesEncountered(startDate, endDate, parsed) {
-  return parsed.blocked
-    .filter((b) => startDate && endDate && b.start <= endDate && b.end >= startDate)
-    .map((b) => b.name);
-}
-
-function createScheduledPreviewRow({ termName, unit, days, slice, events, parsed, statusPrefix = 'Scheduled' }) {
-  const startDate = slice[0].date;
-  const endDate = slice[slice.length - 1].date;
-  const eventHits = events.filter((ev) => slice.some((d) => ev.dates.has(d.date))).map((ev) => ev.name);
-  const crossingWarnings = boundaryWarningsForUnit(unit, startDate, endDate, parsed);
-  const blockedHits = blockedRangesEncountered(startDate, endDate, parsed);
-  const statusMessages = [];
-  if (eventHits.length) statusMessages.push('Scheduled with event-note warnings');
-  else statusMessages.push(statusPrefix);
-  statusMessages.push(...crossingWarnings);
-
-  return {
-    term: termName,
-    unit: unit.unitName,
-    days,
-    startDate,
-    endDate,
-    skippedBlockedDays: blockedHits.length ? `Skipped: ${blockedHits.join('; ')}` : 'Skipped globally based on BLOCKED_DAYS',
-    eventWarnings: eventHits.join('; '),
-    status: [...new Set(statusMessages)].join('; ')
-  };
-}
-
-function buildStrictTermPreview(parsed, dateRows, blockedSet, events) {
-  const previewRows = [];
-  for (const term of parsed.terms) {
-    const termDays = dateRows.filter((d) => (
-      d.date >= term.start &&
-      d.date <= term.end &&
-      makeInstructionalDayFilter(parsed, blockedSet)(d)
-    ));
-
-    const termUnits = parsed.units.filter((u) => u.termName === term.name);
-    let cursor = 0;
-
-    for (const unit of termUnits) {
-      if (cursor + unit.days > termDays.length) {
-        previewRows.push({
-          term: term.name,
-          unit: unit.unitName,
-          days: unit.days,
-          startDate: 'N/A',
-          endDate: 'N/A',
-          skippedBlockedDays: 'N/A',
-          eventWarnings: '',
-          status: 'Not enough instructional days in term'
-        });
+      if (isPeriodText(joined)) {
+        currentPeriod = normalizePeriodLabel(joined);
+        if (currentPeriod) sectionStats.get(currentPeriod).seen = true;
+        header = { titleCol: null, daysCol: null };
         continue;
       }
 
-      const slice = termDays.slice(cursor, cursor + unit.days);
-      cursor += unit.days;
-      previewRows.push(createScheduledPreviewRow({ termName: term.name, unit, days: unit.days, slice, events, parsed }));
-    }
+      header = detectYagHeader(texts, header);
 
-    if (cursor < termDays.length) {
-      previewRows.push({
-        term: term.name,
-        unit: '(unused term capacity)',
-        days: termDays.length - cursor,
-        startDate: '',
-        endDate: '',
-        skippedBlockedDays: '',
-        eventWarnings: '',
-        status: 'Unused instructional days remain'
+      if (/balance/i.test(joined)) {
+        const nums = row.values.map((_, idx) => extractNumberFromCell(row.getCell(idx))).filter((n) => n != null);
+        const balance = nums.length ? nums[nums.length - 1] : null;
+        if (currentPeriod && balance != null && Math.abs(balance) > 0.0001) warnings.push(`${currentPeriod} balance is ${balance}; expected 0.`);
+        continue;
+      }
+      if (!currentPeriod || /instructional days available|total days in units/i.test(joined)) continue;
+
+      const daysCandidates = [];
+      for (let c = 1; c <= lastCell; c += 1) {
+        const n = extractNumberFromCell(row.getCell(c));
+        if (n != null && n > 0 && n < 200) daysCandidates.push({ col: c, value: n });
+      }
+      if (!daysCandidates.length) continue;
+
+      let daysCandidate = header.daysCol ? daysCandidates.find((d) => d.col === header.daysCol) : null;
+      if (!daysCandidate) daysCandidate = daysCandidates[daysCandidates.length - 1];
+
+      let titleCol = header.titleCol;
+      if (!titleCol || !cellText(row.getCell(titleCol))) {
+        titleCol = 0;
+        for (let c = 1; c <= lastCell; c += 1) {
+          const text = cellText(row.getCell(c));
+          if (!text || c === daysCandidate.col || isSkipYagText(text) || /^\d+(\.\d+)?$/.test(text)) continue;
+          titleCol = c;
+          break;
+        }
+      }
+      if (!titleCol) continue;
+      const title = cellText(row.getCell(titleCol));
+      if (!title || isSkipYagText(title) || isPeriodText(title)) continue;
+
+      const warning = Number.isInteger(daysCandidate.value) ? '' : HALF_DAY_WARNING;
+      units.push({
+        gradingPeriod: currentPeriod,
+        unitName: title,
+        days: daysCandidate.value,
+        sourceSheet: ws.name,
+        sourceCell: row.getCell(titleCol).address,
+        warning,
+        allowCrossPeriod: false
       });
+      sectionStats.get(currentPeriod).units += 1;
     }
+  });
+
+  for (const [period, stat] of sectionStats) {
+    if (stat.seen && stat.units === 0) warnings.push(`${period}: ${LOW_CONFIDENCE_WARNING}`);
   }
-  return { rows: previewRows, okToApply: !previewRows.some((r) => r.startDate === 'N/A' || r.endDate === 'N/A') };
+  if (!units.length) warnings.push('No units extracted. Use Advanced Mode to review or enter units manually.');
+  return { units, warnings, courseName };
 }
 
-function buildFlexibleCrossTermPreview(parsed, dateRows, blockedSet, events) {
-  const instructionalDays = dateRows.filter(makeInstructionalDayFilter(parsed, blockedSet));
-  const previewRows = [];
-  let cursor = 0;
-
-  for (const unit of parsed.units) {
-    const preferredTerm = parsed.terms.find((t) => t.name === unit.termName);
-    const earliestStart = preferredTerm ? preferredTerm.start : dateRows[0].date;
-    while (cursor < instructionalDays.length && instructionalDays[cursor].date < earliestStart) cursor += 1;
-
-    if (cursor + unit.days > instructionalDays.length) {
-      const remaining = Math.max(0, instructionalDays.length - cursor);
-      previewRows.push({
-        term: unit.termName,
-        unit: unit.unitName,
-        days: unit.days,
-        startDate: remaining ? instructionalDays[cursor].date : 'N/A',
-        endDate: 'N/A',
-        skippedBlockedDays: 'N/A',
-        eventWarnings: '',
-        status: `Not enough instructional days remain in the detected school year (${remaining} available, ${unit.days} required). Apply Changes disabled.`
-      });
-      return { rows: previewRows, okToApply: false };
-    }
-
-    const slice = instructionalDays.slice(cursor, cursor + unit.days);
-    cursor += unit.days;
-    previewRows.push(createScheduledPreviewRow({ termName: unit.termName, unit, days: unit.days, slice, events, parsed }));
-  }
-
-  if (cursor < instructionalDays.length) {
-    previewRows.push({
-      term: 'School Year',
-      unit: '(remaining year capacity)',
-      days: instructionalDays.length - cursor,
-      startDate: '',
-      endDate: '',
-      skippedBlockedDays: '',
-      eventWarnings: '',
-      status: 'Available instructional days remain after all units are scheduled'
-    });
-  }
-
-  return { rows: previewRows, okToApply: true };
-}
-
-function generateAdvancedPreview() {
-  if (!state.workbook || !state.diagnostics) {
-    setError('No workbook uploaded. Upload a workbook before generating preview.');
+function extractUnitsFromYag() {
+  if (!state.yagWorkbook) {
+    showValidationError('No YAG uploaded. Upload a completed district YAG workbook first.');
     return;
   }
-  const parsed = parseTemplate($('templateInput').value);
+  const result = extractUnitsFromYagWorkbook(state.yagWorkbook);
+  state.units = result.units;
+  state.extractionWarnings = result.warnings;
+  state.courseName = result.courseName || state.courseName;
+  state.preview = [];
   state.previewSucceeded = false;
-  if (!parsed.ok) {
-    $('validationOutput').innerHTML = `<p class="error">Fix template errors first.</p><ul>${parsed.errors.map((e) => `<li>${e}</li>`).join('')}</ul>`;
+  state.applied = false;
+  renderUnitTables();
+  renderExtractionSummary();
+  syncTemplateFromState();
+  setNextStep(state.units.length ? 'Next: review extracted units, make small edits if needed, then generate preview.' : LOW_CONFIDENCE_WARNING);
+}
+
+function renderExtractionSummary() {
+  const byPeriod = PLC_GRADING_PERIOD_CONFIG.map((p) => `${p.name}: ${state.units.filter((u) => u.gradingPeriod === p.name).length} unit(s)`).join(' | ');
+  const warnings = state.extractionWarnings.length ? `<ul>${state.extractionWarnings.map((w) => `<li class="warn">${escapeHtml(w)}</li>`).join('')}</ul>` : '<p class="ok">Extraction completed with no balance or confidence warnings.</p>';
+  $('plcExtractionSummary').innerHTML = `<p><strong>Course:</strong> ${escapeHtml(state.courseName || 'Not detected')}</p><p>${escapeHtml(byPeriod)}</p>${warnings}`;
+}
+
+function periodOptions(selected) {
+  return state.gradingPeriods.map((p) => `<option value="${escapeHtml(p.name)}" ${p.name === selected ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+}
+
+function renderPlcUnitTable() {
+  if (!state.units.length) {
+    $('plcUnitTableOutput').textContent = 'No extracted units yet. Use Extract Units from YAG or add a row.';
     return;
   }
-  if (state.diagnostics.missingSheets.length) {
-    $('previewOutput').innerHTML = `<p class="error">Expected sheets missing: ${state.diagnostics.missingSheets.join(', ')}</p>`;
+  $('plcUnitTableOutput').innerHTML = `<table><thead><tr><th>Grading Period</th><th>Unit Name</th><th>Instructional Days</th><th>Source Sheet</th><th>Source Cell</th><th>Warning</th><th>Action</th></tr></thead><tbody>
+    ${state.units.map((u, i) => `<tr>
+      <td><select data-table="unit" data-i="${i}" data-k="gradingPeriod">${periodOptions(u.gradingPeriod)}</select></td>
+      <td><input data-table="unit" data-i="${i}" data-k="unitName" value="${escapeHtml(u.unitName)}" /></td>
+      <td><input type="number" step="0.5" min="0.5" data-table="unit" data-i="${i}" data-k="days" value="${u.days}" /></td>
+      <td>${escapeHtml(u.sourceSheet || 'Manual')}</td><td>${escapeHtml(u.sourceCell || '')}</td><td>${escapeHtml(u.warning || '')}</td>
+      <td><button type="button" data-delete-unit="${i}">Delete</button></td>
+    </tr>`).join('')}</tbody></table>`;
+  bindUnitTableInputs('plcUnitTableOutput');
+}
+
+function renderAdvancedUnitTable() {
+  if (!state.units.length) {
+    $('advancedUnitTableOutput').textContent = 'No unit rows yet. Extract in PLC Mode or add rows manually.';
     return;
   }
+  $('advancedUnitTableOutput').innerHTML = `<table><thead><tr><th>Select</th><th>Grading Period</th><th>Unit Name</th><th>Instructional Days</th><th>Allow Continue</th><th>Action</th></tr></thead><tbody>
+    ${state.units.map((u, i) => `<tr class="${i === state.selectedAdvancedUnit ? 'selected-row' : ''}">
+      <td><input type="radio" name="advancedUnitSelect" data-select-unit="${i}" ${i === state.selectedAdvancedUnit ? 'checked' : ''} /></td>
+      <td><select data-table="unit" data-i="${i}" data-k="gradingPeriod">${periodOptions(u.gradingPeriod)}</select></td>
+      <td><input data-table="unit" data-i="${i}" data-k="unitName" value="${escapeHtml(u.unitName)}" /></td>
+      <td><input type="number" step="0.5" min="0.5" data-table="unit" data-i="${i}" data-k="days" value="${u.days}" /></td>
+      <td><input type="checkbox" data-table="unit" data-i="${i}" data-k="allowCrossPeriod" ${u.allowCrossPeriod ? 'checked' : ''} /></td>
+      <td><button type="button" data-delete-unit="${i}">Delete</button></td>
+    </tr>`).join('')}</tbody></table>`;
+  bindUnitTableInputs('advancedUnitTableOutput');
+}
 
-  const dateRows = Object.values(state.diagnostics.perSheet).flat().sort((a, b) => a.date.localeCompare(b.date));
-  if (!dateRows.length) {
-    $('previewOutput').innerHTML = '<p class="error">No date cells detected in expected sheets/columns. Cannot schedule safely.</p>';
-    return;
+function bindUnitTableInputs(containerId) {
+  $(containerId).querySelectorAll('[data-table="unit"]').forEach((el) => {
+    el.addEventListener('input', updateUnitFromInput);
+    el.addEventListener('change', updateUnitFromInput);
+  });
+  $(containerId).querySelectorAll('[data-delete-unit]').forEach((btn) => btn.addEventListener('click', () => deleteUnit(Number(btn.dataset.deleteUnit))));
+  $(containerId).querySelectorAll('[data-select-unit]').forEach((input) => input.addEventListener('change', () => {
+    state.selectedAdvancedUnit = Number(input.dataset.selectUnit);
+    renderAdvancedUnitTable();
+  }));
+}
+
+function updateUnitFromInput(e) {
+  const i = Number(e.target.dataset.i);
+  const k = e.target.dataset.k;
+  if (!state.units[i]) return;
+  if (k === 'days') {
+    const value = Number(e.target.value);
+    state.units[i].days = value;
+    state.units[i].warning = Number.isInteger(value) ? '' : HALF_DAY_WARNING;
+  } else if (k === 'allowCrossPeriod') {
+    state.units[i].allowCrossPeriod = e.target.checked;
+  } else {
+    state.units[i][k] = e.target.value;
   }
+  markPreviewStale();
+}
 
-  const blockedSet = new Set(parsed.data.blocked.flatMap((b) => datesInRange(b.start, b.end)));
-  const events = parsed.data.events.map((e) => ({ name: e.name, dates: new Set(datesInRange(e.start, e.end)) }));
-  const useFlexibleCrossTermScheduling = state.mode === 'guided' && state.allowCrossTermGuided;
-  const previewResult = useFlexibleCrossTermScheduling
-    ? buildFlexibleCrossTermPreview(parsed.data, dateRows, blockedSet, events)
-    : buildStrictTermPreview(parsed.data, dateRows, blockedSet, events);
-
-  state.parsed = parsed.data;
-  state.preview = previewResult.rows;
-  state.previewSucceeded = previewResult.okToApply;
-  renderPreview(previewResult.rows);
+function markPreviewStale() {
+  state.previewSucceeded = false;
+  state.applied = false;
+  syncTemplateFromState();
   updateWorkflowState();
 }
 
-function renderPreview(rows) {
-  $('previewOutput').innerHTML = `<table><thead><tr>
-    <th>Term</th><th>Unit Name</th><th>Instructional Days Required</th><th>Generated Start Date</th><th>Generated End Date</th>
-    <th>Skipped Blocked Days Encountered</th><th>Event-Note Warnings Encountered</th><th>Status or Warning</th>
-  </tr></thead><tbody>${rows.map((r) => `<tr><td>${r.term}</td><td>${r.unit}</td><td>${r.days}</td><td>${r.startDate}</td><td>${r.endDate}</td><td>${r.skippedBlockedDays}</td><td>${r.eventWarnings}</td><td>${r.status}</td></tr>`).join('')}</tbody></table>`;
+function addUnitRow(defaultPeriod = state.gradingPeriods[0].name) {
+  state.units.push({ gradingPeriod: defaultPeriod, unitName: '', days: 1, sourceSheet: 'Manual', sourceCell: '', warning: '', allowCrossPeriod: false });
+  state.selectedAdvancedUnit = state.units.length - 1;
+  renderUnitTables();
+  markPreviewStale();
 }
 
-function applyPreviewChanges() {
-  if (!state.workbook || !state.preview || !state.diagnostics) {
-    setError('Cannot apply changes: generate a preview first.');
+function deleteUnit(index) {
+  state.units.splice(index, 1);
+  state.selectedAdvancedUnit = Math.max(0, Math.min(state.selectedAdvancedUnit, state.units.length - 1));
+  renderUnitTables();
+  markPreviewStale();
+}
+
+function renderUnitTables() {
+  renderPlcUnitTable();
+  renderAdvancedUnitTable();
+  renderExtractionSummary();
+}
+
+function renderGpTable() {
+  $('gradingPeriodTableOutput').innerHTML = `<table><thead><tr><th>Grading Period</th><th>Start Date</th><th>End Date</th></tr></thead><tbody>
+    ${state.gradingPeriods.map((p, i) => `<tr><td>${escapeHtml(p.name)}</td><td><input type="date" data-gp="${i}" data-k="start" value="${p.start}" /></td><td><input type="date" data-gp="${i}" data-k="end" value="${p.end}" /></td></tr>`).join('')}</tbody></table>`;
+  $('gradingPeriodTableOutput').querySelectorAll('[data-gp]').forEach((el) => el.addEventListener('input', (e) => {
+    state.gradingPeriods[Number(e.target.dataset.gp)][e.target.dataset.k] = e.target.value;
+    markPreviewStale();
+  }));
+}
+
+function renderRangeTable(containerId, rows, type) {
+  $(containerId).innerHTML = `<table><thead><tr><th>Name</th><th>Start Date</th><th>End Date</th><th>Action</th></tr></thead><tbody>
+    ${rows.map((row, i) => `<tr><td><input data-range-type="${type}" data-i="${i}" data-k="name" value="${escapeHtml(row.name)}" /></td><td><input type="date" data-range-type="${type}" data-i="${i}" data-k="start" value="${row.start}" /></td><td><input type="date" data-range-type="${type}" data-i="${i}" data-k="end" value="${row.end}" /></td><td><button type="button" data-delete-range="${type}:${i}">Delete</button></td></tr>`).join('')}</tbody></table>`;
+  $(containerId).querySelectorAll('[data-range-type]').forEach((el) => el.addEventListener('input', (e) => {
+    const targetRows = e.target.dataset.rangeType === 'blocked' ? state.blockedDays : state.eventNotes;
+    targetRows[Number(e.target.dataset.i)][e.target.dataset.k] = e.target.value;
+    markPreviewStale();
+  }));
+  $(containerId).querySelectorAll('[data-delete-range]').forEach((btn) => btn.addEventListener('click', () => {
+    const [rangeType, idx] = btn.dataset.deleteRange.split(':');
+    (rangeType === 'blocked' ? state.blockedDays : state.eventNotes).splice(Number(idx), 1);
+    renderAdvancedTables();
+    markPreviewStale();
+  }));
+}
+
+function renderAdvancedTables() {
+  renderGpTable();
+  renderRangeTable('blockedDaysTableOutput', state.blockedDays, 'blocked');
+  renderRangeTable('eventNotesTableOutput', state.eventNotes, 'event');
+  renderAdvancedUnitTable();
+  renderFitIssues();
+}
+
+function validatePlanningState() {
+  const errors = [];
+  if (!state.mapWorkbook) errors.push('No curriculum map uploaded. Upload a blank curriculum map workbook before generating preview.');
+  if (!state.units.length) errors.push('No units found. Extract units from a YAG or add units manually.');
+  state.gradingPeriods.forEach((p) => {
+    if (!parseIso(p.start) || !parseIso(p.end)) errors.push(`${p.name}: missing or invalid start/end date.`);
+    else if (p.start > p.end) errors.push(`${p.name}: start date must be before end date.`);
+  });
+  state.blockedDays.concat(state.eventNotes).forEach((d) => {
+    if (!d.name || !parseIso(d.start) || !parseIso(d.end)) errors.push(`Date range row is missing a name, start date, or end date.`);
+    else if (d.start > d.end) errors.push(`${d.name}: start date must be before end date.`);
+  });
+  state.units.forEach((u, i) => {
+    if (!u.gradingPeriod) errors.push(`Unit row ${i + 1}: grading period is required.`);
+    if (!u.unitName.trim()) errors.push(`Unit row ${i + 1}: unit name is required.`);
+    if (!Number.isFinite(Number(u.days)) || Number(u.days) <= 0) errors.push(`Unit row ${i + 1}: instructional days must be greater than 0.`);
+  });
+  if (state.diagnostics?.missingSheets.length) errors.push(`Missing expected curriculum map sheets: ${state.diagnostics.missingSheets.join(', ')}.`);
+  if (state.diagnostics && state.diagnostics.totalDateCells === 0) errors.push('No date cells detected in the curriculum map workbook.');
+  return errors;
+}
+
+function dateRowsForPeriod(period) {
+  const dateRows = Object.values(state.diagnostics?.perSheet || {}).flat().sort((a, b) => a.date.localeCompare(b.date));
+  const blockedSet = new Set(state.blockedDays.flatMap((b) => datesInRange(b.start, b.end)));
+  return dateRows.filter((d) => d.date >= period.start && d.date <= period.end && !isWeekend(d.date) && !blockedSet.has(d.date));
+}
+
+function buildPreview() {
+  const errors = validatePlanningState();
+  if (errors.length) {
+    state.preview = [];
+    state.previewSucceeded = false;
+    $('previewOutput').innerHTML = `<p class="error">Preview cannot be generated yet.</p><ul>${errors.map((e) => `<li>${escapeHtml(e)}</li>`).join('')}</ul>`;
+    setNextStep('Fix the listed issue before generating preview.');
+    updateWorkflowState();
     return;
   }
 
-  const byDate = new Map();
-  for (const row of Object.values(state.diagnostics.perSheet).flat()) {
-    byDate.set(row.date, row);
+  const events = state.eventNotes.map((e) => ({ name: e.name, dates: new Set(datesInRange(e.start, e.end)) }));
+  const rows = [];
+  const fitIssues = [];
+  const unusedDays = [];
+
+  for (let gpIndex = 0; gpIndex < state.gradingPeriods.length; gpIndex += 1) {
+    const period = state.gradingPeriods[gpIndex];
+    const periodDays = dateRowsForPeriod(period);
+    const units = state.units.filter((u) => u.gradingPeriod === period.name);
+    let cursor = 0;
+
+    for (let unitIndex = 0; unitIndex < units.length; unitIndex += 1) {
+      const unit = units[unitIndex];
+      const exactDays = Number(unit.days);
+      const placementDays = Math.ceil(exactDays);
+      let daysPool = periodDays;
+      let termLabel = period.name;
+      if (unit.allowCrossPeriod) {
+        daysPool = [];
+        for (let i = gpIndex; i < state.gradingPeriods.length; i += 1) daysPool.push(...dateRowsForPeriod(state.gradingPeriods[i]));
+        daysPool = daysPool.filter((d) => d.date >= (periodDays[cursor]?.date || period.start));
+      }
+      const remaining = Math.max(0, daysPool.length - cursor);
+      if (cursor + placementDays > daysPool.length) {
+        const status = `Only ${remaining} instructional days remain in this grading period, but this unit needs ${exactDays}.`;
+        rows.push({ term: period.name, unit: unit.unitName, days: exactDays, startDate: remaining ? daysPool[cursor].date : 'N/A', endDate: 'N/A', skippedBlockedDays: 'N/A', eventWarnings: '', status });
+        fitIssues.push({ period: period.name, unitName: unit.unitName, unitGlobalIndex: state.units.indexOf(unit), remaining, needed: exactDays, status });
+        continue;
+      }
+      const slice = daysPool.slice(cursor, cursor + placementDays);
+      cursor += placementDays;
+      const eventHits = events.filter((ev) => slice.some((d) => ev.dates.has(d.date))).map((ev) => ev.name);
+      const warnings = [];
+      if (eventHits.length) warnings.push('Scheduled with event-note warnings');
+      if (!Number.isInteger(exactDays)) warnings.push(HALF_DAY_WARNING);
+      if (unit.allowCrossPeriod) warnings.push('Allowed to continue into next grading period; verify manually.');
+      rows.push({
+        term: termLabel,
+        unit: unit.unitName,
+        days: exactDays,
+        startDate: slice[0].date,
+        endDate: slice[slice.length - 1].date,
+        skippedBlockedDays: 'Weekends and blocked days skipped',
+        eventWarnings: eventHits.join('; '),
+        status: warnings.length ? warnings.join('; ') : 'Scheduled'
+      });
+    }
+    const remainingInPeriod = Math.max(0, periodDays.length - cursor);
+    unusedDays.push({ period: period.name, days: remainingInPeriod });
+    if (remainingInPeriod > 0) rows.push({ term: period.name, unit: '(unused grading-period capacity)', days: remainingInPeriod, startDate: '', endDate: '', skippedBlockedDays: '', eventWarnings: '', status: 'Unused instructional days remain' });
   }
 
+  state.preview = rows;
+  state.fitIssues = fitIssues;
+  state.unusedDays = unusedDays;
+  state.previewSucceeded = fitIssues.length === 0;
+  state.applied = false;
+  renderPreview();
+  renderFitIssues();
+  setNextStep(state.previewSucceeded ? 'Preview ready. Review warnings, then apply changes.' : 'Preview has unscheduled units. Fix them in Advanced Mode or explicitly confirm before applying scheduled rows.');
+}
+
+function renderPreview() {
+  if (!state.preview.length) {
+    $('previewOutput').textContent = 'Generate a preview to see unit start/end dates, warnings, and unused days.';
+    return;
+  }
+  const seriousWarnings = state.preview.filter((r) => r.endDate === 'N/A').map((r) => r.status);
+  const warningBlock = seriousWarnings.length ? `<div class="error-box"><strong>Serious warnings:</strong><ul>${seriousWarnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>` : '';
+  $('previewOutput').innerHTML = `${warningBlock}<table><thead><tr><th>Grading Period</th><th>Unit Name</th><th>Instructional Days Required</th><th>Generated Start Date</th><th>Generated End Date</th><th>Skipped Blocked Days</th><th>Event-Note Warnings</th><th>Status or Warning</th></tr></thead><tbody>
+    ${state.preview.map((r) => `<tr class="${r.endDate === 'N/A' ? 'issue-row' : ''}"><td>${escapeHtml(r.term)}</td><td>${escapeHtml(r.unit)}</td><td>${r.days}</td><td>${escapeHtml(r.startDate)}</td><td>${escapeHtml(r.endDate)}</td><td>${escapeHtml(r.skippedBlockedDays)}</td><td>${escapeHtml(r.eventWarnings)}</td><td>${escapeHtml(r.status)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function renderFitIssues() {
+  const unused = state.unusedDays.length ? `<h3>Unused Days by Grading Period</h3><ul>${state.unusedDays.map((u) => `<li>${escapeHtml(u.period)}: ${u.days}</li>`).join('')}</ul>` : '<p>No unused-day data yet.</p>';
+  const issues = state.fitIssues.length ? `<h3>Units That Did Not Fit</h3><ul>${state.fitIssues.map((i) => `<li class="error">${escapeHtml(i.status)}</li>`).join('')}</ul>` : '<p class="ok">No fit issues detected in the latest preview.</p>';
+  $('fitIssuesOutput').innerHTML = `${unused}${issues}<p class="status">Adjustment helpers modify the Unit Plan Editor. Regenerate the preview after using a helper.</p>`;
+}
+
+function previewRowsForExport() {
+  const headers = ['Grading Period', 'Unit Name', 'Instructional Days Required', 'Generated Start Date', 'Generated End Date', 'Skipped Blocked Days', 'Event-Note Warnings', 'Status or Warning'];
+  const body = state.preview.map((r) => [r.term, r.unit, r.days, r.startDate, r.endDate, r.skippedBlockedDays, r.eventWarnings, r.status]);
+  return [headers, ...body];
+}
+
+function previewToDelimited(delimiter) {
+  return previewRowsForExport().map((row) => row.map((cell) => String(cell ?? '').replace(/\r?\n/g, ' ')).join(delimiter)).join('\n');
+}
+
+function previewToCsv() {
+  return previewRowsForExport().map((row) => row.map((cell) => `"${String(cell ?? '').replace(/\r?\n/g, ' ').replace(/"/g, '""')}"`).join(',')).join('\n');
+}
+
+async function copyPreviewToClipboard() {
+  if (!state.preview.length) {
+    showValidationError('No preview to copy. Generate Preview first.');
+    return;
+  }
+  await navigator.clipboard.writeText(previewToDelimited('\t'));
+  setNextStep('Preview copied to clipboard.');
+}
+
+function downloadPreviewCsv() {
+  if (!state.preview.length) {
+    showValidationError('No preview to download. Generate Preview first.');
+    return;
+  }
+  const csv = previewToCsv();
+  const safeCourse = (state.courseName || 'curriculum-map').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+  downloadBlob(csv, `${safeCourse || 'curriculum-map'}-preview.csv`, 'text/csv');
+  setNextStep('Preview CSV download started.');
+}
+
+function applyPreviewChanges() {
+  if (!state.mapWorkbook || !state.preview.length || !state.diagnostics) {
+    showValidationError('Cannot apply changes: upload a curriculum map and generate a preview first.');
+    return;
+  }
+  const seriousRows = state.preview.filter((r) => r.endDate === 'N/A');
+  if (seriousRows.length && !$('confirmUnscheduledInput').checked) {
+    showValidationError('Unscheduled units are present. Fix them in Advanced Mode or check the confirmation box before applying scheduled rows.');
+    return;
+  }
+
+  const byDate = new Map(Object.values(state.diagnostics.perSheet).flat().map((row) => [row.date, row]));
   let startLabels = 0;
   let endLabels = 0;
   let dateCellsColored = 0;
   const noteCellsTouched = new Set();
 
   for (const item of state.preview) {
-    if (!item.startDate || item.startDate === 'N/A' || !item.endDate || item.endDate === 'N/A') continue;
+    if (!item.startDate || !item.endDate || item.endDate === 'N/A' || item.unit.startsWith('(unused')) continue;
     const start = byDate.get(item.startDate);
     const end = byDate.get(item.endDate);
     if (!start || !end) continue;
-
-    const startWs = state.workbook.getWorksheet(start.sheetName);
-    const endWs = state.workbook.getWorksheet(end.sheetName);
+    const startWs = state.mapWorkbook.getWorksheet(start.sheetName);
+    const endWs = state.mapWorkbook.getWorksheet(end.sheetName);
     appendNote(startWs, start.noteAddr, `START: ${item.unit}`);
     appendNote(endWs, end.noteAddr, `END: ${item.unit}`);
     colorDateCell(startWs, start.dateAddr, START_FILL);
@@ -797,10 +767,9 @@ function applyPreviewChanges() {
     noteCellsTouched.add(`${start.sheetName}!${start.noteAddr}`);
     noteCellsTouched.add(`${end.sheetName}!${end.noteAddr}`);
   }
-
   state.applied = true;
-  $('applyStatus').textContent = `Applied changes in memory. START labels: ${startLabels}; END labels: ${endLabels}; Date cells colored: ${dateCellsColored}; Note cells updated: ${noteCellsTouched.size}. Use Download Edited Workbook to save a new file.`;
-  updateWorkflowState();
+  $('applyStatus').textContent = `Applied changes in memory only. START labels: ${startLabels}; END labels: ${endLabels}; Date cells colored: ${dateCellsColored}; Note cells updated: ${noteCellsTouched.size}. Download creates a new edited copy.`;
+  setNextStep('Changes applied in memory. Next: download the edited curriculum map.');
 }
 
 function appendNote(ws, addr, text) {
@@ -809,259 +778,303 @@ function appendNote(ws, addr, text) {
   cell.value = existing ? `${existing}\n\n${text}` : text;
   cell.alignment = { ...(cell.alignment || {}), wrapText: true };
 }
+
 function colorDateCell(ws, addr, fill) {
-  const cell = ws.getCell(addr);
-  cell.fill = { ...fill };
+  ws.getCell(addr).fill = { ...fill };
 }
 
 async function downloadEditedWorkbook() {
-  if (!state.workbook || !state.applied) {
-    setError('No applied changes to export.');
-    return false;
+  if (!state.mapWorkbook || !state.applied) {
+    showValidationError('No applied changes to export. Apply Changes first.');
+    return;
   }
-  try {
-    const outputName = state.workbookName.replace(/\.(xlsx|xlsm|xls)$/i, '') + '-paced.xlsx';
-    const buf = await state.workbook.xlsx.writeBuffer();
-    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = outputName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
-    return true;
-  } catch (err) {
-    setError(`Export failed: ${err.message}`);
-    setNextStep('Download failed. Check the status message, then try again.');
-    return false;
-  }
+  const outputName = `${state.mapName.replace(/\.(xlsx|xlsm|xls)$/i, '')}-edited-curriculum-map.xlsx`;
+  const buf = await state.mapWorkbook.xlsx.writeBuffer();
+  downloadBlob(buf, outputName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  setNextStep('Download started for the edited curriculum map.');
 }
 
-
-function getDefaultTemplateFromGuided() {
-  const courseName = $('courseNameInput').value.trim();
-  const unitLines = state.guidedUnits.map((u) => `${u.termName} | ${u.unitName} | ${u.days}`).join('\n');
-  return `SCHOOL_YEAR:
-2026-2027
-
-COURSE_NAME:
-${courseName}
-
-SKIP_WEEKENDS:
-yes
-
-TERMS:
-Fall Semester | 2026-08-12 | 2026-12-14
-Spring Semester | 2027-01-06 | 2027-05-14
-
-BLOCKED_DAYS:
-Labor Day | 2026-09-07
-Flex Day PD / Student Holiday | 2026-10-09
-Professional Development / Student Holiday | 2026-10-12
-Fall Break | 2026-11-23 | 2026-11-27
-Winter Break | 2026-12-21 | 2027-01-03
-Teacher Workday / Student Holiday | 2027-01-04
-Professional Development / Student Holiday | 2027-01-05
-Student / Staff Holiday | 2027-01-18
-Professional Development / Student Holiday | 2027-02-12
-Flex Day PD / Student Holiday | 2027-02-15
-Spring Break | 2027-03-08 | 2027-03-12
-Holiday | 2027-03-26
-Professional Development / Student Holiday | 2027-04-30
-Final Exams | 2027-05-17 | 2027-05-20
-Professional Development / Student Holiday | 2027-05-21
-
-EVENT_NOTES:
-Growth Pre-Test | 2026-08-24 | 2026-08-27
-Growth Pre-Test Choir/Band | 2026-09-02 | 2026-09-04
-TSIA2 English | 2026-09-28
-TSIA2 Math | 2026-10-06
-PSAT | 2026-10-22
-CBE | 2026-10-27 | 2026-10-30
-Eng I & II Interim | 2026-11-03
-Alg I Interim | 2026-11-19
-EOC Retakes | 2026-12-01 | 2026-12-10
-Midterms | 2026-12-15 | 2026-12-18
-CBE / ASVAB | 2027-01-19 | 2027-01-22
-Eng I & II Interim | 2027-01-26 | 2027-01-27
-Bio & US Hist Interim | 2027-02-10
-Alg I Interim | 2027-02-23
-TELPAS | 2027-03-02 | 2027-03-04
-TSIA2 English | 2027-03-18
-TSIA2 Math | 2027-03-25
-SAT Day for Juniors | 2027-03-30
-English I & II EOC | 2027-04-08
-Bio & US Hist EOC | 2027-04-15
-Alg I EOC | 2027-04-27
-Growth Post Test | 2027-04-28 | 2027-05-03
-AP / IBC Testing Window | 2027-05-04 | 2027-05-14
-
-UNIT_PLAN:
-${unitLines}
-`;
+function downloadBlob(content, filename, type) {
+  const blob = content instanceof Blob ? content : new Blob([content], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
 }
-function validateGuided(render=true){
- const errors=[];
- if(!$('courseNameInput').value.trim()) errors.push('Course name is required.');
- if(state.guidedUnits.length<1) errors.push('Number of units must be at least 1.');
- state.guidedUnits.forEach((u,i)=>{ if(!u.unitName.trim()) errors.push(`Row ${i+1}: unit name is required.`); if(!Number.isInteger(Number(u.days))||Number(u.days)<=0) errors.push(`Row ${i+1}: instructional days must be greater than 0.`); if(!['Fall Semester','Spring Semester'].includes(u.termName)) errors.push(`Row ${i+1}: valid term is required.`);});
- if(render){$('validationOutput').innerHTML = errors.length ? `<p class="error">Guided validation errors:</p><ul>${errors.map(e=>`<li>${e}</li>`).join('')}</ul>` : '<p class="ok">Guided unit table is valid. Next: generate preview.</p>'; }
- return {ok:!errors.length,errors};
+
+function showValidationError(message) {
+  $('previewOutput').innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
+  setNextStep(message);
 }
-function renderUnitTable(){
- if(!state.guidedUnits.length){$('unitTableOutput').textContent='Create a unit table to begin.';return;}
- $('unitTableOutput').innerHTML = `<table><thead><tr><th>Unit #</th><th>Term</th><th>Unit Name</th><th>Instructional Days</th></tr></thead><tbody>${state.guidedUnits.map((u,i)=>`<tr><td>${i+1}</td><td><select data-i="${i}" data-k="termName"><option ${u.termName==='Fall Semester'?'selected':''}>Fall Semester</option><option ${u.termName==='Spring Semester'?'selected':''}>Spring Semester</option></select></td><td><input data-i="${i}" data-k="unitName" value="${u.unitName.replace(/"/g,'&quot;')}" /></td><td><input type="number" min="1" data-i="${i}" data-k="days" value="${u.days}" /></td></tr>`).join('')}</tbody></table>`;
- $('unitTableOutput').querySelectorAll('input,select').forEach(el=>el.addEventListener('input',e=>{const i=Number(e.target.dataset.i); const k=e.target.dataset.k; state.guidedUnits[i][k]=k==='days'?Number(e.target.value):e.target.value; validateGuided(); updateWorkflowState();}));
- validateGuided();
- updateWorkflowState();
+
+function syncTemplateFromState() {
+  $('templateInput').value = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\n${state.courseName || ''}\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\n${state.gradingPeriods.map((p) => `${p.name} | ${p.start} | ${p.end}`).join('\n')}\n\nBLOCKED_DAYS:\n${state.blockedDays.map((d) => `${d.name} | ${d.start}${d.end !== d.start ? ` | ${d.end}` : ''}`).join('\n')}\n\nEVENT_NOTES:\n${state.eventNotes.map((d) => `${d.name} | ${d.start}${d.end !== d.start ? ` | ${d.end}` : ''}`).join('\n')}\n\nUNIT_PLAN:\n${state.units.map((u) => `${u.gradingPeriod} | ${u.unitName} | ${u.days}${u.allowCrossPeriod ? ' | allow-cross-period' : ''}`).join('\n')}\n`;
 }
-$('modeGuided').onchange=()=>{state.mode='guided'; updateWorkflowState();};
-$('modeAdvanced').onchange=()=>{state.mode='advanced'; updateWorkflowState();};
-function createUnitTable() {
-  try {
-    if (!actionReady('createUnitTableBtn', 'Upload a workbook with detected date cells first.')) return;
-    const n = Number($('unitCountInput').value);
-    if (!Number.isInteger(n) || n < 1) {
-      setError('Number of units must be at least 1.');
-      setNextStep('Next: enter the number of units, then create the unit table.');
+
+function parseTemplate(text) {
+  const data = { courseName: '', terms: [], blocked: [], events: [], units: [] };
+  const errors = [];
+  let section = '';
+  text.split(/\r?\n/).forEach((raw, idx) => {
+    const line = raw.trim();
+    if (!line) return;
+    if (line.endsWith(':')) {
+      section = line.slice(0, -1).trim().toUpperCase();
       return;
     }
-    state.guidedUnits = [];
-    for (let i = 0; i < n; i++) {
-      state.guidedUnits.push({ termName: i < Math.ceil(n / 2) ? 'Fall Semester' : 'Spring Semester', unitName: '', days: 1 });
-    }
-    renderUnitTable();
-    setNextStep('Next: fill in each unit name, term, and instructional day count.');
-  } catch (err) {
-    reportActionError('Create Unit Table', err);
-  }
-}
-function addUnitRow() {
-  try {
-    state.guidedUnits.push({termName:'Spring Semester',unitName:'',days:1});
-    renderUnitTable();
-    setNextStep('Next: fill in each unit name, term, and instructional day count.');
-  } catch (err) {
-    reportActionError('Add Unit Row', err);
-  }
-}
-function removeUnitRow() {
-  try {
-    state.guidedUnits.pop();
-    renderUnitTable();
-    setNextStep(state.guidedUnits.length ? 'Next: review the remaining unit rows.' : 'Next: enter number of units and create unit table.');
-  } catch (err) {
-    reportActionError('Remove Last Unit Row', err);
-  }
-}
-function clearUnitTable() {
-  try {
-    state.guidedUnits=[];
-    renderUnitTable();
-    setNextStep('Next: enter number of units and create unit table.');
-  } catch (err) {
-    reportActionError('Clear Unit Table', err);
-  }
-}
-function validateGuidedUnits() {
-  try {
-    validateGuided(true);
-    scrollToSection('validationSection');
-    updateWorkflowState();
-  } catch (err) {
-    reportActionError('Validate Units', err);
-  }
-}
-function generateGuidedPreview(){
-  try {
-    if(!actionReady('previewBtn', 'Finish all unit names and instructional day counts before generating preview.')) return;
-    if(!state.workbook||!state.diagnostics){setError('No workbook uploaded. Upload a workbook before generating preview.'); setNextStep('Upload a calendar before generating preview.'); return;}
-    const v=validateGuided(true);
-    if(!v.ok){setNextStep('Finish all unit names and instructional day counts before generating preview.'); return;}
-    $('templateInput').value=getDefaultTemplateFromGuided();
-    const parsed=parseTemplate($('templateInput').value);
-    state.validationSucceeded=true;
-    state.previewSucceeded=false;
-    if(!parsed.ok){ setError('Internal guided template generation failed.'); setNextStep('Preview could not be generated. Check the status message.'); return;}
-    generateAdvancedPreview();
-    scrollToSection('previewSection');
-    if (state.previewSucceeded) setNextStep('Preview ready. Review the start and end dates, then apply changes.');
-    else setNextStep('Preview generated with issues. Review the preview status before applying changes.');
-  } catch (err) {
-    reportActionError('Generate Preview', err);
-  }
-}
-function handleApplyChanges(){
-  try {
-    if(!actionReady(state.mode === 'advanced' ? 'advApplyBtn' : 'applyBtn', 'Generate and review the preview before applying changes.')) return;
-    applyPreviewChanges();
-    if(state.applied){ scrollToSection('applySection'); setNextStep('Changes applied. Next: download the edited workbook.'); }
-  } catch (err) {
-    reportActionError('Apply Changes', err);
-  }
-}
-async function handleDownloadWorkbook(){
-  try {
-    if(!actionReady(state.mode === 'advanced' ? 'advDownloadBtn' : 'downloadBtn', 'Apply changes before downloading the edited workbook.')) return;
-    const downloaded = await downloadEditedWorkbook();
-    if (downloaded) setNextStep('Download started for the edited workbook.');
-  } catch (err) {
-    reportActionError('Download Edited Workbook', err);
-  }
-}
-function handleValidateTemplate() {
-  try {
-    if (!actionReady('validateBtn', 'Upload a workbook and load or paste a template before validating.')) return;
-    validateTemplate();
-    scrollToSection('validationSection');
-  } catch (err) {
-    reportActionError('Validate Template', err);
-  }
+    const parts = line.split('|').map((p) => p.trim());
+    const lineNo = idx + 1;
+    if (section === 'COURSE_NAME') data.courseName = line;
+    else if (section === 'TERMS' && parts.length === 3) data.terms.push({ name: parts[0], start: parts[1], end: parts[2] });
+    else if ((section === 'BLOCKED_DAYS' || section === 'EVENT_NOTES') && (parts.length === 2 || parts.length === 3)) {
+      const row = { name: parts[0], start: parts[1], end: parts[2] || parts[1] };
+      (section === 'BLOCKED_DAYS' ? data.blocked : data.events).push(row);
+    } else if (section === 'UNIT_PLAN' && (parts.length === 3 || parts.length === 4)) {
+      data.units.push({ gradingPeriod: parts[0], unitName: parts[1], days: Number(parts[2]), sourceSheet: 'Template', sourceCell: '', warning: Number.isInteger(Number(parts[2])) ? '' : HALF_DAY_WARNING, allowCrossPeriod: /allow/i.test(parts[3] || '') });
+    } else if (!['SCHOOL_YEAR', 'SKIP_WEEKENDS'].includes(section)) errors.push(`Line ${lineNo}: cannot read this template row.`);
+  });
+  return { ok: errors.length === 0, errors, data };
 }
 
-function handleAdvancedPreview() {
-  try {
-    if (!actionReady('advPreviewBtn', 'Validate the template before generating preview.')) return;
-    generateAdvancedPreview();
-    scrollToSection('previewSection');
-    if (state.previewSucceeded) setNextStep('Preview ready. Review the start and end dates, then apply changes.');
-    else setNextStep('Preview generated with issues. Review the preview status before applying changes.');
-  } catch (err) {
-    reportActionError('Generate Preview from Template', err);
+function importTemplateIntoTables() {
+  const parsed = parseTemplate($('templateInput').value);
+  if (!parsed.ok) {
+    showValidationError(`Template import failed: ${parsed.errors.join('; ')}`);
+    return;
   }
+  state.courseName = parsed.data.courseName || state.courseName;
+  if (parsed.data.terms.length) state.gradingPeriods = parsed.data.terms;
+  state.blockedDays = parsed.data.blocked;
+  state.eventNotes = parsed.data.events;
+  state.units = parsed.data.units;
+  renderAdvancedTables();
+  renderUnitTables();
+  markPreviewStale();
+  setNextStep('Template imported into Advanced Mode tables. Review, then generate preview.');
 }
 
-$('wfUploadBtn').onclick = handleUploadShortcut;
-$('wfAdvUploadBtn').onclick = handleUploadShortcut;
-$('wfCourseBtn').onclick = handleCourseShortcut;
-$('wfUnitBtn').onclick = handleUnitShortcut;
-$('wfTemplateBtn').onclick = handleTemplateShortcut;
-$('createUnitTableBtn').onclick = createUnitTable;
-$('addUnitRowBtn').onclick = addUnitRow;
-$('removeUnitRowBtn').onclick = removeUnitRow;
-$('clearUnitTableBtn').onclick = clearUnitTable;
-$('validateBtn').onclick = handleValidateTemplate;
-$('validateTemplateInContextBtn').onclick = handleValidateTemplate;
-$('previewBtn').onclick = generateGuidedPreview;
-$('generatePreviewFromUnitsBtn').onclick = generateGuidedPreview;
-$('advPreviewBtn').onclick = handleAdvancedPreview;
-$('generateTemplatePreviewBtn').onclick = handleAdvancedPreview;
-$('applyBtn').onclick = handleApplyChanges;
-$('advApplyBtn').onclick = handleApplyChanges;
-$('applyFromPreviewBtn').onclick = handleApplyChanges;
-$('downloadBtn').onclick = handleDownloadWorkbook;
-$('advDownloadBtn').onclick = handleDownloadWorkbook;
-$('downloadFromApplyBtn').onclick = handleDownloadWorkbook;
-$('validateUnitsBtn').onclick = validateGuidedUnits;
-
-$('courseNameInput').addEventListener('input',()=>{updateWorkflowState();});
-$('unitCountInput').addEventListener('input',()=>{updateWorkflowState();});
-$('allowCrossTermInput').addEventListener('change',()=>{state.allowCrossTermGuided=$('allowCrossTermInput').checked; state.previewSucceeded=false; state.applied=false; updateWorkflowState();});
-
-function setError(message) {
-  $('validationOutput').innerHTML = `<p class="error">${message}</p>`;
+function openAdvancedMode() {
+  state.mode = 'advanced';
+  $('modeAdvanced').checked = true;
+  $('modePlc').checked = false;
+  syncTemplateFromState();
+  renderAdvancedTables();
+  updateWorkflowState();
+  document.getElementById('advancedModeSections').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+function moveSelectedUnit(delta) {
+  const i = state.selectedAdvancedUnit;
+  const j = i + delta;
+  if (j < 0 || j >= state.units.length) {
+    showValidationError('Cannot move the selected unit farther in that direction.');
+    return;
+  }
+  [state.units[i], state.units[j]] = [state.units[j], state.units[i]];
+  state.selectedAdvancedUnit = j;
+  renderUnitTables();
+  markPreviewStale();
+}
 
+function selectedUnit() {
+  return state.units[state.selectedAdvancedUnit] || null;
+}
+
+function getCurrentIssueUnit() {
+  if (state.fitIssues.length) return state.units[state.fitIssues[0].unitGlobalIndex] || selectedUnit();
+  return selectedUnit();
+}
+
+function addUnusedDaysTo(direction) {
+  const period = selectedUnit()?.gradingPeriod || state.gradingPeriods[0].name;
+  const unused = state.unusedDays.find((u) => u.period === period && u.days > 0);
+  if (!unused) {
+    showValidationError('No unused days are available in the selected grading period.');
+    return;
+  }
+  const units = state.units.filter((u) => u.gradingPeriod === period);
+  const target = direction === 'previous' ? units[units.length - 1] : units[0];
+  if (!target) {
+    showValidationError('No unit is available in this grading period to receive unused days.');
+    return;
+  }
+  target.days = Number(target.days) + unused.days;
+  target.warning = Number.isInteger(target.days) ? '' : HALF_DAY_WARNING;
+  renderUnitTables();
+  markPreviewStale();
+  setNextStep('Unused days added to a nearby unit. Regenerate the preview.');
+}
+
+function distributeUnusedDays() {
+  const period = selectedUnit()?.gradingPeriod || state.gradingPeriods[0].name;
+  const unused = state.unusedDays.find((u) => u.period === period && u.days > 0);
+  const units = state.units.filter((u) => u.gradingPeriod === period);
+  if (!unused || !units.length) {
+    showValidationError('No unused days and units are available for the selected grading period.');
+    return;
+  }
+  const each = unused.days / units.length;
+  units.forEach((u) => {
+    u.days = Number((Number(u.days) + each).toFixed(2));
+    u.warning = Number.isInteger(u.days) ? '' : HALF_DAY_WARNING;
+  });
+  renderUnitTables();
+  markPreviewStale();
+  setNextStep('Unused days distributed. Regenerate the preview and verify decimal day counts manually.');
+}
+
+function nextPeriodName(current) {
+  const idx = state.gradingPeriods.findIndex((p) => p.name === current);
+  return state.gradingPeriods[idx + 1]?.name || current;
+}
+
+function moveIssueToNextGp() {
+  const unit = getCurrentIssueUnit();
+  if (!unit) {
+    showValidationError('No unit selected or fit issue available.');
+    return;
+  }
+  const next = nextPeriodName(unit.gradingPeriod);
+  if (next === unit.gradingPeriod) {
+    showValidationError('This unit is already in the final grading period.');
+    return;
+  }
+  unit.gradingPeriod = next;
+  renderUnitTables();
+  markPreviewStale();
+  setNextStep('Unit moved to the next grading period. Regenerate the preview.');
+}
+
+function allowIssueCrossGp() {
+  const unit = getCurrentIssueUnit();
+  if (!unit) {
+    showValidationError('No unit selected or fit issue available.');
+    return;
+  }
+  unit.allowCrossPeriod = true;
+  renderUnitTables();
+  markPreviewStale();
+  setNextStep('Unit is allowed to continue into the next grading period. Regenerate the preview.');
+}
+
+function adjustIssueUnit(delta) {
+  const unit = getCurrentIssueUnit();
+  if (!unit) {
+    showValidationError('No unit selected or fit issue available.');
+    return;
+  }
+  unit.days = Math.max(0.5, Number(unit.days) + delta);
+  unit.warning = Number.isInteger(unit.days) ? '' : HALF_DAY_WARNING;
+  renderUnitTables();
+  markPreviewStale();
+  setNextStep('Unit day count adjusted. Regenerate the preview.');
+}
+
+function resetDefaults() {
+  state.gradingPeriods = cloneRows(PLC_GRADING_PERIOD_CONFIG);
+  renderAdvancedTables();
+  markPreviewStale();
+  setNextStep('Default grading-period dates restored.');
+}
+
+function exportBlockedDays() {
+  const text = state.blockedDays.map((d) => `${d.name}\t${d.start}\t${d.end}`).join('\n');
+  downloadBlob(text, 'blocked-days.tsv', 'text/tab-separated-values');
+  setNextStep('Blocked days export started.');
+}
+
+function updateWorkflowState() {
+  const mode = state.mode;
+  $('workflowTitle').textContent = mode === 'plc' ? 'PLC Mode Workflow' : 'Advanced Mode Workflow';
+  $('nextStepMessage').textContent = state.nextStep;
+  $('plcWorkflowRow').classList.toggle('hidden', mode !== 'plc');
+  $('advancedWorkflowRow').classList.toggle('hidden', mode !== 'advanced');
+  $('plcModeSections').classList.toggle('hidden', mode !== 'plc');
+  $('advancedModeSections').classList.toggle('hidden', mode !== 'advanced');
+
+  const d = state.diagnostics;
+  $('statusPanel').innerHTML = `<ul>
+    <li><strong>Mode:</strong> ${mode === 'plc' ? 'PLC Mode' : 'Advanced Mode'}</li>
+    <li><strong>YAG loaded:</strong> ${state.yagWorkbook ? escapeHtml(state.yagName) : 'No'}</li>
+    <li><strong>Curriculum map loaded:</strong> ${state.mapWorkbook ? escapeHtml(state.mapName) : 'No'}</li>
+    <li><strong>Date cells detected:</strong> ${d ? d.totalDateCells : 0}</li>
+    <li><strong>Extracted/manual units:</strong> ${state.units.length}</li>
+    <li><strong>Preview rows:</strong> ${state.preview.length}</li>
+    <li><strong>Applied in memory:</strong> ${state.applied ? 'Yes' : 'No'}</li>
+    <li><strong>Next step:</strong> ${escapeHtml(state.nextStep)}</li>
+  </ul>`;
+
+  setStepState('wfPlcUploadBtn', state.yagWorkbook && state.mapWorkbook ? 'complete' : 'current');
+  setStepState('wfPlcExtractBtn', state.units.length ? 'complete' : (state.yagWorkbook ? 'current' : ''));
+  setStepState('wfPlcReviewBtn', state.units.length ? 'current' : '');
+  setStepState('wfPlcPreviewBtn', state.preview.length ? 'complete' : (state.units.length ? 'current' : ''));
+  setStepState('wfPlcApplyBtn', state.applied ? 'complete' : (state.preview.length ? 'current' : ''));
+  setStepState('wfPlcDownloadBtn', state.applied ? 'current' : '');
+  setStepState('wfAdvDiagnosticsBtn', state.diagnostics ? 'complete' : 'current');
+  setStepState('wfAdvSetupBtn', state.gradingPeriods.length ? 'complete' : 'current');
+  setStepState('wfAdvUnitsBtn', state.units.length ? 'complete' : 'current');
+  setStepState('wfAdvFitBtn', state.fitIssues.length ? 'warning' : (state.preview.length ? 'complete' : ''));
+  setStepState('wfAdvPreviewBtn', state.preview.length ? 'complete' : (state.units.length ? 'current' : ''));
+  setStepState('wfAdvApplyDownloadBtn', state.applied ? 'complete' : (state.preview.length ? 'current' : ''));
+}
+
+function setStepState(id, cls) {
+  const el = $(id);
+  if (!el) return;
+  el.className = `workflow-step workflow-control ${cls || ''}`.trim();
+}
+
+function scrollTo(id) {
+  const el = $(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function bindEvents() {
+  $('yagFileInput').addEventListener('change', handleYagUpload);
+  $('mapFileInput').addEventListener('change', handleMapUpload);
+  $('extractUnitsBtn').onclick = extractUnitsFromYag;
+  $('addPlcUnitRowBtn').onclick = () => addUnitRow();
+  $('generatePlcPreviewBtn').onclick = buildPreview;
+  $('generateAdvPreviewBtn').onclick = buildPreview;
+  $('copyPreviewBtn').onclick = copyPreviewToClipboard;
+  $('downloadPreviewCsvBtn').onclick = downloadPreviewCsv;
+  $('applyChangesBtn').onclick = applyPreviewChanges;
+  $('downloadEditedBtn').onclick = downloadEditedWorkbook;
+  $('openAdvancedFromPlcBtn').onclick = openAdvancedMode;
+  $('openAdvancedFromReviewBtn').onclick = openAdvancedMode;
+  $('modePlc').onchange = () => { state.mode = 'plc'; updateWorkflowState(); };
+  $('modeAdvanced').onchange = openAdvancedMode;
+  $('resetGpDatesBtn').onclick = resetDefaults;
+  $('syncTemplateBtn').onclick = () => { syncTemplateFromState(); setNextStep('Planning template updated from Advanced Mode tables.'); };
+  $('addBlockedDayBtn').onclick = () => { state.blockedDays.push({ name: 'Blocked Day', start: '2026-08-12', end: '2026-08-12' }); renderAdvancedTables(); markPreviewStale(); };
+  $('addEventNoteBtn').onclick = () => { state.eventNotes.push({ name: 'Event Note', start: '2026-08-12', end: '2026-08-12' }); renderAdvancedTables(); markPreviewStale(); };
+  $('exportBlockedDaysBtn').onclick = exportBlockedDays;
+  $('addAdvUnitRowBtn').onclick = () => addUnitRow();
+  $('moveAdvUnitUpBtn').onclick = () => moveSelectedUnit(-1);
+  $('moveAdvUnitDownBtn').onclick = () => moveSelectedUnit(1);
+  $('addUnusedToPreviousBtn').onclick = () => addUnusedDaysTo('previous');
+  $('addUnusedToNextBtn').onclick = () => addUnusedDaysTo('next');
+  $('distributeUnusedBtn').onclick = distributeUnusedDays;
+  $('moveIssueNextGpBtn').onclick = moveIssueToNextGp;
+  $('allowIssueCrossGpBtn').onclick = allowIssueCrossGp;
+  $('reduceIssueUnitBtn').onclick = () => adjustIssueUnit(-1);
+  $('increaseNearbyUnitBtn').onclick = () => adjustIssueUnit(1);
+  $('copyBlankBtn').onclick = async () => { await navigator.clipboard.writeText(BLANK_TEMPLATE); setNextStep('Blank template copied to clipboard.'); };
+  $('loadExampleBtn').onclick = () => { $('templateInput').value = EXAMPLE_TEMPLATE; setNextStep('Example template loaded. Import it into tables or edit it manually.'); };
+  $('importTemplateBtn').onclick = importTemplateIntoTables;
+
+  const nav = {
+    wfPlcUploadBtn: 'plcUploadSection', wfPlcExtractBtn: 'plcUploadSection', wfPlcReviewBtn: 'plcUnitPlanSection', wfPlcPreviewBtn: 'previewSection', wfPlcApplyBtn: 'applySection', wfPlcDownloadBtn: 'applySection',
+    wfAdvDiagnosticsBtn: 'advDiagnosticsSection', wfAdvSetupBtn: 'advSetupSection', wfAdvUnitsBtn: 'advUnitsSection', wfAdvFitBtn: 'advFitSection', wfAdvPreviewBtn: 'previewSection', wfAdvApplyDownloadBtn: 'applySection'
+  };
+  Object.entries(nav).forEach(([id, target]) => { $(id).onclick = () => scrollTo(target); });
+}
+
+renderExtractionSummary();
+renderAdvancedTables();
+syncTemplateFromState();
+bindEvents();
 updateWorkflowState();
