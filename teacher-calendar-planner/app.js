@@ -116,42 +116,46 @@ const BLANK_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\n\nSKIP_WEEKENDS
 
 const EXAMPLE_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\nAlgebra 2\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\n1st Nine Weeks | 2026-08-12 | 2026-10-08\n2nd Nine Weeks | 2026-10-13 | 2026-12-18\n3rd Nine Weeks | 2027-01-06 | 2027-03-05\n4th Nine Weeks | 2027-03-15 | 2027-05-20\n\nBLOCKED_DAYS:\n${DEFAULT_BLOCKED_DAYS.map((d) => `${d.name} | ${d.start}${d.end !== d.start ? ` | ${d.end}` : ''}`).join('\n')}\n\nEVENT_NOTES:\n${DEFAULT_EVENT_NOTES.map((d) => `${d.name} | ${d.start}${d.end !== d.start ? ` | ${d.end}` : ''}`).join('\n')}\n\nUNIT_PLAN:\n1st Nine Weeks | Unit 00 Fundamentals | 13\n1st Nine Weeks | Unit 01 Linear F(x) | 13\n2nd Nine Weeks | Unit 02 Systems | 13\n2nd Nine Weeks | Unit 03 Quadratics | 15.5\n3rd Nine Weeks | Unit 04 Polynomials | 17\n4th Nine Weeks | Unit 05 Review | 7\n`;
 
-const state = {
-  mode: 'plc',
-  yagWorkbook: null,
-  yagName: '',
-  mapWorkbook: null,
-  mapName: '',
-  diagnostics: null,
-  schoolYear: '2026-2027',
-  schoolYearSource: 'Fallback/demo default',
-  mapSchoolYear: '',
-  yagSchoolYear: '',
-  inferenceWarnings: ['Using fallback 2026-2027 dates. Upload a curriculum map or review Advanced Mode settings.'],
-  usingFallbackDates: true,
-  courseName: '',
-  gradingPeriods: cloneRows(PLC_GRADING_PERIOD_CONFIG),
-  blockedDays: cloneRows(DEFAULT_BLOCKED_DAYS),
-  eventNotes: [],
-  units: [],
-  extractionWarnings: [],
-  extractionSummary: '',
-  yagCapacitySummary: [],
-  yagDetectedBlockedDays: [],
-  yagDetectedEventNotes: [],
-  reviewNeededNotes: [],
-  ignoredCalendarNotes: [],
-  ignoredEventNotes: cloneRows(DEFAULT_EVENT_NOTES),
-  requireReviewBeforePreview: false,
-  yagSheetDiagnostics: null,
-  preview: [],
-  previewSucceeded: false,
-  applied: false,
-  selectedAdvancedUnit: 0,
-  fitIssues: [],
-  unusedDays: [],
-  nextStep: 'Next: upload a district YAG and blank curriculum map.'
-};
+function createInitialState() {
+  return {
+    mode: 'plc',
+    yagWorkbook: null,
+    yagName: '',
+    mapWorkbook: null,
+    mapName: '',
+    diagnostics: null,
+    schoolYear: '',
+    schoolYearSource: '',
+    mapSchoolYear: '',
+    yagSchoolYear: '',
+    inferenceWarnings: [],
+    usingFallbackDates: true,
+    courseName: '',
+    gradingPeriods: cloneRows(PLC_GRADING_PERIOD_CONFIG),
+    blockedDays: [],
+    eventNotes: [],
+    units: [],
+    extractionWarnings: [],
+    extractionSummary: '',
+    yagCapacitySummary: [],
+    yagDetectedBlockedDays: [],
+    yagDetectedEventNotes: [],
+    reviewNeededNotes: [],
+    ignoredCalendarNotes: [],
+    ignoredEventNotes: [],
+    requireReviewBeforePreview: false,
+    yagSheetDiagnostics: null,
+    preview: [],
+    previewSucceeded: false,
+    applied: false,
+    selectedAdvancedUnit: 0,
+    fitIssues: [],
+    unusedDays: [],
+    nextStep: 'Next: upload a district YAG and blank curriculum map.'
+  };
+}
+
+const state = createInitialState();
 
 const $ = (id) => document.getElementById(id);
 const escapeHtml = (text) => String(text ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -878,6 +882,10 @@ function renderReviewNeededSummary() {
 }
 
 function renderExtractionSummary() {
+  if (!state.units.length && !state.yagWorkbook && !state.mapWorkbook && !state.yagSheetDiagnostics && !(state.yagCapacitySummary || []).length) {
+    $('plcExtractionSummary').textContent = 'No YAG extraction has been run.';
+    return;
+  }
   const periodBasis = state.gradingPeriods.length ? state.gradingPeriods : PLC_GRADING_PERIOD_CONFIG;
   const byPeriod = periodBasis.map((p) => `${p.name}: ${state.units.filter((u) => u.gradingPeriod === p.name).length} unit(s)`).join(' | ');
   const warnings = state.extractionWarnings.concat(state.inferenceWarnings || []);
@@ -1502,6 +1510,70 @@ function adjustIssueUnit(delta) {
   setNextStep('Unit day count adjusted. Regenerate the preview.');
 }
 
+function storageKeyBelongsToPlanner(key) {
+  return /teacher[-_]?calendar[-_]?planner|teacherCalendarPlanner|teacher_calendar_planner/i.test(String(key || ''));
+}
+
+function clearPlannerStorage() {
+  [window.localStorage, window.sessionStorage].forEach((storage) => {
+    if (!storage) return;
+    Object.keys(storage).forEach((key) => {
+      if (storageKeyBelongsToPlanner(key)) storage.removeItem(key);
+    });
+  });
+
+  if (window.indexedDB?.databases) {
+    window.indexedDB.databases().then((databases) => {
+      databases.forEach((db) => {
+        if (storageKeyBelongsToPlanner(db.name)) window.indexedDB.deleteDatabase(db.name);
+      });
+    }).catch(() => {});
+  }
+
+  if (window.location.search || window.location.hash) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+}
+
+function clearFormControls() {
+  document.querySelectorAll('input[type="file"]').forEach((input) => { input.value = ''; });
+  document.querySelectorAll('textarea').forEach((textarea) => { textarea.value = ''; });
+  const confirmUnscheduled = $('confirmUnscheduledInput');
+  if (confirmUnscheduled) confirmUnscheduled.checked = false;
+  const requireReview = $('requireReviewBeforePreviewInput');
+  if (requireReview) requireReview.checked = false;
+  $('modePlc').checked = true;
+  $('modeAdvanced').checked = false;
+}
+
+function renderDefaultUiAfterReset() {
+  $('yagStatus').textContent = 'No YAG loaded.';
+  $('mapStatus').textContent = 'No curriculum map loaded.';
+  $('plcExtractionSummary').textContent = 'No YAG extraction has been run.';
+  $('plcUnitTableOutput').textContent = 'Extract units from the YAG to begin.';
+  $('advancedUnitTableOutput').textContent = 'No unit rows yet. Extract in PLC Mode or add rows manually.';
+  $('previewOutput').textContent = 'Generate a preview to see unit start/end dates, warnings, and unused days.';
+  $('applyStatus').textContent = 'No changes applied yet. The original uploaded workbook is never overwritten.';
+  $('diagnostics').textContent = 'Upload a blank curriculum map workbook to view diagnostics.';
+  $('fitIssuesOutput').textContent = 'Generate a preview to see unused days and fit issues.';
+}
+
+function resetAppState() {
+  Object.assign(state, createInitialState());
+  clearPlannerStorage();
+  clearFormControls();
+  renderAdvancedTables();
+  syncTemplateFromState();
+  renderDefaultUiAfterReset();
+  updateWorkflowState();
+  setStatusMessage('Reset complete. Upload files to begin.');
+}
+
+function confirmAndResetAppState() {
+  const confirmed = window.confirm('Start over and clear all uploaded files, extracted units, preview data, and edits?');
+  if (confirmed) resetAppState();
+}
+
 function resetDefaults() {
   state.gradingPeriods = cloneRows(PLC_GRADING_PERIOD_CONFIG);
   renderAdvancedTables();
@@ -1575,6 +1647,7 @@ function scrollTo(id) {
 function bindEvents() {
   $('yagFileInput').addEventListener('change', handleYagUpload);
   $('mapFileInput').addEventListener('change', handleMapUpload);
+  $('startOverBtn').onclick = confirmAndResetAppState;
   $('extractUnitsBtn').onclick = extractUnitsFromYag;
   $('addPlcUnitRowBtn').onclick = () => addUnitRow();
   $('generatePlcPreviewBtn').onclick = buildPreview;
