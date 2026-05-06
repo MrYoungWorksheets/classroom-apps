@@ -25,45 +25,100 @@ function hasWorkbookWithDates() {
   return !!(state.workbook && state.diagnostics && state.diagnostics.totalDateCells > 0);
 }
 
+function setActionState(id, ready, reason = '') {
+  const el = $(id);
+  if (!el) return;
+  el.disabled = false;
+  el.dataset.ready = ready ? 'true' : 'false';
+  el.setAttribute('aria-disabled', ready ? 'false' : 'true');
+  el.title = ready ? '' : reason;
+  el.classList.toggle('not-ready', !ready);
+}
+
 function updateWorkflowButtons() {
   const workbookLoaded = !!state.workbook;
+  const workbookReady = hasWorkbookWithDates();
   const hasTemplate = !!($('templateInput').value || '').trim();
   const guidedValid = validateGuided(false).ok;
-  $('validateBtn').disabled = !(workbookLoaded && hasTemplate);
-  $('previewBtn').disabled = !(state.mode === 'guided' && workbookLoaded && guidedValid);
-  $('applyBtn').disabled = !state.previewSucceeded;
-  $('downloadBtn').disabled = !state.applied;
-  $('advPreviewBtn').disabled = !state.validationSucceeded;
-  $('advApplyBtn').disabled = !state.previewSucceeded;
-  $('advDownloadBtn').disabled = !state.applied;
+  const uploadReason = state.workbook ? 'Workbook loaded. Upload a different file if needed.' : 'Upload a calendar workbook to begin.';
+  const courseReason = workbookReady ? 'Enter the course name and number of units.' : 'Upload a workbook with detected date cells first.';
+  const unitReason = $('courseNameInput').value.trim() ? 'Fill in unit names and instructional days.' : 'Enter the course name and create a unit table first.';
+  const guidedPreviewReason = !workbookLoaded
+    ? 'Upload a calendar before generating preview.'
+    : (!guidedValid ? 'Complete the course setup and unit table before generating preview.' : 'Generate the pacing preview.');
+  const applyReason = state.previewSucceeded ? 'Apply the previewed changes to the workbook.' : 'Generate a successful preview before applying changes.';
+  const downloadReason = state.applied ? 'Download the edited workbook.' : 'Apply changes before downloading the edited workbook.';
+  const templateReason = workbookReady ? 'Paste or load a planning template.' : 'Upload a workbook with detected date cells first.';
+  const validateReason = workbookLoaded && hasTemplate ? 'Validate the template.' : 'Upload a workbook and load or paste a template before validating.';
+  const advancedPreviewReason = state.validationSucceeded ? 'Generate the pacing preview.' : 'Validate the template before generating preview.';
+
+  setActionState('wfUploadBtn', true, uploadReason);
+  setActionState('wfAdvUploadBtn', true, uploadReason);
+  setActionState('wfCourseBtn', workbookReady, courseReason);
+  setActionState('wfUnitBtn', !!$('courseNameInput').value.trim(), unitReason);
+  setActionState('wfTemplateBtn', workbookReady, templateReason);
+  setActionState('validateBtn', workbookLoaded && hasTemplate, validateReason);
+  setActionState('validateTemplateInContextBtn', workbookLoaded && hasTemplate, validateReason);
+  setActionState('previewBtn', state.mode === 'guided' && workbookLoaded && guidedValid, guidedPreviewReason);
+  setActionState('generatePreviewFromUnitsBtn', state.mode === 'guided' && workbookLoaded && guidedValid, guidedPreviewReason);
+  setActionState('advPreviewBtn', state.validationSucceeded, advancedPreviewReason);
+  setActionState('generateTemplatePreviewBtn', state.validationSucceeded, advancedPreviewReason);
+  setActionState('applyBtn', state.previewSucceeded, applyReason);
+  setActionState('advApplyBtn', state.previewSucceeded, applyReason);
+  setActionState('applyFromPreviewBtn', state.previewSucceeded, applyReason);
+  setActionState('downloadBtn', state.applied, downloadReason);
+  setActionState('advDownloadBtn', state.applied, downloadReason);
+  setActionState('downloadFromApplyBtn', state.applied, downloadReason);
+}
+
+function setStepClass(id, stateName) {
+  const el = $(id);
+  if (!el) return;
+  el.classList.remove('complete', 'current', 'warning', 'error');
+  if (stateName) el.classList.add(stateName);
 }
 
 function updateWorkflowState() {
   const workbookReady = hasWorkbookWithDates();
   const hasTemplate = !!($('templateInput').value || '').trim();
+  const hasCourse = !!$('courseNameInput').value.trim();
+  const hasUnitRows = state.guidedUnits.length > 0;
+  const guidedValid = validateGuided(false).ok;
 
   if (!state.workbook) {
-    state.nextStep = 'Upload a workbook to begin.';
+    state.nextStep = 'Next: upload a calendar.';
   } else if (!workbookReady) {
-    state.nextStep = 'Workbook loaded, but no date cells were detected. Check workbook diagnostics.';
+    state.nextStep = 'Next: check workbook diagnostics because no date cells were detected.';
   } else if (state.applied) {
-    state.nextStep = 'Changes applied. Next: download the edited workbook.';
+    state.nextStep = 'Next: download edited workbook.';
   } else if (state.previewSucceeded) {
-    state.nextStep = 'Preview ready. Review dates, then click Apply Changes.';
+    state.nextStep = 'Next: review preview and apply changes.';
+  } else if (state.mode === 'guided') {
+    if (!hasCourse) state.nextStep = 'Next: enter course name and create unit table.';
+    else if (!hasUnitRows) state.nextStep = 'Next: enter number of units and create unit table.';
+    else if (!guidedValid) state.nextStep = 'Next: fill in unit names and days.';
+    else state.nextStep = 'Next: generate preview.';
   } else if (state.validationSucceeded) {
-    state.nextStep = 'Template valid. Next: click Generate Preview.';
+    state.nextStep = 'Next: generate preview.';
   } else if (hasTemplate) {
-    state.nextStep = 'Template loaded. Next: click Validate Template.';
+    state.nextStep = 'Next: validate template.';
   } else {
-    state.nextStep = 'Workbook loaded. Next: load or paste a planning template.';
+    state.nextStep = 'Next: load or paste a planning template.';
   }
 
-  $('stepUploadIndicator').className = `workflow-step${workbookReady ? ' complete' : (!state.workbook ? ' current' : '')}`;
-  $('stepTemplateIndicator').className = `workflow-step${hasTemplate ? ' complete' : (workbookReady ? ' current' : '')}`;
-  $('step1Indicator').className = `workflow-step${workbookReady ? ' complete' : ' current'}`;
-  const hasCourse = !!$('courseNameInput').value.trim();
-  $('step2Indicator').className = `workflow-step${hasCourse ? ' complete' : (workbookReady ? ' current' : '')}`;
-  $('step3Indicator').className = `workflow-step${state.guidedUnits.length ? ' complete' : (hasCourse ? ' current' : '')}`;
+  const uploadState = !state.workbook ? 'current' : (workbookReady ? 'complete' : 'error');
+  setStepClass('wfUploadBtn', uploadState);
+  setStepClass('wfAdvUploadBtn', uploadState);
+  setStepClass('wfCourseBtn', hasCourse ? 'complete' : (workbookReady ? 'current' : ''));
+  setStepClass('wfUnitBtn', guidedValid ? 'complete' : (hasUnitRows ? 'warning' : (hasCourse ? 'current' : '')));
+  setStepClass('wfTemplateBtn', hasTemplate ? 'complete' : (workbookReady ? 'current' : ''));
+  setStepClass('previewBtn', state.previewSucceeded ? 'complete' : (guidedValid && state.mode === 'guided' ? 'current' : ''));
+  setStepClass('applyBtn', state.applied ? 'complete' : (state.previewSucceeded && state.mode === 'guided' ? 'current' : ''));
+  setStepClass('downloadBtn', state.applied && state.mode === 'guided' ? 'current' : '');
+  setStepClass('validateBtn', state.validationSucceeded ? 'complete' : (hasTemplate && state.mode === 'advanced' ? 'current' : ''));
+  setStepClass('advPreviewBtn', state.previewSucceeded ? 'complete' : (state.validationSucceeded && state.mode === 'advanced' ? 'current' : ''));
+  setStepClass('advApplyBtn', state.applied ? 'complete' : (state.previewSucceeded && state.mode === 'advanced' ? 'current' : ''));
+  setStepClass('advDownloadBtn', state.applied && state.mode === 'advanced' ? 'current' : '');
 
   $('guidedWorkflowRow').classList.toggle('hidden', state.mode !== 'guided');
   $('advancedWorkflowRow').classList.toggle('hidden', state.mode !== 'advanced');
@@ -75,6 +130,8 @@ function updateWorkflowState() {
 }
 
 function renderStatusPanel() {
+  const nextStepMessage = $('nextStepMessage');
+  if (nextStepMessage) nextStepMessage.textContent = state.nextStep;
   const d = state.diagnostics;
   const workbookLoaded = state.workbook ? 'Yes' : 'No';
   const sheetsMatched = d && d.missingSheets.length === 0 ? 'Yes' : 'No';
@@ -95,6 +152,40 @@ function renderStatusPanel() {
 function setNextStep(message) {
   state.nextStep = message;
   renderStatusPanel();
+}
+
+function scrollToSection(id) {
+  const target = $(id);
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function actionReady(id, fallbackMessage) {
+  const el = $(id);
+  if (!el || el.dataset.ready !== 'false') return true;
+  const message = el.title || fallbackMessage;
+  setNextStep(message);
+  return false;
+}
+
+function handleUploadShortcut() {
+  scrollToSection('uploadSection');
+  setNextStep(state.workbook ? 'Upload a different workbook if needed, or continue to the next workflow step.' : 'Next: upload a calendar.');
+}
+
+function handleCourseShortcut() {
+  if (!actionReady('wfCourseBtn', 'Upload a workbook with detected date cells first.')) return;
+  scrollToSection('courseSetupSection');
+}
+
+function handleUnitShortcut() {
+  if (!actionReady('wfUnitBtn', 'Enter the course name and create a unit table first.')) return;
+  scrollToSection('unitListSection');
+}
+
+function handleTemplateShortcut() {
+  if (!actionReady('wfTemplateBtn', 'Upload a workbook with detected date cells first.')) return;
+  scrollToSection('templateSection');
 }
 
 function refreshWorkbookDiagnostics() {
@@ -428,7 +519,7 @@ function parseTemplate(text) {
   return { ok: errors.length === 0, errors, data };
 }
 
-$('validateBtn').onclick = () => {
+function validateTemplate() {
   const parsed = parseTemplate($('templateInput').value);
   state.parsed = parsed.ok ? parsed.data : null;
   state.validationSucceeded = false;
@@ -444,7 +535,7 @@ $('validateBtn').onclick = () => {
     }
   }
   updateWorkflowState();
-};
+}
 
 
 function makeInstructionalDayFilter(parsed, blockedSet) {
@@ -618,7 +709,7 @@ function buildFlexibleCrossTermPreview(parsed, dateRows, blockedSet, events) {
   return { rows: previewRows, okToApply: true };
 }
 
-$('advPreviewBtn').onclick = () => {
+function generateAdvancedPreview() {
   if (!state.workbook || !state.diagnostics) {
     setError('No workbook uploaded. Upload a workbook before generating preview.');
     return;
@@ -652,7 +743,7 @@ $('advPreviewBtn').onclick = () => {
   state.previewSucceeded = previewResult.okToApply;
   renderPreview(previewResult.rows);
   updateWorkflowState();
-};
+}
 
 function renderPreview(rows) {
   $('previewOutput').innerHTML = `<table><thead><tr>
@@ -661,7 +752,7 @@ function renderPreview(rows) {
   </tr></thead><tbody>${rows.map((r) => `<tr><td>${r.term}</td><td>${r.unit}</td><td>${r.days}</td><td>${r.startDate}</td><td>${r.endDate}</td><td>${r.skippedBlockedDays}</td><td>${r.eventWarnings}</td><td>${r.status}</td></tr>`).join('')}</tbody></table>`;
 }
 
-$('advApplyBtn').onclick = () => {
+function applyPreviewChanges() {
   if (!state.workbook || !state.preview || !state.diagnostics) {
     setError('Cannot apply changes: generate a preview first.');
     return;
@@ -699,7 +790,7 @@ $('advApplyBtn').onclick = () => {
   state.applied = true;
   $('applyStatus').textContent = `Applied changes in memory. START labels: ${startLabels}; END labels: ${endLabels}; Date cells colored: ${dateCellsColored}; Note cells updated: ${noteCellsTouched.size}. Use Download Edited Workbook to save a new file.`;
   updateWorkflowState();
-};
+}
 
 function appendNote(ws, addr, text) {
   const cell = ws.getCell(addr);
@@ -712,7 +803,7 @@ function colorDateCell(ws, addr, fill) {
   cell.fill = { ...fill };
 }
 
-$('advDownloadBtn').onclick = async () => {
+async function downloadEditedWorkbook() {
   if (!state.workbook || !state.applied) {
     setError('No applied changes to export.');
     return;
@@ -731,7 +822,7 @@ $('advDownloadBtn').onclick = async () => {
   } catch (err) {
     setError(`Export failed: ${err.message}`);
   }
-};
+}
 
 
 function getDefaultTemplateFromGuided() {
@@ -817,10 +908,46 @@ $('createUnitTableBtn').onclick=()=>{const n=Number($('unitCountInput').value); 
 $('addUnitRowBtn').onclick=()=>{state.guidedUnits.push({termName:'Spring Semester',unitName:'',days:1}); renderUnitTable();};
 $('removeUnitRowBtn').onclick=()=>{state.guidedUnits.pop(); renderUnitTable();};
 $('clearUnitTableBtn').onclick=()=>{state.guidedUnits=[]; renderUnitTable();};
-$('previewBtn').onclick=()=>{ if(!state.workbook||!state.diagnostics){setError('No workbook uploaded. Upload a workbook before generating preview.'); return;} const v=validateGuided(true); if(!v.ok) return; $('templateInput').value=getDefaultTemplateFromGuided(); const parsed=parseTemplate($('templateInput').value); state.validationSucceeded=true; state.previewSucceeded=false; if(!parsed.ok){ setError('Internal guided template generation failed.'); return;} $('advPreviewBtn').onclick(); setNextStep('Review the start and end dates. If they look correct, apply changes.');};
-$('applyBtn').onclick=()=>{$('advApplyBtn').onclick(); if(state.applied) setNextStep('Download the edited workbook.');};
-$('downloadBtn').onclick=async()=>{$('advDownloadBtn').onclick();};
+function generateGuidedPreview(){ if(!actionReady('previewBtn', 'Complete the course setup and unit table before generating preview.')) return; if(!state.workbook||!state.diagnostics){setError('No workbook uploaded. Upload a workbook before generating preview.'); return;} const v=validateGuided(true); if(!v.ok) return; $('templateInput').value=getDefaultTemplateFromGuided(); const parsed=parseTemplate($('templateInput').value); state.validationSucceeded=true; state.previewSucceeded=false; if(!parsed.ok){ setError('Internal guided template generation failed.'); return;} generateAdvancedPreview(); scrollToSection('previewSection'); setNextStep('Next: review preview and apply changes.');}
+function handleApplyChanges(){ if(!actionReady(state.mode === 'advanced' ? 'advApplyBtn' : 'applyBtn', 'Generate a successful preview before applying changes.')) return; applyPreviewChanges(); if(state.applied){ scrollToSection('applySection'); setNextStep('Next: download edited workbook.'); }}
+async function handleDownloadWorkbook(){ if(!actionReady(state.mode === 'advanced' ? 'advDownloadBtn' : 'downloadBtn', 'Apply changes before downloading the edited workbook.')) return; await downloadEditedWorkbook();}
+function handleValidateTemplate() {
+  if (!actionReady('validateBtn', 'Upload a workbook and load or paste a template before validating.')) return;
+  validateTemplate();
+  scrollToSection('validationSection');
+}
+
+function handleAdvancedPreview() {
+  if (!actionReady('advPreviewBtn', 'Validate the template before generating preview.')) return;
+  generateAdvancedPreview();
+  scrollToSection('previewSection');
+}
+
+$('wfUploadBtn').onclick = handleUploadShortcut;
+$('wfAdvUploadBtn').onclick = handleUploadShortcut;
+$('wfCourseBtn').onclick = handleCourseShortcut;
+$('wfUnitBtn').onclick = handleUnitShortcut;
+$('wfTemplateBtn').onclick = handleTemplateShortcut;
+$('validateBtn').onclick = handleValidateTemplate;
+$('validateTemplateInContextBtn').onclick = handleValidateTemplate;
+$('previewBtn').onclick = generateGuidedPreview;
+$('generatePreviewFromUnitsBtn').onclick = generateGuidedPreview;
+$('advPreviewBtn').onclick = handleAdvancedPreview;
+$('generateTemplatePreviewBtn').onclick = handleAdvancedPreview;
+$('applyBtn').onclick = handleApplyChanges;
+$('advApplyBtn').onclick = handleApplyChanges;
+$('applyFromPreviewBtn').onclick = handleApplyChanges;
+$('downloadBtn').onclick = handleDownloadWorkbook;
+$('advDownloadBtn').onclick = handleDownloadWorkbook;
+$('downloadFromApplyBtn').onclick = handleDownloadWorkbook;
+$('validateUnitsBtn').onclick = () => {
+  validateGuided(true);
+  scrollToSection('validationSection');
+  updateWorkflowState();
+};
+
 $('courseNameInput').addEventListener('input',()=>{updateWorkflowState();});
+$('unitCountInput').addEventListener('input',()=>{updateWorkflowState();});
 $('allowCrossTermInput').addEventListener('change',()=>{state.allowCrossTermGuided=$('allowCrossTermInput').checked; state.previewSucceeded=false; state.applied=false; updateWorkflowState();});
 
 function setError(message) {
