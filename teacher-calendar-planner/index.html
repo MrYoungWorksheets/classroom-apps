@@ -78,6 +78,7 @@
         <div id="plcUnitTableOutput" class="panel">Extract units from the YAG to begin.</div>
         <div class="button-row section-action-row">
           <button id="addPlcUnitRowBtn" type="button">Add Row</button>
+          <label class="review-confirm"><input id="requireReviewBeforePreviewInput" type="checkbox" /> Require review-needed notes to be resolved before preview</label>
           <button id="generatePlcPreviewBtn" type="button">Generate Preview</button>
           <button id="openAdvancedFromReviewBtn" type="button">Open in Advanced Mode</button>
         </div>
@@ -137,6 +138,12 @@
         <div class="button-row section-action-row">
           <button id="addEventNoteBtn" type="button">Add Event Note</button>
         </div>
+      </section>
+
+      <section id="advReviewSection">
+        <h2>Advanced Mode: Review Needed / Ignored</h2>
+        <p>Unfamiliar calendar notes are not blocked automatically. Review them before scheduling if they matter for your campus calendar.</p>
+        <div id="reviewNeededTableOutput" class="panel"></div>
       </section>
 
       <section id="advUnitsSection">

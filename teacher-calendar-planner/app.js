@@ -11,9 +11,10 @@ const DATE_COLUMNS = ['A', 'C', 'E', 'G', 'I'];
 const NOTE_COLUMNS = ['B', 'D', 'F', 'H', 'J'];
 const FALL_PERIODS = new Set(['1st', '2nd']);
 const SPRING_PERIODS = new Set(['3rd', '4th']);
-const BLOCKED_NOTE_PATTERN = /(student\s+holiday|staff\s+holiday|teacher\s+workday|professional\s+development|\bPD\b|holiday|fall\s+break|winter\s+break|spring\s+break|\bbreak\b|finals?|midterms?|early\s+release)/i;
-const EVENT_NOTE_PATTERN = /(testing|\bEOC\b|interim|benchmark|\bCBE\b|\bPSAT\b|\bSAT\b|TELPAS|TSIA|growth\s+pre[-\s]?test|growth\s+post[-\s]?test|\bAP\b|\bIBC\b|ASVAB)/i;
-const NON_INSTRUCTIONAL_SECTION_PATTERN = /(anticipated\s+non[-\s]?instructional\s+days|non[-\s]?instructional\s+days|student\s+holiday|staff\s+holiday|teacher\s+workday|professional\s+development|\bPD\b|holiday|fall\s+break|winter\s+break|spring\s+break|\bbreak\b|finals?|midterms?|early\s+release)/i;
+const BLOCKED_NOTE_PATTERN = /(student\s+holiday|staff\s+holiday|teacher\s+work\s*day|professional\s+development|staff\s+development|\bP\.?D\.?\b(?:\s+day)?|in[-\s]?service|convocation|flex\s+day|comp\s+day|no\s+school|no\s+students|holiday|fall\s+break|thanksgiving\s+break|winter\s+break|christmas\s+break|spring\s+break|\bbreak\b)/i;
+const YAG_NON_INSTRUCTIONAL_ONLY_BLOCKED_PATTERN = /(early\s+release|finals?|midterms?)/i;
+const EVENT_NOTE_PATTERN = /(\bEOC\b|interim|benchmark|testing|test\s+window|\bPSAT\b|\bSAT\b|TSIA2?|TELPAS|\bCBE\b|AP\s+testing|IBC\s+testing|ASVAB|growth\s+pre[-\s]?test|growth\s+post[-\s]?test|pre[-\s]?test|post[-\s]?test)/i;
+const NON_INSTRUCTIONAL_SECTION_PATTERN = /(anticipated\s+non[-\s]?instructional\s+days|non[-\s]?instructional\s+days)/i;
 
 
 const DEFAULT_BLOCKED_DAYS = [
@@ -139,6 +140,9 @@ const state = {
   yagCapacitySummary: [],
   yagDetectedBlockedDays: [],
   yagDetectedEventNotes: [],
+  reviewNeededNotes: [],
+  ignoredCalendarNotes: [],
+  requireReviewBeforePreview: false,
   yagSheetDiagnostics: null,
   preview: [],
   previewSucceeded: false,
@@ -326,6 +330,31 @@ function upsertRange(rows, item) {
   rows.push({ source: '', ...item });
 }
 
+function classifyCalendarNote(text, options = {}) {
+  const note = String(text || '').trim();
+  if (!note) return '';
+  if (options.yagNonInstructional && (BLOCKED_NOTE_PATTERN.test(note) || YAG_NON_INSTRUCTIONAL_ONLY_BLOCKED_PATTERN.test(note) || EVENT_NOTE_PATTERN.test(note))) return 'BLOCKED_DAY';
+  if (BLOCKED_NOTE_PATTERN.test(note)) return 'BLOCKED_DAY';
+  if (EVENT_NOTE_PATTERN.test(note)) return 'EVENT_NOTE';
+  return options.reviewIfUnmatched ? 'REVIEW_NEEDED' : '';
+}
+
+function upsertReviewNote(rows, item) {
+  if (!item?.note || !parseIso(item.date)) return;
+  const key = `${item.date}|${String(item.note || '').toLowerCase()}|${item.sourceSheet || ''}|${item.sourceCell || ''}`;
+  if (rows.some((r) => `${r.date}|${String(r.note || '').toLowerCase()}|${r.sourceSheet || ''}|${r.sourceCell || ''}` === key)) return;
+  rows.push({ ...item });
+}
+
+function noteToRange(note, sourcePrefix = 'Reviewed calendar note') {
+  return {
+    name: note.note || 'Calendar note',
+    start: note.date,
+    end: note.date,
+    source: `${sourcePrefix}: ${note.sourceSheet || 'Unknown'}${note.sourceCell ? `!${note.sourceCell}` : ''}`
+  };
+}
+
 function extractDateMentions(text, defaultYear) {
   const out = [];
   const s = String(text || '');
@@ -407,6 +436,7 @@ function detectWorkbookDates(workbook, workbookName, options = {}) {
     inferredPeriods: [],
     blockedDays: [],
     eventNotes: [],
+    reviewNeeded: [],
     mapSchoolYear: ''
   };
   diagnostics.matchedSheets = getMatchedSheets(diagnostics.sheetNames);
@@ -440,8 +470,10 @@ function detectWorkbookDates(workbook, workbookName, options = {}) {
         diagnostics.allAddresses.push(`${match.actualName}!${dateAddr}`);
         if (!diagnostics.firstDate || parsed.iso < diagnostics.firstDate) diagnostics.firstDate = parsed.iso;
         if (!diagnostics.lastDate || parsed.iso > diagnostics.lastDate) diagnostics.lastDate = parsed.iso;
-        if (note && BLOCKED_NOTE_PATTERN.test(note)) upsertRange(diagnostics.blockedDays, { name: note, start: parsed.iso, end: parsed.iso, source: describeSource('Curriculum map note', match.actualName, noteAddr) });
-        else if (note && EVENT_NOTE_PATTERN.test(note)) upsertRange(diagnostics.eventNotes, { name: note, start: parsed.iso, end: parsed.iso, source: describeSource('Curriculum map note', match.actualName, noteAddr) });
+        const classification = classifyCalendarNote(note, { reviewIfUnmatched: true });
+        if (classification === 'BLOCKED_DAY') upsertRange(diagnostics.blockedDays, { name: note, start: parsed.iso, end: parsed.iso, source: describeSource('Curriculum map note', match.actualName, noteAddr) });
+        else if (classification === 'EVENT_NOTE') upsertRange(diagnostics.eventNotes, { name: note, start: parsed.iso, end: parsed.iso, source: describeSource('Curriculum map note', match.actualName, noteAddr) });
+        else if (classification === 'REVIEW_NEEDED') upsertReviewNote(diagnostics.reviewNeeded, { date: parsed.iso, note, sourceSheet: match.actualName, sourceCell: noteAddr });
       });
     }
     if (!diagnostics.perSheet[key].length) diagnostics.warnings.push(`No date cells detected in ${match.actualName} for date columns ${DATE_COLUMNS.join(', ')}.`);
@@ -472,8 +504,10 @@ function applyDetectedCalendarFromMap(diagnostics) {
   state.mapSchoolYear = diagnostics.mapSchoolYear || '';
   state.blockedDays = [];
   state.eventNotes = [];
+  state.reviewNeededNotes = [];
   diagnostics.blockedDays.forEach((d) => upsertRange(state.blockedDays, d));
   diagnostics.eventNotes.forEach((d) => upsertRange(state.eventNotes, d));
+  diagnostics.reviewNeeded.forEach((d) => upsertReviewNote(state.reviewNeededNotes, d));
   state.yagDetectedBlockedDays.forEach((d) => upsertRange(state.blockedDays, d));
   state.yagDetectedEventNotes.forEach((d) => upsertRange(state.eventNotes, d));
   mergeCalendarInference();
@@ -499,7 +533,7 @@ function renderDiagnostics() {
     <li><strong>First / last detected date:</strong> ${d.firstDate || 'N/A'} / ${d.lastDate || 'N/A'}</li>
     <li><strong>Inferred map school year:</strong> ${escapeHtml(d.mapSchoolYear || 'Not detected')}</li>
     <li><strong>Detected grading periods:</strong> ${escapeHtml((d.inferredPeriods || []).map((p) => `${p.name}: ${p.start || '?'} to ${p.end || '?'}`).join(' | ') || 'None')}</li>
-    <li><strong>Detected blocked days / event notes:</strong> ${(d.blockedDays || []).length} / ${(d.eventNotes || []).length}</li>
+    <li><strong>Detected blocked days / event notes / review needed:</strong> ${(d.blockedDays || []).length} / ${(d.eventNotes || []).length} / ${(d.reviewNeeded || []).length}</li>
     <li><strong>Warnings:</strong> ${escapeHtml(d.warnings.join('; ') || 'None')}</li>
   </ul>
   <table><thead><tr><th>Sheet</th><th>Period</th><th>Date Cell</th><th>Note Cell</th><th>Raw Value</th><th>Interpreted Date</th><th>Parse Type</th></tr></thead>
@@ -670,6 +704,7 @@ function extractUnitsFromYagWorkbook(workbook) {
     let currentPeriod = sheetClass.period;
     sectionStats.get(currentPeriod).seen = true;
     let header = { titleCol: null, daysCol: null };
+    let inYagNonInstructionalSection = false;
     for (let r = 1; r <= (ws.actualRowCount || ws.rowCount); r += 1) {
       const row = ws.getRow(r);
       const lastCell = Math.max(row.actualCellCount || 0, 12);
@@ -679,11 +714,13 @@ function extractUnitsFromYagWorkbook(workbook) {
       if (!joined) continue;
 
       const rowYear = yearFromSchoolYear(state.schoolYear || state.yagSchoolYear, currentPeriod) || yearFromSchoolYear(state.yagSchoolYear, currentPeriod);
+      if (NON_INSTRUCTIONAL_SECTION_PATTERN.test(joined)) inYagNonInstructionalSection = true;
       const mentionedDates = extractDateMentions(joined, rowYear);
-      if (mentionedDates.length && NON_INSTRUCTIONAL_SECTION_PATTERN.test(joined)) {
+      const classification = inYagNonInstructionalSection ? 'BLOCKED_DAY' : classifyCalendarNote(joined);
+      if (mentionedDates.length && classification === 'BLOCKED_DAY') {
         const sortedDates = mentionedDates.sort();
-        upsertRange(detectedBlockedDays, { name: joined.slice(0, 120), start: sortedDates[0], end: sortedDates[sortedDates.length - 1], source: describeSource('YAG non-instructional row', ws.name, row.getCell(1).address) });
-      } else if (mentionedDates.length && EVENT_NOTE_PATTERN.test(joined)) {
+        upsertRange(detectedBlockedDays, { name: joined.slice(0, 120), start: sortedDates[0], end: sortedDates[sortedDates.length - 1], source: describeSource(inYagNonInstructionalSection ? 'YAG non-instructional row' : 'YAG blocked-day row', ws.name, row.getCell(1).address) });
+      } else if (mentionedDates.length && classification === 'EVENT_NOTE') {
         const sortedDates = mentionedDates.sort();
         upsertRange(detectedEventNotes, { name: joined.slice(0, 120), start: sortedDates[0], end: sortedDates[sortedDates.length - 1], source: describeSource('YAG event row', ws.name, row.getCell(1).address) });
       }
@@ -696,6 +733,7 @@ function extractUnitsFromYagWorkbook(workbook) {
         currentPeriod = detectedPeriod === sheetClass.period ? detectedPeriod : '';
         if (currentPeriod) sectionStats.get(currentPeriod).seen = true;
         header = { titleCol: null, daysCol: null };
+        inYagNonInstructionalSection = false;
         continue;
       }
 
@@ -829,6 +867,14 @@ function renderRangeReviewSummary(title, rows, emptyText) {
   </tbody></table>`;
 }
 
+function renderReviewNeededSummary() {
+  if (!state.reviewNeededNotes.length) return '<h3>Review Needed</h3><p>No unclassified calendar notes need review.</p>';
+  return `<h3>Review Needed</h3><div class="error-box"><strong>Some calendar notes need review before scheduling.</strong></div>
+    <table><thead><tr><th>Date</th><th>Note Text</th><th>Source Sheet</th><th>Source Cell</th></tr></thead><tbody>
+      ${state.reviewNeededNotes.map((d) => `<tr><td>${escapeHtml(d.date)}</td><td>${escapeHtml(d.note)}</td><td>${escapeHtml(d.sourceSheet || '')}</td><td>${escapeHtml(d.sourceCell || '')}</td></tr>`).join('')}
+    </tbody></table>`;
+}
+
 function renderExtractionSummary() {
   const periodBasis = state.gradingPeriods.length ? state.gradingPeriods : PLC_GRADING_PERIOD_CONFIG;
   const byPeriod = periodBasis.map((p) => `${p.name}: ${state.units.filter((u) => u.gradingPeriod === p.name).length} unit(s)`).join(' | ');
@@ -836,10 +882,13 @@ function renderExtractionSummary() {
   const warningHtml = warnings.length ? `<ul>${Array.from(new Set(warnings)).map((w) => `<li class="warn">${escapeHtml(w)}</li>`).join('')}</ul>` : '<p class="ok">Extraction completed with no balance, confidence, or calendar warnings.</p>';
   $('plcExtractionSummary').innerHTML = `<p><strong>Course:</strong> ${escapeHtml(state.courseName || 'Not detected')}</p>
     <p><strong>Inferred school year:</strong> ${escapeHtml(state.schoolYear || 'Not detected')} <span class="muted">(${escapeHtml(state.schoolYearSource || 'Unknown source')})</span></p>
+    <p><strong>PLC calendar summary:</strong> blocked days detected: ${state.blockedDays.length}; event notes detected: ${state.eventNotes.length}; review-needed notes detected: ${state.reviewNeededNotes.length}.</p>
+    ${state.reviewNeededNotes.length ? '<div class="error-box"><strong>Some calendar notes need review before scheduling.</strong></div>' : ''}
     <p>${escapeHtml(byPeriod)}</p>
     ${renderDetectedGpSummary()}
     ${renderRangeReviewSummary('Detected Blocked Days', state.blockedDays, 'No blocked days detected yet. Review Advanced Mode if your files contain non-instructional days.')}
     ${renderRangeReviewSummary('Detected Event Notes', state.eventNotes, 'No event notes detected yet.')}
+    ${renderReviewNeededSummary()}
     ${renderYagSheetDiagnostics()}${renderYagCapacitySummary()}${warningHtml}`;
 }
 
@@ -956,7 +1005,7 @@ function renderGpTable() {
 function renderRangeTable(containerId, rows, type) {
   const isBlocked = type === 'blocked';
   $(containerId).innerHTML = `<table><thead><tr><th>Description</th><th>Start Date</th><th>End Date</th><th>Source</th><th>Action</th></tr></thead><tbody>
-    ${rows.map((row, i) => `<tr><td><input data-range-type="${type}" data-i="${i}" data-k="name" value="${escapeHtml(row.name)}" /></td><td><input type="date" data-range-type="${type}" data-i="${i}" data-k="start" value="${row.start}" /></td><td><input type="date" data-range-type="${type}" data-i="${i}" data-k="end" value="${row.end}" /></td><td>${escapeHtml(row.source || 'Manual')}</td><td><button type="button" data-convert-range="${type}:${i}">${isBlocked ? 'Treat as Event' : 'Treat as Blocked'}</button> <button type="button" data-delete-range="${type}:${i}">Delete</button></td></tr>`).join('')}</tbody></table>`;
+    ${rows.map((row, i) => `<tr><td><input data-range-type="${type}" data-i="${i}" data-k="name" value="${escapeHtml(row.name)}" /></td><td><input type="date" data-range-type="${type}" data-i="${i}" data-k="start" value="${row.start}" /></td><td><input type="date" data-range-type="${type}" data-i="${i}" data-k="end" value="${row.end}" /></td><td>${escapeHtml(row.source || 'Manual')}</td><td><button type="button" data-convert-range="${type}:${i}">${isBlocked ? 'Treat as Event' : 'Treat as Blocked'}</button> <button type="button" data-range-to-review="${type}:${i}">Move to Review</button> <button type="button" data-range-to-ignore="${type}:${i}">Ignore</button> <button type="button" data-delete-range="${type}:${i}">Delete</button></td></tr>`).join('')}</tbody></table>`;
   $(containerId).querySelectorAll('[data-range-type]').forEach((el) => el.addEventListener('input', (e) => {
     const targetRows = e.target.dataset.rangeType === 'blocked' ? state.blockedDays : state.eventNotes;
     const row = targetRows[Number(e.target.dataset.i)];
@@ -973,9 +1022,53 @@ function renderRangeTable(containerId, rows, type) {
     renderAdvancedTables();
     markPreviewStale();
   }));
+  $(containerId).querySelectorAll('[data-range-to-review]').forEach((btn) => btn.addEventListener('click', () => {
+    const [rangeType, idx] = btn.dataset.rangeToReview.split(':');
+    const from = rangeType === 'blocked' ? state.blockedDays : state.eventNotes;
+    const [row] = from.splice(Number(idx), 1);
+    if (row) upsertReviewNote(state.reviewNeededNotes, { date: row.start, note: row.name, sourceSheet: row.source || 'Advanced Mode', sourceCell: row.end !== row.start ? `${row.start} to ${row.end}` : '' });
+    renderAdvancedTables();
+    markPreviewStale();
+  }));
+  $(containerId).querySelectorAll('[data-range-to-ignore]').forEach((btn) => btn.addEventListener('click', () => {
+    const [rangeType, idx] = btn.dataset.rangeToIgnore.split(':');
+    const from = rangeType === 'blocked' ? state.blockedDays : state.eventNotes;
+    const [row] = from.splice(Number(idx), 1);
+    if (row) state.ignoredCalendarNotes.push({ date: row.start, note: row.name, sourceSheet: row.source || 'Advanced Mode', sourceCell: row.end !== row.start ? `${row.start} to ${row.end}` : '' });
+    renderAdvancedTables();
+    markPreviewStale();
+  }));
   $(containerId).querySelectorAll('[data-delete-range]').forEach((btn) => btn.addEventListener('click', () => {
     const [rangeType, idx] = btn.dataset.deleteRange.split(':');
     (rangeType === 'blocked' ? state.blockedDays : state.eventNotes).splice(Number(idx), 1);
+    renderAdvancedTables();
+    markPreviewStale();
+  }));
+}
+
+function renderReviewNotesTable() {
+  const reviewRows = state.reviewNeededNotes || [];
+  const ignoredRows = state.ignoredCalendarNotes || [];
+  const reviewTable = reviewRows.length ? `<table><thead><tr><th>Date</th><th>Note Text</th><th>Source Sheet</th><th>Source Cell</th><th>Actions</th></tr></thead><tbody>
+    ${reviewRows.map((row, i) => `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.note)}</td><td>${escapeHtml(row.sourceSheet || '')}</td><td>${escapeHtml(row.sourceCell || '')}</td><td><button type="button" data-review-action="blocked:${i}">Treat as Blocked Day</button> <button type="button" data-review-action="event:${i}">Treat as Event Note</button> <button type="button" data-review-action="ignore:${i}">Ignore</button></td></tr>`).join('')}
+  </tbody></table>` : '<p>No review-needed notes.</p>';
+  const ignoredTable = ignoredRows.length ? `<h3>Ignored Notes</h3><table><thead><tr><th>Date</th><th>Note Text</th><th>Source</th><th>Action</th></tr></thead><tbody>
+    ${ignoredRows.map((row, i) => `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.note)}</td><td>${escapeHtml([row.sourceSheet, row.sourceCell].filter(Boolean).join(' '))}</td><td><button type="button" data-restore-ignored="${i}">Restore to Review Needed</button></td></tr>`).join('')}
+  </tbody></table>` : '';
+  $('reviewNeededTableOutput').innerHTML = `${reviewRows.length ? '<div class="error-box"><strong>Some calendar notes need review before scheduling.</strong></div>' : ''}${reviewTable}${ignoredTable}`;
+  $('reviewNeededTableOutput').querySelectorAll('[data-review-action]').forEach((btn) => btn.addEventListener('click', () => {
+    const [action, idxText] = btn.dataset.reviewAction.split(':');
+    const [row] = state.reviewNeededNotes.splice(Number(idxText), 1);
+    if (!row) return;
+    if (action === 'blocked') upsertRange(state.blockedDays, noteToRange(row, 'Review-needed note treated as blocked day'));
+    else if (action === 'event') upsertRange(state.eventNotes, noteToRange(row, 'Review-needed note treated as event note'));
+    else state.ignoredCalendarNotes.push(row);
+    renderAdvancedTables();
+    markPreviewStale();
+  }));
+  $('reviewNeededTableOutput').querySelectorAll('[data-restore-ignored]').forEach((btn) => btn.addEventListener('click', () => {
+    const [row] = state.ignoredCalendarNotes.splice(Number(btn.dataset.restoreIgnored), 1);
+    if (row) upsertReviewNote(state.reviewNeededNotes, row);
     renderAdvancedTables();
     markPreviewStale();
   }));
@@ -985,6 +1078,7 @@ function renderAdvancedTables() {
   renderGpTable();
   renderRangeTable('blockedDaysTableOutput', state.blockedDays, 'blocked');
   renderRangeTable('eventNotesTableOutput', state.eventNotes, 'event');
+  renderReviewNotesTable();
   renderAdvancedUnitTable();
   renderFitIssues();
 }
@@ -994,6 +1088,7 @@ function validatePlanningState() {
   if (!state.mapWorkbook) errors.push('No curriculum map uploaded. Upload a blank curriculum map workbook before generating preview.');
   if (state.mapWorkbook && state.usingFallbackDates) errors.push('Grading-period dates could not be inferred from the uploaded curriculum map. Review Advanced Mode settings before generating preview.');
   if (!state.units.length) errors.push('No units found. Extract units from a YAG or add units manually.');
+  if (state.requireReviewBeforePreview && state.reviewNeededNotes.length) errors.push('Some calendar notes need review before scheduling. Resolve or ignore review-needed notes in Advanced Mode, or turn off the require-review option.');
   state.gradingPeriods.forEach((p) => {
     if (!parseIso(p.start) || !parseIso(p.end)) errors.push(`${p.name}: missing or invalid start/end date.`);
     else if (p.start > p.end) errors.push(`${p.name}: start date must be before end date.`);
@@ -1098,7 +1193,8 @@ function renderPreview() {
   }
   const seriousWarnings = state.preview.filter((r) => r.endDate === 'N/A').map((r) => r.status);
   const warningBlock = seriousWarnings.length ? `<div class="error-box"><strong>Serious warnings:</strong><ul>${seriousWarnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>` : '';
-  $('previewOutput').innerHTML = `${warningBlock}<table><thead><tr><th>Grading Period</th><th>Unit Name</th><th>Instructional Days Required</th><th>Generated Start Date</th><th>Generated End Date</th><th>Skipped Blocked Days</th><th>Event-Note Warnings</th><th>Status or Warning</th></tr></thead><tbody>
+  const reviewWarning = state.reviewNeededNotes.length ? '<div class="error-box"><strong>Some calendar notes need review before scheduling.</strong></div>' : '';
+  $('previewOutput').innerHTML = `${reviewWarning}${warningBlock}<table><thead><tr><th>Grading Period</th><th>Unit Name</th><th>Instructional Days Required</th><th>Generated Start Date</th><th>Generated End Date</th><th>Skipped Blocked Days</th><th>Event-Note Warnings</th><th>Status or Warning</th></tr></thead><tbody>
     ${state.preview.map((r) => `<tr class="${r.endDate === 'N/A' ? 'issue-row' : ''}"><td>${escapeHtml(r.term)}</td><td>${escapeHtml(r.unit)}</td><td>${r.days}</td><td>${escapeHtml(r.startDate)}</td><td>${escapeHtml(r.endDate)}</td><td>${escapeHtml(r.skippedBlockedDays)}</td><td>${escapeHtml(r.eventWarnings)}</td><td>${escapeHtml(r.status)}</td></tr>`).join('')}</tbody></table>`;
 }
 
@@ -1268,6 +1364,8 @@ function importTemplateIntoTables() {
   if (parsed.data.terms.length) state.gradingPeriods = parsed.data.terms;
   state.blockedDays = parsed.data.blocked;
   state.eventNotes = parsed.data.events;
+  state.reviewNeededNotes = [];
+  state.ignoredCalendarNotes = [];
   state.units = parsed.data.units;
   renderAdvancedTables();
   renderUnitTables();
@@ -1413,6 +1511,7 @@ function updateWorkflowState() {
   const mode = state.mode;
   $('workflowTitle').textContent = mode === 'plc' ? 'PLC Mode Workflow' : 'Advanced Mode Workflow';
   $('nextStepMessage').textContent = state.nextStep;
+  if ($('requireReviewBeforePreviewInput')) $('requireReviewBeforePreviewInput').checked = state.requireReviewBeforePreview;
   $('plcWorkflowRow').classList.toggle('hidden', mode !== 'plc');
   $('advancedWorkflowRow').classList.toggle('hidden', mode !== 'advanced');
   $('plcModeSections').classList.toggle('hidden', mode !== 'plc');
@@ -1429,6 +1528,7 @@ function updateWorkflowState() {
     <li><strong>Extracted/manual units:</strong> ${state.units.length}</li>
     <li><strong>Detected blocked days:</strong> ${state.blockedDays.length}</li>
     <li><strong>Detected event notes:</strong> ${state.eventNotes.length}</li>
+    <li><strong>Review-needed notes:</strong> ${state.reviewNeededNotes.length}</li>
     <li><strong>Warnings:</strong> ${escapeHtml((state.inferenceWarnings || []).join('; ') || 'None')}</li>
     <li><strong>Preview rows:</strong> ${state.preview.length}</li>
     <li><strong>Applied in memory:</strong> ${state.applied ? 'Yes' : 'No'}</li>
@@ -1479,6 +1579,7 @@ function bindEvents() {
   $('syncTemplateBtn').onclick = () => { syncTemplateFromState(); setNextStep('Planning template updated from Advanced Mode tables.'); };
   $('addBlockedDayBtn').onclick = () => { state.blockedDays.push({ name: 'Blocked Day', start: defaultManualDate(), end: defaultManualDate(), source: 'Advanced Mode manual add' }); renderAdvancedTables(); markPreviewStale(); };
   $('addEventNoteBtn').onclick = () => { state.eventNotes.push({ name: 'Event Note', start: defaultManualDate(), end: defaultManualDate(), source: 'Advanced Mode manual add' }); renderAdvancedTables(); markPreviewStale(); };
+  $('requireReviewBeforePreviewInput').onchange = (e) => { state.requireReviewBeforePreview = e.target.checked; updateWorkflowState(); };
   $('exportBlockedDaysBtn').onclick = exportBlockedDays;
   $('addAdvUnitRowBtn').onclick = () => addUnitRow();
   $('moveAdvUnitUpBtn').onclick = () => moveSelectedUnit(-1);
