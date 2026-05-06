@@ -11,9 +11,9 @@ const DATE_COLUMNS = ['A', 'C', 'E', 'G', 'I'];
 const NOTE_COLUMNS = ['B', 'D', 'F', 'H', 'J'];
 const FALL_PERIODS = new Set(['1st', '2nd']);
 const SPRING_PERIODS = new Set(['3rd', '4th']);
-const BLOCKED_NOTE_PATTERN = /(student\s+holiday|staff\s+holiday|teacher\s+work\s*day|professional\s+development|staff\s+development|\bP\.?D\.?\b(?:\s+day)?|in[-\s]?service|convocation|flex\s+day|comp\s+day|no\s+school|no\s+students|holiday|fall\s+break|thanksgiving\s+break|winter\s+break|christmas\s+break|spring\s+break|\bbreak\b)/i;
+const BLOCKED_NOTE_PATTERN = /(labor\s+day|memorial\s+day|mlk\s+day|martin\s+luther\s+king|presidents?\s+day|thanksgiving(?:\s+break)?|christmas\s+break|winter\s+break|spring\s+break|fall\s+break|student\s+holiday|staff\s+holiday|teacher\s+work\s*day|professional\s+development|staff\s+development|\bP\.?D\.?\b(?:\s+day)?|flex\s+day\s+pd|in[-\s]?service|convocation|no\s+school|no\s+students|holiday|\bbreak\b)/i;
 const YAG_NON_INSTRUCTIONAL_ONLY_BLOCKED_PATTERN = /(early\s+release|finals?|midterms?)/i;
-const EVENT_NOTE_PATTERN = /(\bEOC\b|interim|benchmark|testing|test\s+window|\bPSAT\b|\bSAT\b|TSIA2?|TELPAS|\bCBE\b|AP\s+testing|IBC\s+testing|ASVAB|growth\s+pre[-\s]?test|growth\s+post[-\s]?test|pre[-\s]?test|post[-\s]?test)/i;
+const IGNORED_EVENT_NOTE_PATTERN = /(\bIBC\b|\bAP\b(?:\s+(?:testing|world|calculus|pre[-\s]?calculus|environmental))?|\bEOC\b|\bSTAAR\b|interim|benchmark|testing|test\s+window|\bPSAT\b|\bSAT\b|TSIA2?|TELPAS|\bCBE\b|ASVAB|growth\s+pre[-\s]?test|growth\s+post[-\s]?test|pre[-\s]?test|post[-\s]?test)/i;
 const NON_INSTRUCTIONAL_SECTION_PATTERN = /(anticipated\s+non[-\s]?instructional\s+days|non[-\s]?instructional\s+days)/i;
 
 
@@ -31,7 +31,6 @@ const DEFAULT_BLOCKED_DAYS = [
   { name: 'Spring Break', start: '2027-03-08', end: '2027-03-12' },
   { name: 'Holiday', start: '2027-03-26', end: '2027-03-26' },
   { name: 'Professional Development / Student Holiday', start: '2027-04-30', end: '2027-04-30' },
-  { name: 'Final Exams', start: '2027-05-17', end: '2027-05-20' },
   { name: 'Professional Development / Student Holiday', start: '2027-05-21', end: '2027-05-21' }
 ];
 const DEFAULT_EVENT_NOTES = [
@@ -133,7 +132,7 @@ const state = {
   courseName: '',
   gradingPeriods: cloneRows(PLC_GRADING_PERIOD_CONFIG),
   blockedDays: cloneRows(DEFAULT_BLOCKED_DAYS),
-  eventNotes: cloneRows(DEFAULT_EVENT_NOTES),
+  eventNotes: [],
   units: [],
   extractionWarnings: [],
   extractionSummary: '',
@@ -142,6 +141,7 @@ const state = {
   yagDetectedEventNotes: [],
   reviewNeededNotes: [],
   ignoredCalendarNotes: [],
+  ignoredEventNotes: cloneRows(DEFAULT_EVENT_NOTES),
   requireReviewBeforePreview: false,
   yagSheetDiagnostics: null,
   preview: [],
@@ -333,9 +333,10 @@ function upsertRange(rows, item) {
 function classifyCalendarNote(text, options = {}) {
   const note = String(text || '').trim();
   if (!note) return '';
-  if (options.yagNonInstructional && (BLOCKED_NOTE_PATTERN.test(note) || YAG_NON_INSTRUCTIONAL_ONLY_BLOCKED_PATTERN.test(note) || EVENT_NOTE_PATTERN.test(note))) return 'BLOCKED_DAY';
+  if (options.yagNonInstructional && (BLOCKED_NOTE_PATTERN.test(note) || YAG_NON_INSTRUCTIONAL_ONLY_BLOCKED_PATTERN.test(note))) return 'BLOCKED_DAY';
   if (BLOCKED_NOTE_PATTERN.test(note)) return 'BLOCKED_DAY';
-  if (EVENT_NOTE_PATTERN.test(note)) return 'EVENT_NOTE';
+  if (IGNORED_EVENT_NOTE_PATTERN.test(note)) return 'IGNORED_EVENT_NOTE';
+  if (YAG_NON_INSTRUCTIONAL_ONLY_BLOCKED_PATTERN.test(note)) return options.reviewIfUnmatched ? 'REVIEW_NEEDED' : '';
   return options.reviewIfUnmatched ? 'REVIEW_NEEDED' : '';
 }
 
@@ -472,7 +473,7 @@ function detectWorkbookDates(workbook, workbookName, options = {}) {
         if (!diagnostics.lastDate || parsed.iso > diagnostics.lastDate) diagnostics.lastDate = parsed.iso;
         const classification = classifyCalendarNote(note, { reviewIfUnmatched: true });
         if (classification === 'BLOCKED_DAY') upsertRange(diagnostics.blockedDays, { name: note, start: parsed.iso, end: parsed.iso, source: describeSource('Curriculum map note', match.actualName, noteAddr) });
-        else if (classification === 'EVENT_NOTE') upsertRange(diagnostics.eventNotes, { name: note, start: parsed.iso, end: parsed.iso, source: describeSource('Curriculum map note', match.actualName, noteAddr) });
+        else if (classification === 'IGNORED_EVENT_NOTE') upsertRange(diagnostics.eventNotes, { name: note, start: parsed.iso, end: parsed.iso, source: describeSource('Curriculum map note ignored for scheduling', match.actualName, noteAddr) });
         else if (classification === 'REVIEW_NEEDED') upsertReviewNote(diagnostics.reviewNeeded, { date: parsed.iso, note, sourceSheet: match.actualName, sourceCell: noteAddr });
       });
     }
@@ -504,12 +505,13 @@ function applyDetectedCalendarFromMap(diagnostics) {
   state.mapSchoolYear = diagnostics.mapSchoolYear || '';
   state.blockedDays = [];
   state.eventNotes = [];
+  state.ignoredEventNotes = [];
   state.reviewNeededNotes = [];
   diagnostics.blockedDays.forEach((d) => upsertRange(state.blockedDays, d));
-  diagnostics.eventNotes.forEach((d) => upsertRange(state.eventNotes, d));
+  diagnostics.eventNotes.forEach((d) => upsertRange(state.ignoredEventNotes, d));
   diagnostics.reviewNeeded.forEach((d) => upsertReviewNote(state.reviewNeededNotes, d));
   state.yagDetectedBlockedDays.forEach((d) => upsertRange(state.blockedDays, d));
-  state.yagDetectedEventNotes.forEach((d) => upsertRange(state.eventNotes, d));
+  state.yagDetectedEventNotes.forEach((d) => upsertRange(state.ignoredEventNotes, d));
   mergeCalendarInference();
   renderAdvancedTables();
   syncTemplateFromState();
@@ -716,13 +718,13 @@ function extractUnitsFromYagWorkbook(workbook) {
       const rowYear = yearFromSchoolYear(state.schoolYear || state.yagSchoolYear, currentPeriod) || yearFromSchoolYear(state.yagSchoolYear, currentPeriod);
       if (NON_INSTRUCTIONAL_SECTION_PATTERN.test(joined)) inYagNonInstructionalSection = true;
       const mentionedDates = extractDateMentions(joined, rowYear);
-      const classification = inYagNonInstructionalSection ? 'BLOCKED_DAY' : classifyCalendarNote(joined);
+      const classification = classifyCalendarNote(joined, { yagNonInstructional: inYagNonInstructionalSection });
       if (mentionedDates.length && classification === 'BLOCKED_DAY') {
         const sortedDates = mentionedDates.sort();
         upsertRange(detectedBlockedDays, { name: joined.slice(0, 120), start: sortedDates[0], end: sortedDates[sortedDates.length - 1], source: describeSource(inYagNonInstructionalSection ? 'YAG non-instructional row' : 'YAG blocked-day row', ws.name, row.getCell(1).address) });
-      } else if (mentionedDates.length && classification === 'EVENT_NOTE') {
+      } else if (mentionedDates.length && classification === 'IGNORED_EVENT_NOTE') {
         const sortedDates = mentionedDates.sort();
-        upsertRange(detectedEventNotes, { name: joined.slice(0, 120), start: sortedDates[0], end: sortedDates[sortedDates.length - 1], source: describeSource('YAG event row', ws.name, row.getCell(1).address) });
+        upsertRange(detectedEventNotes, { name: joined.slice(0, 120), start: sortedDates[0], end: sortedDates[sortedDates.length - 1], source: describeSource('YAG event row ignored for scheduling', ws.name, row.getCell(1).address) });
       }
 
       const courseGuess = maybeCourseName(texts.filter(Boolean));
@@ -804,7 +806,7 @@ function extractUnitsFromYag() {
   state.yagDetectedBlockedDays = result.detectedBlockedDays || [];
   state.yagDetectedEventNotes = result.detectedEventNotes || [];
   state.yagDetectedBlockedDays.forEach((d) => upsertRange(state.blockedDays, d));
-  state.yagDetectedEventNotes.forEach((d) => upsertRange(state.eventNotes, d));
+  state.yagDetectedEventNotes.forEach((d) => upsertRange(state.ignoredEventNotes, d));
   state.courseName = result.courseName || state.courseName;
   mergeCalendarInference();
   state.preview = [];
@@ -882,12 +884,12 @@ function renderExtractionSummary() {
   const warningHtml = warnings.length ? `<ul>${Array.from(new Set(warnings)).map((w) => `<li class="warn">${escapeHtml(w)}</li>`).join('')}</ul>` : '<p class="ok">Extraction completed with no balance, confidence, or calendar warnings.</p>';
   $('plcExtractionSummary').innerHTML = `<p><strong>Course:</strong> ${escapeHtml(state.courseName || 'Not detected')}</p>
     <p><strong>Inferred school year:</strong> ${escapeHtml(state.schoolYear || 'Not detected')} <span class="muted">(${escapeHtml(state.schoolYearSource || 'Unknown source')})</span></p>
-    <p><strong>PLC calendar summary:</strong> blocked days detected: ${state.blockedDays.length}; event notes detected: ${state.eventNotes.length}; review-needed notes detected: ${state.reviewNeededNotes.length}.</p>
+    <p><strong>PLC calendar summary:</strong> blocked days detected: ${state.blockedDays.length}; calendar events ignored for scheduling: ${state.ignoredEventNotes.length}; review-needed notes detected: ${state.reviewNeededNotes.length}.</p>
     ${state.reviewNeededNotes.length ? '<div class="error-box"><strong>Some calendar notes need review before scheduling.</strong></div>' : ''}
     <p>${escapeHtml(byPeriod)}</p>
     ${renderDetectedGpSummary()}
     ${renderRangeReviewSummary('Detected Blocked Days', state.blockedDays, 'No blocked days detected yet. Review Advanced Mode if your files contain non-instructional days.')}
-    ${renderRangeReviewSummary('Detected Event Notes', state.eventNotes, 'No event notes detected yet.')}
+
     ${renderReviewNeededSummary()}
     ${renderYagSheetDiagnostics()}${renderYagCapacitySummary()}${warningHtml}`;
 }
@@ -1002,6 +1004,20 @@ function renderGpTable() {
   }));
 }
 
+function renderIgnoredEventNotesSummary() {
+  if (!state.ignoredEventNotes.length) return '';
+  return `<details><summary>Calendar Events Ignored for Scheduling (${state.ignoredEventNotes.length})</summary>
+    <table><thead><tr><th>Description</th><th>Start Date</th><th>End Date</th><th>Source</th></tr></thead><tbody>
+    ${state.ignoredEventNotes.map((d) => `<tr><td>${escapeHtml(d.name)}</td><td>${escapeHtml(d.start)}</td><td>${escapeHtml(d.end)}</td><td>${escapeHtml(d.source || 'Calendar event ignored for scheduling')}</td></tr>`).join('')}
+    </tbody></table>
+  </details>`;
+}
+
+function renderEventNotesTable() {
+  renderRangeTable('eventNotesTableOutput', state.eventNotes, 'event');
+  $('eventNotesTableOutput').insertAdjacentHTML('beforeend', renderIgnoredEventNotesSummary());
+}
+
 function renderRangeTable(containerId, rows, type) {
   const isBlocked = type === 'blocked';
   $(containerId).innerHTML = `<table><thead><tr><th>Description</th><th>Start Date</th><th>End Date</th><th>Source</th><th>Action</th></tr></thead><tbody>
@@ -1077,7 +1093,7 @@ function renderReviewNotesTable() {
 function renderAdvancedTables() {
   renderGpTable();
   renderRangeTable('blockedDaysTableOutput', state.blockedDays, 'blocked');
-  renderRangeTable('eventNotesTableOutput', state.eventNotes, 'event');
+  renderEventNotesTable();
   renderReviewNotesTable();
   renderAdvancedUnitTable();
   renderFitIssues();
@@ -1124,7 +1140,6 @@ function buildPreview() {
     return;
   }
 
-  const events = state.eventNotes.map((e) => ({ name: e.name, dates: new Set(datesInRange(e.start, e.end)) }));
   const rows = [];
   const fitIssues = [];
   const unusedDays = [];
@@ -1155,9 +1170,7 @@ function buildPreview() {
       }
       const slice = daysPool.slice(cursor, cursor + placementDays);
       cursor += placementDays;
-      const eventHits = events.filter((ev) => slice.some((d) => ev.dates.has(d.date))).map((ev) => ev.name);
       const warnings = [];
-      if (eventHits.length) warnings.push('Scheduled with event-note warnings');
       if (!Number.isInteger(exactDays)) warnings.push(HALF_DAY_WARNING);
       if (unit.allowCrossPeriod) warnings.push('Allowed to continue into next grading period; verify manually.');
       rows.push({
@@ -1167,13 +1180,13 @@ function buildPreview() {
         startDate: slice[0].date,
         endDate: slice[slice.length - 1].date,
         skippedBlockedDays: 'Weekends and blocked days skipped',
-        eventWarnings: eventHits.join('; '),
+        eventWarnings: '',
         status: warnings.length ? warnings.join('; ') : 'Scheduled'
       });
     }
     const remainingInPeriod = Math.max(0, periodDays.length - cursor);
     unusedDays.push({ period: period.name, days: remainingInPeriod });
-    if (remainingInPeriod > 0) rows.push({ term: period.name, unit: '(unused grading-period capacity)', days: remainingInPeriod, startDate: '', endDate: '', skippedBlockedDays: '', eventWarnings: '', status: 'Unused instructional days remain' });
+    if (remainingInPeriod > 0) rows.push({ term: period.name, unit: '(Flex / Buffer Days Available)', days: remainingInPeriod, startDate: '', endDate: '', skippedBlockedDays: '', eventWarnings: '', status: 'Unused instructional days remain' });
   }
 
   state.preview = rows;
@@ -1194,12 +1207,12 @@ function renderPreview() {
   const seriousWarnings = state.preview.filter((r) => r.endDate === 'N/A').map((r) => r.status);
   const warningBlock = seriousWarnings.length ? `<div class="error-box"><strong>Serious warnings:</strong><ul>${seriousWarnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>` : '';
   const reviewWarning = state.reviewNeededNotes.length ? '<div class="error-box"><strong>Some calendar notes need review before scheduling.</strong></div>' : '';
-  $('previewOutput').innerHTML = `${reviewWarning}${warningBlock}<table><thead><tr><th>Grading Period</th><th>Unit Name</th><th>Instructional Days Required</th><th>Generated Start Date</th><th>Generated End Date</th><th>Skipped Blocked Days</th><th>Event-Note Warnings</th><th>Status or Warning</th></tr></thead><tbody>
-    ${state.preview.map((r) => `<tr class="${r.endDate === 'N/A' ? 'issue-row' : ''}"><td>${escapeHtml(r.term)}</td><td>${escapeHtml(r.unit)}</td><td>${r.days}</td><td>${escapeHtml(r.startDate)}</td><td>${escapeHtml(r.endDate)}</td><td>${escapeHtml(r.skippedBlockedDays)}</td><td>${escapeHtml(r.eventWarnings)}</td><td>${escapeHtml(r.status)}</td></tr>`).join('')}</tbody></table>`;
+  $('previewOutput').innerHTML = `${reviewWarning}${warningBlock}<table><thead><tr><th>Grading Period</th><th>Unit Name</th><th>Instructional Days Required</th><th>Generated Start Date</th><th>Generated End Date</th><th>Skipped Blocked Days</th><th>Status or Warning</th></tr></thead><tbody>
+    ${state.preview.map((r) => `<tr class="${r.endDate === 'N/A' ? 'issue-row' : ''}"><td>${escapeHtml(r.term)}</td><td>${escapeHtml(r.unit)}</td><td>${r.days}</td><td>${escapeHtml(r.startDate)}</td><td>${escapeHtml(r.endDate)}</td><td>${escapeHtml(r.skippedBlockedDays)}</td><td>${escapeHtml(r.status)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function renderFitIssues() {
-  const unused = state.unusedDays.length ? `<h3>Unused Days by Grading Period</h3><ul>${state.unusedDays.map((u) => `<li>${escapeHtml(u.period)}: ${u.days}</li>`).join('')}</ul>` : '<p>No unused-day data yet.</p>';
+  const unused = state.unusedDays.length ? `<h3>Flex / Buffer Days Available</h3><ul>${state.unusedDays.map((u) => `<li>${escapeHtml(u.period)}: ${u.days}</li>`).join('')}</ul>` : '<p>No unused-day data yet.</p>';
   const issues = state.fitIssues.length ? `<h3>Units That Did Not Fit</h3><ul>${state.fitIssues.map((i) => `<li class="error">${escapeHtml(i.status)}</li>`).join('')}</ul>` : '<p class="ok">No fit issues detected in the latest preview.</p>';
   $('fitIssuesOutput').innerHTML = `${unused}${issues}<p class="status">Adjustment helpers modify the Unit Plan Editor. Regenerate the preview after using a helper.</p>`;
 }
@@ -1208,12 +1221,11 @@ function previewRowsForExport() {
   const meta = [
     ['Inferred School Year', state.schoolYear || 'Not detected'],
     ['Detected Grading Periods', state.gradingPeriods.map((p) => `${p.name}: ${p.start} to ${p.end}`).join('; ')],
-    ['Blocked Day Warnings', state.blockedDays.map((d) => `${d.name}: ${d.start}${d.end !== d.start ? ` to ${d.end}` : ''}`).join('; ') || 'None'],
-    ['Event-Note Warnings', state.eventNotes.map((d) => `${d.name}: ${d.start}${d.end !== d.start ? ` to ${d.end}` : ''}`).join('; ') || 'None'],
+    ['Blocked Days Used for Scheduling', state.blockedDays.map((d) => `${d.name}: ${d.start}${d.end !== d.start ? ` to ${d.end}` : ''}`).join('; ') || 'None'],
     [],
   ];
-  const headers = ['Grading Period', 'Unit Name', 'Instructional Days Required', 'Generated Start Date', 'Generated End Date', 'Skipped Blocked Days', 'Event-Note Warnings', 'Status or Warning'];
-  const body = state.preview.map((r) => [r.term, r.unit, r.days, r.startDate, r.endDate, r.skippedBlockedDays, r.eventWarnings, r.status]);
+  const headers = ['Grading Period', 'Unit Name', 'Instructional Days Required', 'Generated Start Date', 'Generated End Date', 'Skipped Blocked Days', 'Status or Warning'];
+  const body = state.preview.map((r) => [r.term, r.unit, r.days, r.startDate, r.endDate, r.skippedBlockedDays, r.status]);
   return [...meta, headers, ...body];
 }
 
@@ -1527,7 +1539,7 @@ function updateWorkflowState() {
     <li><strong>Date cells detected:</strong> ${d ? d.totalDateCells : 0}</li>
     <li><strong>Extracted/manual units:</strong> ${state.units.length}</li>
     <li><strong>Detected blocked days:</strong> ${state.blockedDays.length}</li>
-    <li><strong>Detected event notes:</strong> ${state.eventNotes.length}</li>
+    <li><strong>Calendar events ignored for scheduling:</strong> ${state.ignoredEventNotes.length}</li>
     <li><strong>Review-needed notes:</strong> ${state.reviewNeededNotes.length}</li>
     <li><strong>Warnings:</strong> ${escapeHtml((state.inferenceWarnings || []).join('; ') || 'None')}</li>
     <li><strong>Preview rows:</strong> ${state.preview.length}</li>
