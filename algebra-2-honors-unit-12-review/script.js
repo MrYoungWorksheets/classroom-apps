@@ -423,7 +423,7 @@ function recommendedRetryList(weakest){
   window.PROBLEMS.forEach(problem => {const rec = recordFor(problem.id); if(rec.status === 'Needs Review' || rec.needsReview) ids.add(problem.id);});
   return [...ids].sort((a,b) => problemOrder(a) - problemOrder(b));
 }
-function renderSummary(){
+function summaryData(){
   const total = window.PROBLEMS.length;
   const done = completedCount(window.PROBLEMS);
   const first = window.PROBLEMS.filter(p => recordFor(p.id).firstAttemptCorrect).length;
@@ -432,17 +432,58 @@ function renderSummary(){
   const weakest = weakestSkillAreas();
   const retryList = recommendedRetryList(weakest);
   const statsRows = tagStats().filter(item => item.completed || item.score).sort((a,b) => b.score - a.score || a.tag.localeCompare(b.tag));
+  const fallbackStatsRows = tagStats().slice(0, 8);
+  const problemRows = window.PROBLEMS.map(problem => ({problem, record:recordFor(problem.id)}));
+  return {total, done, first, helped, review, weakest, retryList, statsRows, fallbackStatsRows, problemRows};
+}
+function renderStatsTable(rows){
+  return `<table class="status-table"><thead><tr><th>Skill</th><th>Completed</th><th>First try</th><th>After help</th><th>Needs review</th><th>Hints</th><th>Retry problems</th></tr></thead><tbody>${rows.map(item => `<tr><td>${escapeHtml(titleCase(item.tag))}</td><td>${item.completed}/${item.total}</td><td>${item.first}</td><td>${item.helped}</td><td>${item.review}</td><td>${item.hints}</td><td>${escapeHtml(item.problems.join(', ') || '—')}</td></tr>`).join('')}</tbody></table>`;
+}
+function renderProblemStatusTable(problemRows){
+  return `<table class="status-table"><thead><tr><th>Problem ID</th><th>Topic</th><th>Status</th><th>Attempts</th><th>Hint used</th></tr></thead><tbody>${problemRows.map(({problem, record}) => `<tr><td>${escapeHtml(problem.id)}</td><td>${escapeHtml(problem.topic)}</td><td>${escapeHtml(record.status)}</td><td>${record.attempts}</td><td>${record.hintUsed ? 'Yes' : 'No'}</td></tr>`).join('')}</tbody></table>`;
+}
+function renderSummaryMetrics(data){
+  return `<div class="summary-grid"><div class="summary-card"><strong>Total completed</strong><span>${data.done}/${data.total}</span></div><div class="summary-card"><strong>Correct first try</strong><span>${data.first}</span></div><div class="summary-card"><strong>Correct after help</strong><span>${data.helped}</span></div><div class="summary-card"><strong>Needs review</strong><span>${data.review}</span></div></div>`;
+}
+function renderWeakSkillList(weakest){
+  return weakest.length ? `<ol class="weak-list">${weakest.map(skill => `<li><strong>${escapeHtml(titleCase(skill.tag))}:</strong> Retry ${escapeHtml(skill.problems.join(', '))}.</li>`).join('')}</ol>` : '<p>No weak skill areas yet. Complete more problems to generate recommendations.</p>';
+}
+function renderPrintableSummary(data, printedAt){
+  const statsRows = data.statsRows.length ? data.statsRows : data.fallbackStatsRows;
+  return `<div class="print-title-block"><p class="eyebrow">Final Summary</p><h1>${ASSIGNMENT_TITLE}</h1><p><strong>Student name:</strong> ${escapeHtml(state.student.name || 'Not entered')} &nbsp; <strong>Class period:</strong> ${escapeHtml(state.student.period || 'Not entered')}</p><p><strong>Date/time printed:</strong> ${escapeHtml(printedAt)}</p></div>
+    ${renderSummaryMetrics(data)}
+    <h2>Top weak skill areas</h2>
+    ${renderWeakSkillList(data.weakest)}
+    <h2>Recommended retry list</h2><p>${data.retryList.length ? escapeHtml(data.retryList.join(', ')) : 'None yet'}</p>
+    <h2>Skill breakdown</h2>
+    ${renderStatsTable(statsRows)}
+    <h2>Full problem-by-problem status list</h2>
+    ${renderProblemStatusTable(data.problemRows)}`;
+}
+function updatePrintableSummary(data = summaryData()){
+  const printSummary = document.getElementById('printSummary');
+  if(!printSummary) return;
+  printSummary.innerHTML = renderPrintableSummary(data, new Date().toLocaleString());
+}
+function renderSummary(){
+  const data = summaryData();
+  const statsRows = data.statsRows.length ? data.statsRows : data.fallbackStatsRows;
   document.getElementById('summaryContent').innerHTML = `<p><strong>Student:</strong> ${escapeHtml(state.student.name || 'Not entered')} &nbsp; <strong>Period:</strong> ${escapeHtml(state.student.period || 'Not entered')}</p>
     <p><strong>Assignment:</strong> ${ASSIGNMENT_TITLE}</p>
-    <div class="summary-grid"><div class="summary-card"><strong>Total completed</strong><span>${done}/${total}</span></div><div class="summary-card"><strong>Correct first try</strong><span>${first}</span></div><div class="summary-card"><strong>Correct after help</strong><span>${helped}</span></div><div class="summary-card"><strong>Needs review</strong><span>${review}</span></div></div>
+    ${renderSummaryMetrics(data)}
     <h3>Most difficult skill areas</h3>
-    ${weakest.length ? `<ol class="weak-list">${weakest.map(skill => `<li><strong>${escapeHtml(titleCase(skill.tag))}:</strong> Retry ${escapeHtml(skill.problems.join(', '))}.</li>`).join('')}</ol>` : '<p>No weak skill areas yet. Complete more problems to generate recommendations.</p>'}
-    <h3>Recommended Retry List</h3><p>${retryList.length ? escapeHtml(retryList.join(', ')) : 'None yet'}</p>
+    ${renderWeakSkillList(data.weakest)}
+    <h3>Recommended Retry List</h3><p>${data.retryList.length ? escapeHtml(data.retryList.join(', ')) : 'None yet'}</p>
     <h3>Skill breakdown</h3>
-    <table class="status-table"><thead><tr><th>Skill</th><th>Completed</th><th>First try</th><th>After help</th><th>Needs review</th><th>Hints</th><th>Retry problems</th></tr></thead><tbody>${(statsRows.length ? statsRows : tagStats().slice(0, 8)).map(item => `<tr><td>${escapeHtml(titleCase(item.tag))}</td><td>${item.completed}/${item.total}</td><td>${item.first}</td><td>${item.helped}</td><td>${item.review}</td><td>${item.hints}</td><td>${escapeHtml(item.problems.join(', ') || '—')}</td></tr>`).join('')}</tbody></table>
+    ${renderStatsTable(statsRows)}
     <h3>Problem record</h3>
-    <table class="status-table"><thead><tr><th>Problem</th><th>Topic</th><th>Status</th><th>Attempts</th><th>Hint used</th></tr></thead><tbody>${window.PROBLEMS.map(p => {const rec = recordFor(p.id);return `<tr><td>${escapeHtml(p.id)}</td><td>${escapeHtml(p.topic)}</td><td>${escapeHtml(rec.status)}</td><td>${rec.attempts}</td><td>${rec.hintUsed ? 'Yes' : 'No'}</td></tr>`;}).join('')}</tbody></table>`;
+    ${renderProblemStatusTable(data.problemRows)}`;
+  updatePrintableSummary(data);
   showView('summary');
+}
+function printSummary(){
+  updatePrintableSummary();
+  window.print();
 }
 function titleCase(value){return String(value).replace(/\b\w/g, letter => letter.toUpperCase());}
 function startOver(){
@@ -462,6 +503,8 @@ document.getElementById('startForm').addEventListener('submit', event => {
 document.getElementById('dashboardBtn').addEventListener('click', () => state.started ? renderDashboard() : showView('landing'));
 document.getElementById('returnDashboardBtn').addEventListener('click', renderDashboard);
 document.getElementById('summaryDashboardBtn').addEventListener('click', renderDashboard);
+document.getElementById('printSummaryBtn').addEventListener('click', printSummary);
+window.addEventListener('beforeprint', () => {if(state.view === 'summary') updatePrintableSummary();});
 document.getElementById('startOverBtn').addEventListener('click', startOver);
 document.getElementById('prevPageBtn').addEventListener('click', () => {state.topicPage -= 1;renderTopic();window.scrollTo({top:0, behavior:'smooth'});});
 document.getElementById('nextPageBtn').addEventListener('click', () => {state.topicPage += 1;renderTopic();window.scrollTo({top:0, behavior:'smooth'});});
