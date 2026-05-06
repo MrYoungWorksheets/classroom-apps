@@ -53,6 +53,15 @@ function freshRecord(){
 }
 function recordFor(id){if(!state.records[id]) state.records[id] = freshRecord(); return state.records[id];}
 function escapeHtml(value){return String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));}
+function renderMathText(value){return escapeHtml(value);}
+function typesetMath(root = document.body, attempts = 0){
+  if(window.MathJax && typeof window.MathJax.typesetPromise === 'function'){
+    window.MathJax.typesetClear?.([root]);
+    window.MathJax.typesetPromise([root]).catch(error => console.warn('MathJax rendering failed:', error));
+    return;
+  }
+  if(attempts < 20) window.setTimeout(() => typesetMath(root, attempts + 1), 100);
+}
 function normalize(value){return String(value || '').toLowerCase().replace(/−/g,'-').replace(/[{}\s]/g,'').replace(/∞/g,'infinity');}
 function compactMath(value){return normalize(value).replace(/\*\*/g,'^').replace(/√/g,'sqrt').replace(/naturallogof/g,'ln').replace(/log₃/g,'log_3').replace(/log₂/g,'log_2');}
 function problemsForTopic(title){return window.PROBLEMS.filter(problem => problem.topic === title);}
@@ -95,6 +104,7 @@ function renderDashboard(){
     grid.appendChild(button);
   });
   showView('dashboard');
+  typesetMath(grid);
 }
 
 function openTopic(topicTitle, page = 0){state.currentTopic = topicTitle;state.topicPage = page;renderTopic();}
@@ -112,6 +122,7 @@ function renderTopic(){
   document.getElementById('nextPageBtn').disabled = state.topicPage === maxPage;
   attachProblemEvents();
   showView('topic');
+  typesetMath(document.getElementById('problemGrid'));
 }
 
 function statusClass(status){if(status === 'Correct') return 'correct'; if(status !== 'Not Started') return 'review'; return '';}
@@ -153,23 +164,23 @@ function placeholderFor(graphId, key){
 }
 function formatSteps(steps){
   const safeSteps = Array.isArray(steps) ? steps : [String(steps || '')];
-  return `<ol>${safeSteps.map(step => `<li>${escapeHtml(step).replace(/\n/g,'<br>')}</li>`).join('')}</ol>`;
+  return `<ol>${safeSteps.map(step => `<li>${renderMathText(step)}</li>`).join('')}</ol>`;
 }
 function renderSolution(solution){
-  return `<div class="solution"><h4>Worked solution</h4><p><strong>Short answer:</strong> ${escapeHtml(solution.shortAnswer)}</p><div><strong>Steps:</strong>${formatSteps(solution.workedSteps)}</div><p><strong>Common mistake:</strong> ${escapeHtml(solution.commonMistake)}</p></div>`;
+  return `<div class="solution math-area"><h4>Worked solution</h4><p><strong>Short answer:</strong> ${renderMathText(solution.shortAnswer)}</p><div class="solution-steps"><strong>Steps:</strong>${formatSteps(solution.workedSteps)}</div><p><strong>Common mistake:</strong> ${renderMathText(solution.commonMistake)}</p></div>`;
 }
 function renderProblemCard(problem){
   const rec = recordFor(problem.id);
   const solution = SOLUTIONS_BY_ID[problem.solutionId] || {shortAnswer:'Solution pending.', workedSteps:['Ask your teacher for this worked solution.'], commonMistake:'Check each step carefully.'};
-  const feedback = rec.feedback ? `<div class="feedback ${rec.feedbackType || ''}">${escapeHtml(rec.feedback)}</div>` : '';
-  const strongerHint = rec.attempts > 0 && rec.status === 'Not Started' ? `<div class="feedback hint"><strong>Second hint:</strong> ${escapeHtml(problem.hint2)}</div>` : '';
+  const feedback = rec.feedback ? `<div class="feedback ${rec.feedbackType || ''} math-area">${renderMathText(rec.feedback)}</div>` : '';
+  const strongerHint = rec.attempts > 0 && rec.status === 'Not Started' ? `<div class="feedback hint math-area"><strong>Second hint:</strong> ${renderMathText(problem.hint2)}</div>` : '';
   const practiceNote = state.practice[problem.id] ? `<p class="practice-note">Practice retry #${state.practice[problem.id]}: this does not change your original review record.</p>` : '';
   return `<article class="problem-card ${statusClass(rec.status)}" data-problem-id="${problem.id}">
     <div class="problem-top"><div><p class="eyebrow">Problem ${problem.appNumber}</p><h3>${escapeHtml(problem.topic)}</h3></div><span class="status-pill ${statusClass(rec.status)}">${escapeHtml(rec.status)}</span></div>
-    <p class="problem-prompt">${escapeHtml(problem.prompt).replace(/\n/g,'<br>')}</p>
+    <div class="problem-prompt math-area">${renderMathText(problem.prompt)}</div>
     <div class="tag-row">${renderTags(problem.skillTags)}</div>
-    <div class="support-grid"><div class="support-box"><strong>How to start</strong><p>${escapeHtml(problem.howTo)}</p></div><div class="support-box"><strong>Watch out</strong><p>${escapeHtml(problem.watchOut)}</p></div></div>
-    <span class="answer-format">${escapeHtml(problem.answerFormat)}</span>
+    <div class="support-grid"><div class="support-box math-area"><strong>How to start</strong><p>${renderMathText(problem.howTo)}</p></div><div class="support-box math-area"><strong>Watch out</strong><p>${renderMathText(problem.watchOut)}</p></div></div>
+    <span class="answer-format math-area">${renderMathText(problem.answerFormat)}</span>
     <div class="answer-area">${renderAnswerArea(problem)}</div>
     ${practiceNote}${feedback}${strongerHint}
     <div class="actions"><button class="btn check-btn" type="button" data-action="check">Check answer</button><button class="btn secondary hint-btn" type="button" data-action="hint">Hint</button>${rec.solutionShown ? `<button class="btn secondary practice-btn" type="button" data-action="practice">Try again for practice</button>` : ''}</div>
@@ -480,6 +491,7 @@ function renderSummary(){
     ${renderProblemStatusTable(data.problemRows)}`;
   updatePrintableSummary(data);
   showView('summary');
+  typesetMath(document.getElementById('summaryView'));
 }
 function printSummary(){
   updatePrintableSummary();
