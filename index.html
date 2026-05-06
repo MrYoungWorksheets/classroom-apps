@@ -350,7 +350,8 @@
         title: 'Algebra 2 Honors Unit 12 Review',
         description: 'Parent functions, transformed graphs, equation solving, logarithms, function composition, and systems of equations.',
         link: 'algebra-2-honors-unit-12-review/',
-        dueDate: '2026-05-06'
+        dueDate: '2026-05-11T16:15:00-06:00',
+        dueDateLabel: 'May 11, 2026 at 4:15 PM CST'
       },
       {
         title: 'Chapter 11 Part 2 Review',
@@ -384,7 +385,8 @@
     // ===== END EDITABLE DATA =====
 
     function localDateFromInput(dateText) {
-      const parts = dateText.split('-').map(Number);
+      const [datePart] = dateText.split('T');
+      const parts = datePart.split('-').map(Number);
       return new Date(parts[0], parts[1] - 1, parts[2]);
     }
 
@@ -393,7 +395,8 @@
       return new Date(now.getFullYear(), now.getMonth(), now.getDate());
     }
 
-    function formatDate(dateText) {
+    function formatDate(dateText, dueDateLabel) {
+      if (dueDateLabel) return dueDateLabel;
       return localDateFromInput(dateText).toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'long',
@@ -431,7 +434,7 @@
                   <h3>${escapeHtml(assignment.title)}${pastDueTitle}</h3>
                   <p class="muted">${escapeHtml(assignment.description)}</p>
                   <div class="card-meta">
-                    <span>Due: ${escapeHtml(formatDate(assignment.dueDate))}</span>
+                    <span>Due: ${escapeHtml(formatDate(assignment.dueDate, assignment.dueDateLabel))}</span>
                     <span class="status ${status.className}">${status.label}</span>
                   </div>
                   <a class="launch-link" href="${escapeHtml(assignment.link)}" target="_blank" rel="noopener noreferrer">Launch Assignment</a>
