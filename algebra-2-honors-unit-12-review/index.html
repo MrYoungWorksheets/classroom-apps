@@ -86,9 +86,13 @@
           <p class="eyebrow">Final Summary</p>
           <h2 id="summaryTitle">Review progress snapshot</h2>
         </div>
-        <button class="btn secondary" id="summaryDashboardBtn" type="button">Return to Dashboard</button>
+        <div class="summary-actions no-print">
+          <button class="btn" id="printSummaryBtn" type="button">Print / Save PDF</button>
+          <button class="btn secondary" id="summaryDashboardBtn" type="button">Return to Dashboard</button>
+        </div>
       </div>
       <div id="summaryContent"></div>
+      <section class="print-summary" id="printSummary" aria-label="Printable final summary"></section>
     </section>
   </main>
 
