@@ -20,23 +20,26 @@
       </div>
     </section>
 
-    <section>
-      <h2>Workflow</h2>
+    <section id="workflowSection" class="sticky-workflow" aria-label="Sticky workflow controls">
+      <div class="workflow-heading-row">
+        <h2>Workflow</h2>
+        <p id="nextStepMessage" class="next-step-message">Next: upload a calendar.</p>
+      </div>
       <div class="button-row workflow-row" id="guidedWorkflowRow">
-        <div id="step1Indicator" class="workflow-step">Step 1: Upload Calendar</div>
-        <div id="step2Indicator" class="workflow-step">Step 2: Course Setup</div>
-        <div id="step3Indicator" class="workflow-step">Step 3: Unit List</div>
-        <button id="previewBtn" type="button" disabled>Step 4: Generate Preview</button>
-        <button id="applyBtn" type="button" disabled>Step 5: Apply Changes</button>
-        <button id="downloadBtn" type="button" disabled>Download Edited Workbook</button>
+        <button id="wfUploadBtn" class="workflow-step workflow-control current" type="button">Step 1: Upload Calendar</button>
+        <button id="wfCourseBtn" class="workflow-step workflow-control" type="button">Step 2: Course Setup</button>
+        <button id="wfUnitBtn" class="workflow-step workflow-control" type="button">Step 3: Unit List</button>
+        <button id="previewBtn" class="workflow-control" type="button">Step 4: Generate Preview</button>
+        <button id="applyBtn" class="workflow-control" type="button">Step 5: Apply Changes</button>
+        <button id="downloadBtn" class="workflow-control" type="button">Download Edited Workbook</button>
       </div>
       <div class="button-row workflow-row hidden" id="advancedWorkflowRow">
-        <div id="stepUploadIndicator" class="workflow-step">1. Upload</div>
-        <div id="stepTemplateIndicator" class="workflow-step">2. Load/Paste Template</div>
-        <button id="validateBtn" type="button" disabled>3. Validate</button>
-        <button id="advPreviewBtn" type="button" disabled>4. Generate Preview</button>
-        <button id="advApplyBtn" type="button" disabled>5. Apply Changes</button>
-        <button id="advDownloadBtn" type="button" disabled>6. Download Workbook</button>
+        <button id="wfAdvUploadBtn" class="workflow-step workflow-control current" type="button">1. Upload</button>
+        <button id="wfTemplateBtn" class="workflow-step workflow-control" type="button">2. Load/Paste Template</button>
+        <button id="validateBtn" class="workflow-control" type="button">3. Validate</button>
+        <button id="advPreviewBtn" class="workflow-control" type="button">4. Generate Preview</button>
+        <button id="advApplyBtn" class="workflow-control" type="button">5. Apply Changes</button>
+        <button id="advDownloadBtn" class="workflow-control" type="button">6. Download Workbook</button>
       </div>
     </section>
 
@@ -45,53 +48,70 @@
       <div id="statusPanel" class="panel">Upload a workbook to begin.</div>
     </section>
 
-    <section>
+    <section id="uploadSection">
       <h2>Step 1: Upload Calendar File</h2>
       <input id="fileInput" type="file" accept=".xlsx,.xlsm,.xls" />
       <p id="fileStatus" class="status">No workbook loaded.</p>
     </section>
 
     <section id="guidedSection">
-      <h2>Step 2: Course Setup</h2>
-      <div class="button-row">
-        <input id="courseNameInput" type="text" placeholder="Course Name" />
-        <input id="unitCountInput" type="number" min="1" placeholder="Number of Units" />
-        <button id="createUnitTableBtn" type="button">Create Unit Table</button>
+      <div id="courseSetupSection">
+        <h2>Step 2: Course Setup</h2>
+        <div class="button-row">
+          <input id="courseNameInput" type="text" placeholder="Course Name" />
+          <input id="unitCountInput" type="number" min="1" placeholder="Number of Units" />
+          <button id="createUnitTableBtn" type="button">Create Unit Table</button>
+        </div>
       </div>
-      <h2>Step 3: Unit List</h2>
-      <div class="button-row">
-        <button id="addUnitRowBtn" type="button">Add Unit Row</button>
-        <button id="removeUnitRowBtn" type="button">Remove Last Unit Row</button>
-        <button id="clearUnitTableBtn" type="button">Clear Unit Table</button>
+      <div id="unitListSection">
+        <h2>Step 3: Unit List</h2>
+        <div class="button-row">
+          <button id="addUnitRowBtn" type="button">Add Unit Row</button>
+          <button id="removeUnitRowBtn" type="button">Remove Last Unit Row</button>
+          <button id="clearUnitTableBtn" type="button">Clear Unit Table</button>
+          <button id="validateUnitsBtn" type="button">Validate Units</button>
+          <button id="generatePreviewFromUnitsBtn" type="button">Generate Preview</button>
+        </div>
+        <div class="panel">
+          <label><input id="allowCrossTermInput" type="checkbox" checked /> Allow units to continue across semester or grading-period boundaries when needed.</label>
+          <p class="status">If checked, a unit may start in one term and finish in the next. Breaks and blocked days are still skipped. The preview will warn you when this happens.</p>
+        </div>
+        <div id="unitTableOutput" class="panel">Create a unit table to begin.</div>
       </div>
-      <div class="panel">
-        <label><input id="allowCrossTermInput" type="checkbox" checked /> Allow units to continue across semester or grading-period boundaries when needed.</label>
-        <p class="status">If checked, a unit may start in one term and finish in the next. Breaks and blocked days are still skipped. The preview will warn you when this happens.</p>
-      </div>
-      <div id="unitTableOutput" class="panel">Create a unit table to begin.</div>
     </section>
 
     <section id="advancedSection" class="hidden">
-      <h2>Paste Planning Template</h2>
-      <div class="button-row">
-        <button id="copyBlankBtn" type="button">Copy Blank Template</button>
-        <button id="loadExampleBtn" type="button">Load Algebra 2 Example Template</button>
+      <h2>Advanced Template Mode</h2>
+      <div id="templateSection">
+        <h3>Paste Planning Template</h3>
+        <div class="button-row">
+          <button id="copyBlankBtn" type="button">Copy Blank Template</button>
+          <button id="loadExampleBtn" type="button">Load Algebra 2 Example Template</button>
+          <button id="validateTemplateInContextBtn" type="button">Validate Template</button>
+          <button id="generateTemplatePreviewBtn" type="button">Generate Preview</button>
+        </div>
+        <textarea id="templateInput" rows="20" placeholder="Paste Planning Template here..."></textarea>
       </div>
-      <textarea id="templateInput" rows="20" placeholder="Paste Planning Template here..."></textarea>
     </section>
 
-    <section>
+    <section id="validationSection">
       <h2>Validation</h2>
       <div id="validationOutput" class="panel">Validation output appears here.</div>
     </section>
 
-    <section>
+    <section id="previewSection">
       <h2>Preview</h2>
+      <div class="button-row">
+        <button id="applyFromPreviewBtn" type="button">Apply Changes</button>
+      </div>
       <div id="previewOutput" class="panel">Preview table appears here.</div>
     </section>
 
-    <section>
+    <section id="applySection">
       <h2>Apply to Workbook</h2>
+      <div class="button-row">
+        <button id="downloadFromApplyBtn" type="button">Download Edited Workbook</button>
+      </div>
       <p id="applyStatus" class="status"></p>
     </section>
 
