@@ -58,6 +58,51 @@ const END_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4CCCC
 const HALF_DAY_WARNING = 'Half-day count used. Placement uses whole calendar dates; verify manually.';
 const LOW_CONFIDENCE_WARNING = 'Could not confidently extract this section. Use Advanced Mode to review or enter units manually.';
 
+const YAG_REAL_UNIT_PATTERN = /\bUnit\s*\d+(?:\.\d+)?\b/i;
+
+function emptyYagCapacitySummary() {
+  return PLC_GRADING_PERIOD_CONFIG.map((p) => ({
+    gradingPeriod: p.name,
+    calendarDaysAvailable: null,
+    nonInstructionalDays: null,
+    instructionalDaysAvailable: null,
+    totalUnitDays: null,
+    balance: null
+  }));
+}
+
+function getYagCapacitySummaryRow(summary, periodName) {
+  return summary.find((row) => row.gradingPeriod === periodName) || null;
+}
+
+function isRealYagUnitTitle(text) {
+  return YAG_REAL_UNIT_PATTERN.test(String(text || ''));
+}
+
+function detectYagSummaryMetric(text) {
+  const s = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  if (/\btotal\s+calendar\s+days\s+available\b/i.test(s) || /\bcalendar\s+days\s+available\b/i.test(s)) return 'calendarDaysAvailable';
+  if (/\banticipated\s+non[-\s]?instructional\s+days\b/i.test(s) || /\bnon[-\s]?instructional\s+days\b/i.test(s)) return 'nonInstructionalDays';
+  if (/\binstructional\s+days\s+available\b/i.test(s)) return 'instructionalDaysAvailable';
+  if (/\btotal\s+days\s+in\s+units\b/i.test(s)) return 'totalUnitDays';
+  if (/\bbalance\b/i.test(s)) return 'balance';
+  return '';
+}
+
+function isYagBookkeepingOrEventText(text) {
+  return /(total\s+calendar\s+days\s+available|calendar\s+days\s+available|instructional\s+days\s+available|non[-\s]?instructional\s+days|total\s+days\s+in\s+units|balance|anticipated\s+non[-\s]?instructional\s+days|midterms?|finals?|early\s+release|\bSAT\b|\bPSAT\b|\bEOC\b|interim|TELPAS|\bCBE\b|benchmark|testing|holiday|break|professional\s+development|student\s+holiday|staff\s+holiday|teacher\s+workday)/i.test(String(text || ''));
+}
+
+function extractNumbersFromRow(row, lastCell) {
+  const nums = [];
+  for (let c = 1; c <= lastCell; c += 1) {
+    const n = extractNumberFromCell(row.getCell(c));
+    if (n != null) nums.push({ col: c, value: n });
+  }
+  return nums;
+}
+
 const BLANK_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\n1st Nine Weeks | 2026-08-12 | 2026-10-08\n2nd Nine Weeks | 2026-10-13 | 2026-12-18\n3rd Nine Weeks | 2027-01-06 | 2027-03-05\n4th Nine Weeks | 2027-03-15 | 2027-05-20\n\nBLOCKED_DAYS:\nName | YYYY-MM-DD\nName | YYYY-MM-DD | YYYY-MM-DD\n\nEVENT_NOTES:\nName | YYYY-MM-DD\nName | YYYY-MM-DD | YYYY-MM-DD\n\nUNIT_PLAN:\n1st Nine Weeks | Unit Name | Number of Instructional Days\n`;
 
 const EXAMPLE_TEMPLATE = `SCHOOL_YEAR:\n2026-2027\n\nCOURSE_NAME:\nAlgebra 2\n\nSKIP_WEEKENDS:\nyes\n\nTERMS:\n1st Nine Weeks | 2026-08-12 | 2026-10-08\n2nd Nine Weeks | 2026-10-13 | 2026-12-18\n3rd Nine Weeks | 2027-01-06 | 2027-03-05\n4th Nine Weeks | 2027-03-15 | 2027-05-20\n\nBLOCKED_DAYS:\n${DEFAULT_BLOCKED_DAYS.map((d) => `${d.name} | ${d.start}${d.end !== d.start ? ` | ${d.end}` : ''}`).join('\n')}\n\nEVENT_NOTES:\n${DEFAULT_EVENT_NOTES.map((d) => `${d.name} | ${d.start}${d.end !== d.start ? ` | ${d.end}` : ''}`).join('\n')}\n\nUNIT_PLAN:\n1st Nine Weeks | Unit 00 Fundamentals | 13\n1st Nine Weeks | Unit 01 Linear F(x) | 13\n2nd Nine Weeks | Unit 02 Systems | 13\n2nd Nine Weeks | Unit 03 Quadratics | 15.5\n3rd Nine Weeks | Unit 04 Polynomials | 17\n4th Nine Weeks | Unit 05 Review | 7\n`;
@@ -76,6 +121,7 @@ const state = {
   units: [],
   extractionWarnings: [],
   extractionSummary: '',
+  yagCapacitySummary: [],
   preview: [],
   previewSucceeded: false,
   applied: false,
@@ -318,8 +364,10 @@ function isPeriodText(text) {
 }
 
 function isSkipYagText(text) {
-  return /^(unit number\/title;?\s*teks|days in unit|instructional days available|total days in units|balance|unit title|unit number|teks)$/i.test(String(text || '').trim()) ||
-    /(instructional days available|total days in units|balance)/i.test(String(text || ''));
+  const s = String(text || '').trim();
+  return /^(unit number\/title;?\s*teks|days in unit|instructional days available|total days in units|balance|unit title|unit number|teks)$/i.test(s) ||
+    /(instructional days available|total days in units|balance)/i.test(s) ||
+    (!isRealYagUnitTitle(s) && isYagBookkeepingOrEventText(s));
 }
 
 function extractNumberFromCell(cell) {
@@ -336,7 +384,7 @@ function maybeCourseName(rowText) {
   const joined = rowText.join(' ').trim();
   const courseMatch = joined.match(/course\s*(name)?\s*[:\-]\s*(.+)$/i);
   if (courseMatch && courseMatch[2]) return courseMatch[2].trim();
-  if (joined && joined.length > 4 && joined.length < 90 && !isPeriodText(joined) && !isSkipYagText(joined) && !/days|balance|total|unit/i.test(joined)) return joined;
+  if (joined && joined.length > 4 && joined.length < 90 && !isPeriodText(joined) && !isSkipYagText(joined) && !/days|balance|total|unit/i.test(joined) && !isYagBookkeepingOrEventText(joined)) return joined;
   return '';
 }
 
@@ -353,6 +401,7 @@ function detectYagHeader(rowText, currentHeader) {
 function extractUnitsFromYagWorkbook(workbook) {
   const units = [];
   const warnings = [];
+  const capacitySummary = emptyYagCapacitySummary();
   const sectionStats = new Map(PLC_GRADING_PERIOD_CONFIG.map((p) => [p.name, { seen: false, units: 0 }]));
   let courseName = '';
 
@@ -379,37 +428,36 @@ function extractUnitsFromYagWorkbook(workbook) {
 
       header = detectYagHeader(texts, header);
 
-      if (/balance/i.test(joined)) {
-        const nums = row.values.map((_, idx) => extractNumberFromCell(row.getCell(idx))).filter((n) => n != null);
-        const balance = nums.length ? nums[nums.length - 1] : null;
-        if (currentPeriod && balance != null && Math.abs(balance) > 0.0001) warnings.push(`${currentPeriod} balance is ${balance}; expected 0.`);
+      const nums = extractNumbersFromRow(row, lastCell);
+      const summaryMetric = detectYagSummaryMetric(joined);
+      if (currentPeriod && summaryMetric) {
+        const summaryRow = getYagCapacitySummaryRow(capacitySummary, currentPeriod);
+        const value = nums.length ? nums[nums.length - 1].value : null;
+        if (summaryRow && value != null) summaryRow[summaryMetric] = value;
+        if (summaryMetric === 'balance' && value != null && Math.abs(value) > 0.0001) warnings.push(`${currentPeriod} balance is ${value}; expected 0.`);
         continue;
       }
-      if (!currentPeriod || /instructional days available|total days in units/i.test(joined)) continue;
+      if (!currentPeriod) continue;
 
-      const daysCandidates = [];
-      for (let c = 1; c <= lastCell; c += 1) {
-        const n = extractNumberFromCell(row.getCell(c));
-        if (n != null && n > 0 && n < 200) daysCandidates.push({ col: c, value: n });
-      }
+      const daysCandidates = nums.filter((n) => n.value > 0 && n.value < 200);
       if (!daysCandidates.length) continue;
 
       let daysCandidate = header.daysCol ? daysCandidates.find((d) => d.col === header.daysCol) : null;
       if (!daysCandidate) daysCandidate = daysCandidates[daysCandidates.length - 1];
 
       let titleCol = header.titleCol;
-      if (!titleCol || !cellText(row.getCell(titleCol))) {
+      if (!titleCol || !isRealYagUnitTitle(cellText(row.getCell(titleCol)))) {
         titleCol = 0;
         for (let c = 1; c <= lastCell; c += 1) {
           const text = cellText(row.getCell(c));
-          if (!text || c === daysCandidate.col || isSkipYagText(text) || /^\d+(\.\d+)?$/.test(text)) continue;
+          if (!text || c === daysCandidate.col || isSkipYagText(text) || /^\d+(\.\d+)?$/.test(text) || !isRealYagUnitTitle(text)) continue;
           titleCol = c;
           break;
         }
       }
       if (!titleCol) continue;
       const title = cellText(row.getCell(titleCol));
-      if (!title || isSkipYagText(title) || isPeriodText(title)) continue;
+      if (!title || !isRealYagUnitTitle(title) || isPeriodText(title)) continue;
 
       const warning = Number.isInteger(daysCandidate.value) ? '' : HALF_DAY_WARNING;
       units.push({
@@ -429,7 +477,7 @@ function extractUnitsFromYagWorkbook(workbook) {
     if (stat.seen && stat.units === 0) warnings.push(`${period}: ${LOW_CONFIDENCE_WARNING}`);
   }
   if (!units.length) warnings.push('No units extracted. Use Advanced Mode to review or enter units manually.');
-  return { units, warnings, courseName };
+  return { units, warnings, courseName, capacitySummary };
 }
 
 function extractUnitsFromYag() {
@@ -440,6 +488,7 @@ function extractUnitsFromYag() {
   const result = extractUnitsFromYagWorkbook(state.yagWorkbook);
   state.units = result.units;
   state.extractionWarnings = result.warnings;
+  state.yagCapacitySummary = result.capacitySummary || [];
   state.courseName = result.courseName || state.courseName;
   state.preview = [];
   state.previewSucceeded = false;
@@ -450,10 +499,32 @@ function extractUnitsFromYag() {
   setNextStep(state.units.length ? 'Next: review extracted units, make small edits if needed, then generate preview.' : LOW_CONFIDENCE_WARNING);
 }
 
+function formatYagSummaryValue(value) {
+  return value == null ? '—' : String(value);
+}
+
+function hasYagSummaryValues(row) {
+  return row && ['calendarDaysAvailable', 'nonInstructionalDays', 'instructionalDaysAvailable', 'totalUnitDays', 'balance'].some((key) => row[key] != null);
+}
+
+function renderYagCapacitySummary() {
+  const rows = (state.yagCapacitySummary || []).filter(hasYagSummaryValues);
+  if (!rows.length) return '';
+  const balanceMessages = rows.filter((row) => row.balance != null).map((row) => {
+    if (Math.abs(row.balance) <= 0.0001) return `<li class="ok">${escapeHtml(row.gradingPeriod)}: YAG balance appears complete for this grading period.</li>`;
+    return `<li class="warn">${escapeHtml(row.gradingPeriod)}: YAG balance is ${escapeHtml(row.balance)}; review unit totals and available days.</li>`;
+  }).join('');
+  return `<h3>YAG Capacity Diagnostics</h3>
+    <table><thead><tr><th>Grading Period</th><th>Calendar Days Available</th><th>Non-instructional Days</th><th>Instructional Days Available</th><th>Total Unit Days</th><th>Balance</th></tr></thead><tbody>
+      ${rows.map((row) => `<tr><td>${escapeHtml(row.gradingPeriod)}</td><td>${formatYagSummaryValue(row.calendarDaysAvailable)}</td><td>${formatYagSummaryValue(row.nonInstructionalDays)}</td><td>${formatYagSummaryValue(row.instructionalDaysAvailable)}</td><td>${formatYagSummaryValue(row.totalUnitDays)}</td><td>${formatYagSummaryValue(row.balance)}</td></tr>`).join('')}
+    </tbody></table>
+    ${balanceMessages ? `<ul>${balanceMessages}</ul>` : ''}`;
+}
+
 function renderExtractionSummary() {
   const byPeriod = PLC_GRADING_PERIOD_CONFIG.map((p) => `${p.name}: ${state.units.filter((u) => u.gradingPeriod === p.name).length} unit(s)`).join(' | ');
   const warnings = state.extractionWarnings.length ? `<ul>${state.extractionWarnings.map((w) => `<li class="warn">${escapeHtml(w)}</li>`).join('')}</ul>` : '<p class="ok">Extraction completed with no balance or confidence warnings.</p>';
-  $('plcExtractionSummary').innerHTML = `<p><strong>Course:</strong> ${escapeHtml(state.courseName || 'Not detected')}</p><p>${escapeHtml(byPeriod)}</p>${warnings}`;
+  $('plcExtractionSummary').innerHTML = `<p><strong>Course:</strong> ${escapeHtml(state.courseName || 'Not detected')}</p><p>${escapeHtml(byPeriod)}</p>${renderYagCapacitySummary()}${warnings}`;
 }
 
 function periodOptions(selected) {
