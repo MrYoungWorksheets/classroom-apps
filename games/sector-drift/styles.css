@@ -88,15 +88,15 @@ h3 {
   min-width: 0;
 }
 
-.sector-panel, .math-panel { border-color: rgba(255, 209, 102, 0.38); }
+.sector-panel, .math-panel, .mission-panel { border-color: rgba(255, 209, 102, 0.38); }
 
-.stat-grid, .cargo-grid, .upgrade-grid, .trade-grid, .planet-grid {
+.stat-grid, .cargo-grid, .upgrade-grid, .trade-grid, .planet-grid, .mission-grid, .achievement-grid, .stats-grid, .tutorial-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
 }
 
-.stat, .resource, .mini-card {
+.stat, .resource, .mini-card, .mission-card, .achievement-card, .tutorial-step {
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
@@ -197,7 +197,7 @@ input {
 @media (max-width: 640px) {
   .hero { flex-direction: column; }
   .danger-button { width: 100%; }
-  .stat-grid, .cargo-grid, .upgrade-grid, .trade-grid, .planet-grid { grid-template-columns: 1fr; }
+  .stat-grid, .cargo-grid, .upgrade-grid, .trade-grid, .planet-grid, .mission-grid, .achievement-grid, .stats-grid, .tutorial-list { grid-template-columns: 1fr; }
 }
 
 @media (min-width: 880px) {
@@ -205,5 +205,50 @@ input {
     grid-template-columns: minmax(230px, 0.9fr) minmax(320px, 1.3fr) minmax(280px, 1fr);
     align-items: start;
   }
-  .math-panel { grid-column: span 2; }
+  .math-panel, .mission-panel, .achievements-panel, .log-panel { grid-column: span 2; }
+}
+
+
+details.compact-section {
+  margin-top: 0.75rem;
+}
+
+details.compact-section summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 700;
+  list-style-position: inside;
+}
+
+.mission-card.complete, .tutorial-step.complete, .achievement-card.unlocked {
+  border-color: rgba(142, 246, 178, 0.45);
+  background: rgba(142, 246, 178, 0.08);
+}
+
+.achievement-card.locked, .tutorial-step.locked {
+  opacity: 0.72;
+}
+
+.progress-text {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.reward-text {
+  color: var(--accent);
+}
+
+.turn-warning {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.port-type {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.small-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
 }
