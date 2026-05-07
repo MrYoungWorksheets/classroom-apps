@@ -57,6 +57,7 @@ const SHIPS = {
 
 let sectorMap = createSectorMap();
 let game = loadGame();
+let selectedSectorNumber = game.player.currentSector;
 
 const panels = {};
 
@@ -92,40 +93,85 @@ if (typeof document !== "undefined") {
 }
 
 function createSectorMap() {
-  const typeCycle = ["empty", "port", "planet", "asteroid", "anomaly", "empty", "planet", "port", "asteroid", "empty"];
   const planetNames = ["Emberfall", "Quiet Vesta", "Blue Rook", "Juniper Moon", "Cinder Vale", "New Lumen", "Frost Harbor", "Copperleaf", "Aster Well", "Kindle Rest"];
+  const lanePairs = [
+    [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 10],
+    [3, 11], [11, 12], [12, 13], [13, 14],
+    [3, 15], [15, 16], [16, 17], [17, 18], [18, 19],
+    [5, 20], [20, 21], [21, 22], [22, 23],
+    [5, 24], [24, 25], [25, 26], [26, 27], [27, 28], [28, 8],
+    [7, 29], [29, 30], [30, 31], [31, 32],
+    [8, 33], [33, 34], [34, 35], [35, 36], [36, 37],
+    [10, 38], [38, 39], [39, 40], [40, 41],
+    [2, 42], [42, 43], [43, 44], [44, 45], [45, 6],
+    [6, 46], [46, 47], [47, 48],
+    [9, 49], [49, 50],
+    [1, 5], [2, 7], [4, 8], [10, 1], [18, 31], [33, 25],
+  ];
+  const coordinates = {
+    1: { x: 10, y: 48 }, 2: { x: 20, y: 45 }, 3: { x: 30, y: 42 }, 4: { x: 40, y: 43 }, 5: { x: 50, y: 45 },
+    6: { x: 60, y: 46 }, 7: { x: 70, y: 44 }, 8: { x: 80, y: 42 }, 9: { x: 88, y: 48 }, 10: { x: 94, y: 58 },
+    11: { x: 28, y: 30 }, 12: { x: 24, y: 20 }, 13: { x: 18, y: 13 }, 14: { x: 11, y: 9 },
+    15: { x: 33, y: 55 }, 16: { x: 31, y: 66 }, 17: { x: 26, y: 76 }, 18: { x: 19, y: 84 }, 19: { x: 10, y: 91 },
+    20: { x: 51, y: 32 }, 21: { x: 54, y: 22 }, 22: { x: 59, y: 14 }, 23: { x: 66, y: 8 },
+    24: { x: 54, y: 56 }, 25: { x: 60, y: 65 }, 26: { x: 67, y: 72 }, 27: { x: 76, y: 72 }, 28: { x: 82, y: 62 },
+    29: { x: 70, y: 32 }, 30: { x: 72, y: 22 }, 31: { x: 77, y: 13 }, 32: { x: 86, y: 8 },
+    33: { x: 82, y: 32 }, 34: { x: 88, y: 24 }, 35: { x: 93, y: 16 }, 36: { x: 96, y: 9 }, 37: { x: 91, y: 4 },
+    38: { x: 89, y: 66 }, 39: { x: 82, y: 75 }, 40: { x: 75, y: 84 }, 41: { x: 68, y: 92 },
+    42: { x: 18, y: 57 }, 43: { x: 15, y: 68 }, 44: { x: 18, y: 78 }, 45: { x: 30, y: 86 },
+    46: { x: 59, y: 58 }, 47: { x: 55, y: 71 }, 48: { x: 49, y: 84 },
+    49: { x: 95, y: 49 }, 50: { x: 98, y: 39 },
+  };
+  const typeOverrides = {
+    1: "port", 3: "port", 5: "port", 7: "port", 8: "port", 10: "port", 14: "planet", 19: "planet", 23: "planet", 31: "port", 32: "planet", 37: "planet", 41: "planet", 45: "port", 48: "planet",
+    12: "asteroid", 16: "anomaly", 21: "asteroid", 25: "anomaly", 30: "asteroid", 34: "anomaly", 39: "asteroid", 43: "anomaly", 47: "asteroid", 50: "anomaly",
+  };
+  const routeRoles = {
+    1: "core", 3: "crossroad", 5: "crossroad", 6: "crossroad", 7: "crossroad", 8: "crossroad", 10: "crossroad", 14: "deadEnd", 19: "deadEnd", 23: "deadEnd", 32: "deadEnd", 37: "deadEnd", 41: "deadEnd", 48: "deadEnd", 50: "deadEnd",
+    11: "tunnel", 12: "tunnel", 13: "tunnel", 15: "tunnel", 16: "tunnel", 17: "tunnel", 18: "tunnel", 20: "tunnel", 21: "tunnel", 22: "tunnel", 24: "tunnel", 25: "tunnel", 26: "tunnel", 27: "tunnel", 28: "tunnel", 29: "tunnel", 30: "tunnel", 31: "tunnel", 33: "tunnel", 34: "tunnel", 35: "tunnel", 36: "tunnel", 38: "tunnel", 39: "tunnel", 40: "tunnel", 42: "tunnel", 43: "tunnel", 44: "tunnel", 45: "frontier", 46: "tunnel", 47: "tunnel", 49: "tunnel",
+  };
+  const strategicNotes = {
+    core: "Core route: reliable lanes radiate from this safe classroom port.",
+    tunnel: "Tunnel lane: a narrow chain of systems rewards careful scouting.",
+    deadEnd: "Dead-end system: valuable but difficult to reach or defend.",
+    crossroad: "Crossroad system: several lanes meet here, making this a major navigation choice.",
+    frontier: "Frontier station: a remote route anchor for future defensive play.",
+  };
   const sectors = {};
 
   for (let number = 1; number <= MAX_SECTOR; number += 1) {
-    const adjacent = new Set();
-    if (number > 1) adjacent.add(number - 1);
-    if (number < MAX_SECTOR) adjacent.add(number + 1);
+    sectors[number] = { number, adjacent: [], coordinates: coordinates[number] || createSectorCoordinates(number) };
+  }
 
-    const jumpA = ((number * 7) % MAX_SECTOR) + 1;
-    const jumpB = ((number * 13 + 5) % MAX_SECTOR) + 1;
-    if (jumpA !== number) adjacent.add(jumpA);
-    if (number % 5 === 0 && jumpB !== number) adjacent.add(jumpB);
+  lanePairs.forEach(([a, b]) => {
+    sectors[a].adjacent.push(b);
+    sectors[b].adjacent.push(a);
+  });
 
-    let type = typeCycle[(number * 3 + 1) % typeCycle.length];
-    if (number === 1) type = "port";
-    const coordinates = createSectorCoordinates(number);
+  for (let number = 1; number <= MAX_SECTOR; number += 1) {
+    const sector = sectors[number];
+    sector.adjacent = Array.from(new Set(sector.adjacent)).sort((a, b) => a - b);
+    const degree = sector.adjacent.length;
+    const routeRole = routeRoles[number] || (degree >= 4 ? "crossroad" : degree === 1 ? "deadEnd" : degree === 2 ? "tunnel" : "frontier");
+    const type = typeOverrides[number] || (["empty", "asteroid", "anomaly", "empty", "planet"][stableNumber(number, 11) % 5]);
     const dangerLevel = createDangerLevel(number, type);
     const hazardType = dangerLevel > 0 ? Object.keys(HAZARD_TYPES)[stableNumber(number, 17) % Object.keys(HAZARD_TYPES).length] : null;
     const economy = type === "port" ? createPortEconomy(number) : null;
-
-    sectors[number] = {
-      number,
-      adjacent: Array.from(adjacent).sort((a, b) => a - b),
+    Object.assign(sector, {
       type,
-      coordinates,
       dangerLevel,
       hazardType,
+      routeRole,
+      isChokepoint: routeRole === "crossroad" || [13, 18, 22, 31, 36, 40, 44, 47].includes(number),
+      strategicNote: strategicNotes[routeRole] || strategicNotes.frontier,
       flavor: getSectorFlavor(type, number),
       objects: getSectorObjects(type, number, hazardType),
-    };
+    });
 
-    if (economy) Object.assign(sectors[number], economy);
-    if (type === "planet") sectors[number].planet = {
+    if (economy) Object.assign(sector, economy);
+    if ([1, 5, 8, 45].includes(number)) sector.hasShipyard = true;
+    if ([1, 5, 8, 45].includes(number)) sector.portType = number === 1 ? "Core Port" : number === 45 ? "Frontier Starbase" : "Major Station";
+    if (type === "planet") sector.planet = {
       id: `planet-${number}`,
       name: planetNames[number % planetNames.length],
       owner: null,
@@ -133,12 +179,6 @@ function createSectorMap() {
       stored: { Ore: 0, Food: 0, Tech: 0 },
     };
   }
-
-  Object.values(sectors).forEach((sector) => {
-    sector.adjacent.forEach((neighbor) => {
-      sectors[neighbor].adjacent = Array.from(new Set([...sectors[neighbor].adjacent, sector.number])).sort((a, b) => a - b);
-    });
-  });
 
   return sectors;
 }
@@ -372,6 +412,7 @@ function renderShipPanel() {
       ${stat("Pilot", p.pilotName)}${stat("Rank", currentRank())}${stat("Ship", p.shipName)}${stat("Credits", p.credits)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Turns", `${p.turns}/${p.maxTurns}`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Sector", p.currentSector)}${stat("Cargo Space", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Hazard Resist", ship.hazardResist + Math.max(0, p.upgrades.shield - 1))}
     </div>
     <p class="help-text">${ship.description}</p>
+    ${renderEmergencyWarpControl()}
     ${p.legacyUpgradeOverride ? `<p class="cooldown">Legacy upgrade override active: ${upgradeReductionSummary(p.upgrades, caps)}</p>` : ""}
     ${p.turns <= 0 ? `<p class="turn-warning">Out of turns. Complete missions for bonus turns or return tomorrow.</p>` : ""}
     ${cargoSpaceLeft() < 0 ? `<p class="turn-warning">Cargo is over capacity. Sell, deposit, or dump cargo before buying more.</p>` : ""}
@@ -392,26 +433,153 @@ function renderSectorPanel() {
     <span class="badge">Sector ${sector.number}: ${titleCase(sector.type)}</span>
     <p class="flavor">${sector.flavor}</p>
     <p><strong>Visible objects:</strong> ${knownFeatures(sector).join(", ")}</p>
-    <p class="help-text"><strong>Scanner:</strong> ${scannerHelpText()} ${danger}.</p>
+    <p class="strategic-note">${sector.strategicNote}</p>
+    <p class="help-text"><strong>Scanner:</strong> ${scannerHelpText()} ${danger}. Click an adjacent system node to travel, or click any visible node for intel.</p>
     ${renderMinimap()}
+    ${renderNavigationIntel()}
     <h3>Adjacent Sectors</h3>
     <div class="travel-grid">
       ${sector.adjacent.map((number) => `<button type="button" ${cannotTravel ? "disabled" : ""} data-action="travel" data-sector="${number}">${scannerTravelLabel(number)}</button>`).join("")}
     </div>
     ${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete missions for bonus turns or return tomorrow.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty. Complete math missions for fuel or trade when you reach a port.</p>` : `<p class="help-text">Travel costs 1 turn and 1 fuel. A sector event may occur after arrival.</p>`}`;
   panels.sector.querySelectorAll("[data-action='travel']").forEach((button) => button.addEventListener("click", () => travelToSector(Number(button.dataset.sector))));
+  panels.sector.querySelectorAll("[data-map-sector]").forEach((node) => {
+    const number = Number(node.dataset.mapSector);
+    node.addEventListener("click", () => handleMapNodeSelect(number));
+    node.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handleMapNodeSelect(number);
+      }
+    });
+    node.addEventListener("focus", () => selectSector(number, true));
+  });
+  panels.ship.querySelector("[data-action='emergencyWarp']")?.addEventListener("click", emergencyWarp);
 }
 
 function renderMinimap() {
   const visible = getVisibleSectorNumbers();
-  return `<div class="minimap" aria-label="Scanner minimap">${Object.values(sectorMap).map((sector) => {
-    const isVisible = visible.includes(sector.number);
-    const visited = game.visitedSectors.includes(sector.number);
-    const current = sector.number === game.player.currentSector;
-    const style = `left:${sector.coordinates.x}%;top:${sector.coordinates.y}%;`;
-    const label = isVisible ? `${sector.number}${visited ? " ✓" : ""}` : "?";
-    return `<span class="map-node ${sector.type} ${visited ? "visited" : ""} ${current ? "current" : ""} ${isVisible ? "visible" : "hidden"}" style="${style}" title="${isVisible ? scannerTravelLabel(sector.number) : "Unrevealed sector"}">${label}</span>`;
-  }).join("")}</div>`;
+  const visibleSet = new Set(visible);
+  const lanes = [];
+  Object.values(sectorMap).forEach((sector) => {
+    if (!visibleSet.has(sector.number)) return;
+    sector.adjacent.forEach((neighbor) => {
+      if (sector.number >= neighbor || !visibleSet.has(neighbor)) return;
+      const strong = sector.number === game.player.currentSector || neighbor === game.player.currentSector;
+      lanes.push(`<line class="map-lane ${strong ? "current-lane" : "known-lane"}" x1="${sector.coordinates.x}" y1="${sector.coordinates.y}" x2="${sectorMap[neighbor].coordinates.x}" y2="${sectorMap[neighbor].coordinates.y}" />`);
+    });
+  });
+  const unknownStubs = renderUnknownLaneStubs(visibleSet);
+  const nodes = visible.map((number) => renderMapNode(sectorMap[number])).join("");
+  return `<div class="minimap" aria-label="Scanner minimap"><svg class="sector-map" viewBox="0 0 100 100" role="img" aria-label="Local sector lane map"><g class="map-lanes">${lanes.join("")}${unknownStubs}</g><g class="map-nodes">${nodes}</g></svg></div>`;
+}
+
+function renderUnknownLaneStubs(visibleSet) {
+  if (game.player.upgrades.scanner > 2) return "";
+  return sectorMap[game.player.currentSector].adjacent.filter((number) => !visibleSet.has(number)).map((number) => {
+    const from = sectorMap[game.player.currentSector].coordinates;
+    const to = sectorMap[number].coordinates;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    return `<line class="map-lane unknown-lane" x1="${from.x}" y1="${from.y}" x2="${from.x + dx * 0.28}" y2="${from.y + dy * 0.28}" />`;
+  }).join("");
+}
+
+function renderMapNode(sector) {
+  const visited = game.visitedSectors.includes(sector.number);
+  const current = sector.number === game.player.currentSector;
+  const adjacent = sectorMap[game.player.currentSector].adjacent.includes(sector.number);
+  const detected = !visited && game.revealedSectors.includes(sector.number);
+  const selected = selectedSectorNumber === sector.number;
+  const danger = canSeeDanger(sector.number) && sector.dangerLevel > 0;
+  const radius = current ? 4.2 : sector.routeRole === "crossroad" ? 3.8 : 3.3;
+  const classes = ["map-node", sector.type, sector.routeRole, visited ? "visited" : "", current ? "current" : "", adjacent ? "adjacent" : "", detected ? "detected" : "", selected ? "selected" : "", danger ? "danger-known" : ""].filter(Boolean).join(" ");
+  const tooltip = sectorTooltip(sector.number);
+  return `<g class="${classes}" data-map-sector="${sector.number}" role="button" tabindex="0" aria-label="${tooltip}"><title>${tooltip}</title><circle cx="${sector.coordinates.x}" cy="${sector.coordinates.y}" r="${radius}"></circle><text x="${sector.coordinates.x}" y="${sector.coordinates.y + 1.35}">${sector.number}</text>${sector.routeRole === "deadEnd" ? `<circle class="role-marker" cx="${sector.coordinates.x + 4.5}" cy="${sector.coordinates.y - 4.5}" r="1.2"></circle>` : ""}${sector.routeRole === "crossroad" ? `<text class="role-symbol" x="${sector.coordinates.x + 5}" y="${sector.coordinates.y - 4}">✚</text>` : ""}${danger ? `<text class="danger-marker" x="${sector.coordinates.x + 4.7}" y="${sector.coordinates.y + 5.8}">!</text>` : ""}</g>`;
+}
+
+function renderNavigationIntel() {
+  const selected = sectorMap[selectedSectorNumber] ? sectorMap[selectedSectorNumber] : sectorMap[game.player.currentSector];
+  selectedSectorNumber = selected.number;
+  const current = selected.number === game.player.currentSector;
+  const adjacent = sectorMap[game.player.currentSector].adjacent.includes(selected.number);
+  const visited = game.visitedSectors.includes(selected.number);
+  const detected = game.revealedSectors.includes(selected.number);
+  const visible = getVisibleSectorNumbers().includes(selected.number);
+  const status = current ? "Current sector" : adjacent ? "Adjacent" : visited ? "Visited" : detected ? "Detected" : visible ? "Visible" : "Unknown";
+  const canTravel = adjacent && game.player.turns > 0 && game.player.fuel > 0;
+  const danger = canSeeDanger(selected.number) ? (selected.dangerLevel > 0 ? `${HAZARD_TYPES[selected.hazardType].icon} Danger ${selected.dangerLevel}: ${HAZARD_TYPES[selected.hazardType].label}` : "No danger detected") : "Danger unknown";
+  const features = scannerFeatureText(selected);
+  return `<aside class="nav-intel" aria-live="polite"><h3>Navigation Intel</h3><div class="intel-grid">
+    ${stat("Sector", selected.number)}${stat("Status", status)}${stat("System Type", visible ? titleCase(selected.type) : "Unknown")}${stat("Route Role", canSeeRouteRole(selected.number) ? titleCase(selected.routeRole) : "Scan level 4")}
+    ${stat("Danger", danger)}${stat("Travel", adjacent ? (canTravel ? "Available · 1 fuel / 1 turn" : travelBlockedReason()) : current ? "Already here" : "Not directly connected")}
+  </div><p><strong>Known features:</strong> ${features}</p><p class="strategic-note">${canSeeRouteRole(selected.number) ? selected.strategicNote : "Upgrade scanners to reveal route roles such as tunnels, dead ends, and crossroads."}</p><p class="recommendation">${navigationRecommendation(selected.number)}</p></aside>`;
+}
+
+function renderEmergencyWarpControl() {
+  const disabled = game.player.currentSector === 1 || game.player.fuel < 5;
+  const reason = game.player.currentSector === 1 ? "Already at Sector 1." : game.player.fuel < 5 ? "Emergency warp requires 5 fuel." : "Spend 5 fuel to return to the safe Core Port without using turns.";
+  return `<div class="emergency-warp"><button type="button" data-action="emergencyWarp" ${disabled ? "disabled" : ""}>Emergency Warp to Sector 1</button><p class="help-text">${reason}</p></div>`;
+}
+
+function handleMapNodeSelect(number) {
+  selectSector(number, true);
+  const current = sectorMap[game.player.currentSector];
+  if (number === game.player.currentSector) return;
+  if (current.adjacent.includes(number)) travelToSector(number);
+}
+
+function selectSector(number, shouldRender = true) {
+  if (!sectorMap[number]) return;
+  selectedSectorNumber = number;
+  if (shouldRender) renderSectorPanel();
+}
+
+function sectorTooltip(number) {
+  const sector = sectorMap[number];
+  const type = getVisibleSectorNumbers().includes(number) ? titleCase(sector.type) : "Unknown system";
+  const danger = canSeeDanger(number) && sector.dangerLevel > 0 ? `, danger ${sector.dangerLevel}` : canSeeDanger(number) ? ", no danger detected" : ", danger unknown";
+  const features = scannerFeatureText(sector);
+  return `Sector ${number}: ${type}${danger}. ${features}.`;
+}
+
+function scannerFeatureText(sector) {
+  if (!getVisibleSectorNumbers().includes(sector.number)) return "Upgrade scanners to reveal more";
+  if (game.player.upgrades.scanner < 3 && !game.visitedSectors.includes(sector.number) && sector.number !== game.player.currentSector) return "Major features require scanner level 3 or a visit";
+  return knownFeatures(sector).join(", ");
+}
+
+function canSeeRouteRole(number) {
+  return game.player.upgrades.scanner >= 4 || game.visitedSectors.includes(number) || number === game.player.currentSector;
+}
+
+function travelBlockedReason() {
+  if (game.player.turns <= 0) return "Out of turns";
+  if (game.player.fuel <= 0) return "Fuel empty";
+  return "Unavailable";
+}
+
+function navigationRecommendation(number) {
+  const sector = sectorMap[number];
+  if (number === game.player.currentSector) return "You are here. Review adjacent lanes before moving.";
+  if (!getVisibleSectorNumbers().includes(number)) return "Upgrade scanners to reveal more.";
+  if (!sectorMap[game.player.currentSector].adjacent.includes(number)) return "Not directly connected from current sector.";
+  if (game.player.fuel <= 0 || game.player.turns <= 0) return travelBlockedReason() === "Fuel empty" ? "Fuel is empty. Complete math missions for fuel or trade when you reach a port." : "Out of turns. Complete missions for bonus turns or return tomorrow.";
+  if (canSeeDanger(number) && sector.dangerLevel > 0) return "Danger detected. Repair or upgrade shields before entering.";
+  return "Direct jump available.";
+}
+
+function emergencyWarp() {
+  if (game.player.currentSector === 1) return addAndRender("Already at Sector 1.");
+  if (game.player.fuel < 5) return addAndRender("Emergency warp requires 5 fuel.");
+  game.player.fuel -= 5;
+  game.player.currentSector = 1;
+  selectedSectorNumber = 1;
+  markSectorVisited(1);
+  updateScannerReveals();
+  addLog("Emergency warp engaged. Returned to Sector 1 for 5 fuel.");
+  saveGame();
+  render();
 }
 
 function renderLocationPanel() {
@@ -443,12 +611,12 @@ function renderRepairPanel(sector) {
 }
 
 function renderShipyardPanel() {
-  return `<h3>Shipyard</h3><div class="trade-grid">${Object.values(SHIPS).map((ship) => {
+  return `<details class="compact-section shipyard-section"><summary>Shipyard Ships</summary><div class="trade-grid">${Object.values(SHIPS).map((ship) => {
     const owned = game.player.ownedShips.includes(ship.id);
     const active = currentShip().id === ship.id;
     const blocked = !owned && (game.player.credits < ship.price || cargoUsed() > calculateCargoCapacity(ship, capUpgradesForShip(game.player.upgrades, ship)));
     return `<div class="mini-card"><h3>${ship.name}</h3><p>${ship.description}</p>${stat("Price", owned ? "Owned" : ship.price)}${stat("Cargo", calculateCargoCapacity(ship, capUpgradesForShip(game.player.upgrades, ship)))}${stat("Fuel", calculateFuelCapacity(ship, capUpgradesForShip(game.player.upgrades, ship)))}${stat("Hull", ship.maxHull + Math.max(0, Math.min(game.player.upgrades.shield, ship.upgradeCaps.shield) - 1) * 4)}<button data-action="buyShip" data-ship="${ship.id}" ${active || blocked ? "disabled" : ""}>${active ? "Current Ship" : owned ? "Switch Ship" : "Buy Ship"}</button></div>`;
-  }).join("")}</div>`;
+  }).join("")}</div></details>`;
 }
 
 function renderPlanet(sector) {
@@ -549,21 +717,21 @@ function renderUpgradePanel() {
 
 function renderAchievementsPanel() {
   const definitions = achievementDefinitions();
-  panels.achievements.innerHTML = `<h2 id="achievementsHeading">Achievements</h2><div class="achievement-grid">${definitions.map((achievement) => {
+  panels.achievements.innerHTML = `<h2 id="achievementsHeading">Achievements</h2><details class="compact-section"><summary>Show achievement progress</summary><div class="achievement-grid">${definitions.map((achievement) => {
     const unlocked = game.achievements.includes(achievement.id);
     return `<div class="achievement-card ${unlocked ? "unlocked" : "locked"}"><strong>${unlocked ? "✓" : "○"} ${achievement.title}</strong><p>${achievement.description}</p></div>`;
-  }).join("")}</div>`;
+  }).join("")}</div></details>`;
 }
 
 function renderStatsPanel() {
   const s = game.stats;
-  panels.stats.innerHTML = `<h2 id="statsHeading">Career Stats</h2><div class="stats-grid">
+  panels.stats.innerHTML = `<h2 id="statsHeading">Career Stats</h2><details class="compact-section"><summary>Show career stats</summary><div class="stats-grid">
     ${stat("Rank", currentRank())}${stat("Visited Sectors", s.visitedSectors.length)}${stat("Trade Credits", s.creditsEarnedFromTrade)}${stat("Resources Mined", s.resourcesMined)}${stat("Ore Mined", s.oreMined)}${stat("Math Missions", s.mathMissionsCompleted)}${stat("Planets Claimed", s.planetsClaimed)}${stat("Anomalies Scanned", s.anomaliesScanned)}${stat("Resources Deposited", s.resourcesDeposited)}${stat("Planet Upgrades", s.planetUpgrades)}${stat("Tech Sold", s.techSold)}${stat("Board Missions", s.missionsClaimed)}${stat("Resources Sold", s.resourcesSold)}
-  </div>`;
+  </div></details>`;
 }
 
 function renderLogPanel() {
-  panels.log.innerHTML = `<h2 id="logHeading">Captain's Log</h2><ol class="log-list">${game.log.map((entry) => `<li>${entry}</li>`).join("")}</ol>`;
+  panels.log.innerHTML = `<h2 id="logHeading">Recent Captain's Log</h2><ol class="log-list compact-log">${game.log.map((entry) => `<li>${entry}</li>`).join("")}</ol>`;
 }
 
 function travelToSector(number) {
@@ -572,6 +740,7 @@ function travelToSector(number) {
   if (!spendTurn("travel")) return;
   game.player.fuel -= 1;
   game.player.currentSector = number;
+  selectedSectorNumber = number;
   markSectorVisited(number);
   addLog(`Traveled to Sector ${number}.`);
   completeTutorialStep("travel");
@@ -1124,7 +1293,14 @@ function normalizeSectorList(list, requiredSector = 1) {
 }
 
 function getVisibleSectorNumbers() {
-  return normalizeSectorList([...(game.revealedSectors || []), ...(game.visitedSectors || []), game.player.currentSector], game.player.currentSector);
+  const scanner = game.player.upgrades?.scanner || 1;
+  const localRange = scanner >= 5 ? 3 : scanner >= 2 ? 2 : 1;
+  const visible = new Set(sectorsWithinJumps(game.player.currentSector, localRange));
+  const memoryRange = scanner >= 4 ? 4 : scanner >= 2 ? 3 : 2;
+  [...(game.visitedSectors || []), ...(game.revealedSectors || [])].forEach((number) => {
+    if (number === game.player.currentSector || sectorDistance(game.player.currentSector, number) <= memoryRange) visible.add(number);
+  });
+  return normalizeSectorList(Array.from(visible), game.player.currentSector);
 }
 
 function sectorsWithinJumps(origin, jumps) {
@@ -1163,7 +1339,7 @@ function sectorDistance(a, b) {
 
 function updateScannerReveals(targetGame = game) {
   const scanner = targetGame.player.upgrades?.scanner || 1;
-  const revealRange = Math.min(4, 1 + Math.floor(scanner / 2));
+  const revealRange = scanner >= 5 ? 3 : scanner >= 2 ? 2 : 1;
   const revealed = new Set(normalizeSectorList(targetGame.revealedSectors || [], targetGame.player.currentSector));
   sectorsWithinJumps(targetGame.player.currentSector, revealRange).forEach((number) => revealed.add(number));
   (targetGame.visitedSectors || []).forEach((number) => revealed.add(number));
@@ -1190,13 +1366,22 @@ function knownFeatures(sector) {
 }
 
 function canSeeDanger(number) {
-  return game.visitedSectors.includes(number) || game.revealedSectors.includes(number) || game.player.upgrades.scanner >= 3;
+  if (game.visitedSectors.includes(number) || number === game.player.currentSector) return true;
+  const scanner = game.player.upgrades.scanner;
+  const distance = sectorDistance(game.player.currentSector, number);
+  if (scanner >= 5) return distance <= 3;
+  if (scanner >= 4) return distance <= 2;
+  if (scanner >= 3) return distance <= 1;
+  return false;
 }
 
 function scannerHelpText() {
   const scanner = game.player.upgrades.scanner;
-  const range = Math.min(4, 1 + Math.floor(scanner / 2));
-  return `Level ${scanner} reveals sectors within ${range} jump${range === 1 ? "" : "s"}.`;
+  if (scanner <= 1) return "Level 1 shows your current sector, adjacent systems, and nearby visited lanes.";
+  if (scanner === 2) return "Level 2 shows lanes up to 2 jumps away and connects visible systems.";
+  if (scanner === 3) return "Level 3 identifies system types and major features for visible sectors, with danger on adjacent routes.";
+  if (scanner === 4) return "Level 4 adds route roles and danger details within 2 jumps.";
+  return `Level ${scanner} sharpens local route clarity without automatically revealing the entire sector map.`;
 }
 
 function capUpgradesForShip(upgrades, ship) {
