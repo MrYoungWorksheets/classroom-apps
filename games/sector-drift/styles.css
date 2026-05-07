@@ -73,10 +73,19 @@ h3 {
 }
 
 .dashboard {
-  display: grid;
-  gap: 1rem;
+  display: block;
   padding: 1rem;
+}
+
+.core-dashboard, .secondary-dashboard {
+  display: grid;
   grid-template-columns: 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.secondary-dashboard {
+  margin-top: 1rem;
 }
 
 .panel {
@@ -201,11 +210,16 @@ input {
 }
 
 @media (min-width: 880px) {
-  .dashboard {
-    grid-template-columns: minmax(230px, 0.9fr) minmax(320px, 1.3fr) minmax(280px, 1fr);
-    align-items: start;
+  .core-dashboard {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.35fr) minmax(0, 1fr);
   }
-  .math-panel, .mission-panel, .achievements-panel, .log-panel { grid-column: span 2; }
+
+  .secondary-dashboard {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-flow: dense;
+  }
+
+  .mission-panel { grid-column: span 2; }
 }
 
 
@@ -218,6 +232,15 @@ details.compact-section summary {
   cursor: pointer;
   font-weight: 700;
   list-style-position: inside;
+}
+
+.mission-grid {
+  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.mission-card, .mini-card {
+  align-self: start;
 }
 
 .mission-card.complete, .tutorial-step.complete, .achievement-card.unlocked {
@@ -253,10 +276,30 @@ details.compact-section summary {
   padding-left: 1.1rem;
 }
 
+.map-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin: 0.75rem 0 0.45rem;
+}
+
+.map-toolbar button {
+  min-height: 2.1rem;
+  padding: 0.4rem 0.65rem;
+}
+
+.map-zoom-label {
+  color: var(--accent);
+  font-weight: 700;
+  margin-right: auto;
+}
+
 .minimap {
   position: relative;
   min-height: 280px;
-  margin: 0.9rem 0;
+  margin: 0.45rem 0 0.9rem;
   border: 1px solid var(--line-soft);
   border-radius: 14px;
   background:
@@ -299,7 +342,12 @@ details.compact-section summary {
   outline: none;
 }
 
-.map-node circle:first-of-type {
+.map-hit-target {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.map-node .map-visible-node {
   fill: rgba(7, 16, 20, 0.94);
   stroke: rgba(231, 251, 255, 0.35);
   stroke-width: 0.9;
@@ -316,18 +364,18 @@ details.compact-section summary {
   user-select: none;
 }
 
-.map-node.detected circle:first-of-type { fill: rgba(43, 212, 217, 0.14); stroke: rgba(43, 212, 217, 0.65); }
-.map-node.visited circle:first-of-type { fill: rgba(142, 246, 178, 0.2); stroke: rgba(142, 246, 178, 0.75); }
-.map-node.adjacent circle:first-of-type { stroke: rgba(43, 212, 217, 0.95); stroke-width: 1.35; }
-.map-node.current circle:first-of-type { fill: var(--accent); stroke: #fff3bd; stroke-width: 1.6; filter: drop-shadow(0 0 5px rgba(255, 209, 102, 0.85)); }
+.map-node.detected .map-visible-node { fill: rgba(43, 212, 217, 0.14); stroke: rgba(43, 212, 217, 0.65); }
+.map-node.visited .map-visible-node { fill: rgba(142, 246, 178, 0.2); stroke: rgba(142, 246, 178, 0.75); }
+.map-node.adjacent .map-visible-node { stroke: rgba(43, 212, 217, 0.95); stroke-width: 1.35; }
+.map-node.current .map-visible-node { fill: var(--accent); stroke: #fff3bd; stroke-width: 1.6; filter: drop-shadow(0 0 5px rgba(255, 209, 102, 0.85)); }
 .map-node.current text { fill: #061013; }
-.map-node.selected circle:first-of-type { stroke: #ffffff; stroke-width: 1.7; }
-.map-node.port circle:first-of-type { filter: drop-shadow(0 0 4px rgba(255, 209, 102, 0.35)); }
-.map-node.planet circle:first-of-type { fill: rgba(142, 246, 178, 0.16); }
-.map-node.anomaly circle:first-of-type { filter: drop-shadow(0 0 4px rgba(43, 212, 217, 0.45)); }
-.map-node.deadEnd circle:first-of-type { stroke-dasharray: 1.5 1; }
-.map-node.crossroad circle:first-of-type { stroke-width: 1.45; }
-.map-node:hover circle:first-of-type, .map-node:focus-visible circle:first-of-type { stroke: #ffffff; filter: drop-shadow(0 0 6px rgba(43, 212, 217, 0.8)); }
+.map-node.selected .map-visible-node { stroke: #ffffff; stroke-width: 1.7; }
+.map-node.port .map-visible-node { filter: drop-shadow(0 0 4px rgba(255, 209, 102, 0.35)); }
+.map-node.planet .map-visible-node { fill: rgba(142, 246, 178, 0.16); }
+.map-node.anomaly .map-visible-node { filter: drop-shadow(0 0 4px rgba(43, 212, 217, 0.45)); }
+.map-node.deadEnd .map-visible-node { stroke-dasharray: 1.5 1; }
+.map-node.crossroad .map-visible-node { stroke-width: 1.45; }
+.map-node:hover .map-visible-node, .map-node:focus-visible .map-visible-node { stroke: #ffffff; filter: drop-shadow(0 0 6px rgba(43, 212, 217, 0.8)); }
 
 .role-marker { fill: var(--warn); stroke: none; }
 .role-symbol { fill: var(--accent); font-size: 4px; font-weight: 900; }
@@ -358,7 +406,7 @@ details.compact-section summary {
 }
 
 .compact-log {
-  max-height: 16rem;
+  max-height: 12rem;
   overflow: auto;
   padding-right: 0.4rem;
 }
@@ -374,14 +422,7 @@ details.compact-section summary {
   .intel-grid { grid-template-columns: 1fr; }
 }
 
-@media (min-width: 880px) {
-  .sector-panel { grid-column: span 1; }
-  .location-panel { grid-column: span 1; }
-  .mission-panel, .tutorial-panel, .upgrade-panel, .achievements-panel, .stats-panel, .log-panel { grid-column: span 1; }
-  .math-panel { grid-column: span 1; }
-}
-
 @media (min-width: 1180px) {
-  .math-panel, .mission-panel, .tutorial-panel { grid-column: span 1; }
-  .achievements-panel, .stats-panel, .log-panel { grid-column: span 1; }
+  .secondary-dashboard { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .mission-panel { grid-column: span 2; }
 }

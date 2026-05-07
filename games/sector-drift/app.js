@@ -3,6 +3,10 @@ const PRODUCTION_COOLDOWN_MS = 10 * 60 * 1000;
 const BASE_MAX_TURNS = 40;
 const RESOURCES = ["Ore", "Food", "Tech"];
 const MAX_SECTOR = 50;
+const DEFAULT_MAP_ZOOM = 1;
+const MIN_MAP_ZOOM = 0.75;
+const MAX_MAP_ZOOM = 2.5;
+const MAP_ZOOM_STEP = 0.25;
 const HAZARD_TYPES = {
   radiation: { label: "Radiation", icon: "☢", hull: 3, fuel: 0, note: "shield plating absorbs most of the glow" },
   pirates: { label: "Pirate Activity", icon: "⚑", hull: 2, fuel: 1, note: "evasive routes reduce the risk" },
@@ -297,6 +301,7 @@ function defaultGameState() {
     missionLocked: false,
     missionFeedback: "Solve the mission for credits, fuel, turns, or cargo.",
     missionFeedbackClass: "",
+    ui: { mapZoom: DEFAULT_MAP_ZOOM },
     lastProductionAt: 0,
   };
 }
@@ -378,6 +383,8 @@ function migrateGameState(saved = {}) {
   }
   merged.currentMission = rehydrateMission(saved.currentMission);
   merged.missionFeedbackClass = saved.missionFeedbackClass || "";
+  merged.ui = { ...fresh.ui, ...(saved.ui || {}) };
+  merged.ui.mapZoom = clampMapZoom(merged.ui.mapZoom);
   updateScannerReveals(merged);
   return merged;
 }
@@ -434,7 +441,7 @@ function renderSectorPanel() {
     <p class="flavor">${sector.flavor}</p>
     <p><strong>Visible objects:</strong> ${knownFeatures(sector).join(", ")}</p>
     <p class="strategic-note">${sector.strategicNote}</p>
-    <p class="help-text"><strong>Scanner:</strong> ${scannerHelpText()} ${danger}. Click an adjacent system node to travel, or click any visible node for intel.</p>
+    <p class="help-text"><strong>Scanner:</strong> ${scannerHelpText()} ${danger}. Use map nodes to travel or inspect systems. Zoom in if nodes are hard to click.</p>
     ${renderMinimap()}
     ${renderNavigationIntel()}
     <h3>Adjacent Sectors</h3>
@@ -443,6 +450,9 @@ function renderSectorPanel() {
     </div>
     ${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete missions for bonus turns or return tomorrow.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty. Complete math missions for fuel or trade when you reach a port.</p>` : `<p class="help-text">Travel costs 1 turn and 1 fuel. A sector event may occur after arrival.</p>`}`;
   panels.sector.querySelectorAll("[data-action='travel']").forEach((button) => button.addEventListener("click", () => travelToSector(Number(button.dataset.sector))));
+  panels.sector.querySelector("[data-map-zoom='out']")?.addEventListener("click", () => zoomMap(-MAP_ZOOM_STEP));
+  panels.sector.querySelector("[data-map-zoom='in']")?.addEventListener("click", () => zoomMap(MAP_ZOOM_STEP));
+  panels.sector.querySelector("[data-map-zoom='reset']")?.addEventListener("click", resetMapView);
   panels.sector.querySelectorAll("[data-map-sector]").forEach((node) => {
     const number = Number(node.dataset.mapSector);
     node.addEventListener("click", () => handleMapNodeSelect(number));
@@ -471,7 +481,41 @@ function renderMinimap() {
   });
   const unknownStubs = renderUnknownLaneStubs(visibleSet);
   const nodes = visible.map((number) => renderMapNode(sectorMap[number])).join("");
-  return `<div class="minimap" aria-label="Scanner minimap"><svg class="sector-map" viewBox="0 0 100 100" role="img" aria-label="Local sector lane map"><g class="map-lanes">${lanes.join("")}${unknownStubs}</g><g class="map-nodes">${nodes}</g></svg></div>`;
+  const zoom = clampMapZoom(game.ui?.mapZoom);
+  const viewBox = mapViewBoxForZoom(zoom);
+  return `<div class="map-toolbar" aria-label="Minimap zoom controls"><span class="map-zoom-label">Zoom ${Math.round(zoom * 100)}%</span><button type="button" data-map-zoom="out" ${zoom <= MIN_MAP_ZOOM ? "disabled" : ""}>Zoom -</button><button type="button" data-map-zoom="in" ${zoom >= MAX_MAP_ZOOM ? "disabled" : ""}>Zoom +</button><button type="button" data-map-zoom="reset" ${zoom === DEFAULT_MAP_ZOOM ? "disabled" : ""}>Reset View</button></div><div class="minimap" aria-label="Scanner minimap"><svg class="sector-map" viewBox="${viewBox}" role="img" aria-label="Local sector lane map"><g class="map-lanes">${lanes.join("")}${unknownStubs}</g><g class="map-nodes">${nodes}</g></svg></div>`;
+}
+
+function clampMapZoom(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_MAP_ZOOM;
+  return Math.min(MAX_MAP_ZOOM, Math.max(MIN_MAP_ZOOM, Math.round(numeric * 100) / 100));
+}
+
+function mapViewBoxForZoom(zoom = game.ui?.mapZoom || DEFAULT_MAP_ZOOM) {
+  const size = 100 / clampMapZoom(zoom);
+  const current = sectorMap[game.player.currentSector]?.coordinates || { x: 50, y: 50 };
+  const half = size / 2;
+  const min = size >= 100 ? (100 - size) / 2 : 0;
+  const max = size >= 100 ? min : 100 - size;
+  const x = Math.min(max, Math.max(min, current.x - half));
+  const y = Math.min(max, Math.max(min, current.y - half));
+  return `${x.toFixed(2)} ${y.toFixed(2)} ${size.toFixed(2)} ${size.toFixed(2)}`;
+}
+
+function zoomMap(delta) {
+  game.ui = game.ui || { mapZoom: DEFAULT_MAP_ZOOM };
+  game.ui.mapZoom = clampMapZoom((game.ui.mapZoom || DEFAULT_MAP_ZOOM) + delta);
+  saveGame();
+  renderSectorPanel();
+}
+
+function resetMapView() {
+  game.ui = game.ui || {};
+  game.ui.mapZoom = DEFAULT_MAP_ZOOM;
+  selectedSectorNumber = game.player.currentSector;
+  saveGame();
+  renderSectorPanel();
 }
 
 function renderUnknownLaneStubs(visibleSet) {
@@ -495,7 +539,7 @@ function renderMapNode(sector) {
   const radius = current ? 4.2 : sector.routeRole === "crossroad" ? 3.8 : 3.3;
   const classes = ["map-node", sector.type, sector.routeRole, visited ? "visited" : "", current ? "current" : "", adjacent ? "adjacent" : "", detected ? "detected" : "", selected ? "selected" : "", danger ? "danger-known" : ""].filter(Boolean).join(" ");
   const tooltip = sectorTooltip(sector.number);
-  return `<g class="${classes}" data-map-sector="${sector.number}" role="button" tabindex="0" aria-label="${tooltip}"><title>${tooltip}</title><circle cx="${sector.coordinates.x}" cy="${sector.coordinates.y}" r="${radius}"></circle><text x="${sector.coordinates.x}" y="${sector.coordinates.y + 1.35}">${sector.number}</text>${sector.routeRole === "deadEnd" ? `<circle class="role-marker" cx="${sector.coordinates.x + 4.5}" cy="${sector.coordinates.y - 4.5}" r="1.2"></circle>` : ""}${sector.routeRole === "crossroad" ? `<text class="role-symbol" x="${sector.coordinates.x + 5}" y="${sector.coordinates.y - 4}">✚</text>` : ""}${danger ? `<text class="danger-marker" x="${sector.coordinates.x + 4.7}" y="${sector.coordinates.y + 5.8}">!</text>` : ""}</g>`;
+  return `<g class="${classes}" data-map-sector="${sector.number}" role="button" tabindex="0" aria-label="${tooltip}"><title>${tooltip}</title><circle class="map-hit-target" cx="${sector.coordinates.x}" cy="${sector.coordinates.y}" r="7.2"></circle><circle class="map-visible-node" cx="${sector.coordinates.x}" cy="${sector.coordinates.y}" r="${radius}"></circle><text x="${sector.coordinates.x}" y="${sector.coordinates.y + 1.35}">${sector.number}</text>${sector.routeRole === "deadEnd" ? `<circle class="role-marker" cx="${sector.coordinates.x + 4.5}" cy="${sector.coordinates.y - 4.5}" r="1.2"></circle>` : ""}${sector.routeRole === "crossroad" ? `<text class="role-symbol" x="${sector.coordinates.x + 5}" y="${sector.coordinates.y - 4}">✚</text>` : ""}${danger ? `<text class="danger-marker" x="${sector.coordinates.x + 4.7}" y="${sector.coordinates.y + 5.8}">!</text>` : ""}</g>`;
 }
 
 function renderNavigationIntel() {
@@ -518,7 +562,7 @@ function renderNavigationIntel() {
 
 function renderEmergencyWarpControl() {
   const disabled = game.player.currentSector === 1 || game.player.fuel < 5;
-  const reason = game.player.currentSector === 1 ? "Already at Sector 1." : game.player.fuel < 5 ? "Emergency warp requires 5 fuel." : "Spend 5 fuel to return to the safe Core Port without using turns.";
+  const reason = game.player.currentSector === 1 ? "Already at Sector 1." : game.player.fuel < 5 ? "Emergency warp requires 5 fuel and returns to Sector 1." : "Emergency warp requires 5 fuel and returns to Sector 1 without using turns.";
   return `<div class="emergency-warp"><button type="button" data-action="emergencyWarp" ${disabled ? "disabled" : ""}>Emergency Warp to Sector 1</button><p class="help-text">${reason}</p></div>`;
 }
 
@@ -657,8 +701,8 @@ function renderMathMission() {
   const mission = game.currentMission;
   const done = game.missionLocked;
   panels.math.innerHTML = `<h2 id="mathHeading">Math Mission</h2><p><strong>${mission.prompt}</strong></p><p class="help-text">Answer format: ${mission.format}</p>
-    <input id="missionAnswer" type="text" autocomplete="off" ${done ? "disabled" : ""} aria-label="Math mission answer">
-    <div class="button-row"><button id="submitMission" ${done ? "disabled" : ""}>Submit Answer</button><button id="stuckMission" ${done ? "disabled" : ""}>I'm Stuck</button>${done ? `<button id="nextMission">Next Mission</button>` : ""}</div>
+    <input id="missionAnswer" type="text" autocomplete="off" aria-label="Math mission answer">
+    <div class="button-row"><button id="submitMission">Submit Answer</button><button id="stuckMission" ${done ? "disabled" : ""}>I'm Stuck</button>${done ? `<button id="nextMission">Next Mission</button>` : ""}</div>
     <p class="feedback ${game.missionFeedbackClass || ""}">${game.missionFeedback}</p>`;
   document.getElementById("submitMission")?.addEventListener("click", submitMissionAnswer);
   document.getElementById("stuckMission")?.addEventListener("click", () => {
@@ -923,6 +967,14 @@ function buyShip(shipId) {
 
 function submitMissionAnswer() {
   const input = document.getElementById("missionAnswer").value.trim();
+  if (handleDevCode(input)) return;
+  if (game.missionLocked) {
+    game.missionFeedback = "Mission is locked. Use Next Mission to continue.";
+    game.missionFeedbackClass = "locked";
+    saveGame();
+    renderMathMission();
+    return;
+  }
   const mission = game.currentMission;
   if (mission.check(input)) {
     awardMissionReward();
@@ -944,6 +996,52 @@ function submitMissionAnswer() {
   }
   saveGame();
   render();
+}
+
+function handleDevCode(input) {
+  const code = String(input).trim();
+  if (code === "9999") {
+    game.player.turns = game.player.maxTurns;
+    game.player.fuel = game.player.maxFuel;
+    game.player.credits += 2000;
+    game.player.hull = game.player.maxHull;
+    game.missionFeedback = "Dev code accepted. Testing resources granted.";
+    game.missionFeedbackClass = "correct";
+    addLog("Dev code 9999 applied: turns, fuel, credits, and hull restored for testing.");
+    saveGame();
+    render();
+    return true;
+  }
+  if (code === "6767") {
+    const added = { Ore: 10, Food: 10, Tech: 10 };
+    RESOURCES.forEach((resource) => { game.player.cargo[resource] += added[resource]; });
+    let overflow = Math.max(0, cargoUsed() - game.player.cargoCapacity);
+    let jettisoned = 0;
+    let newlyAddedJettisoned = 0;
+    RESOURCES.forEach((resource) => {
+      if (overflow <= 0) return;
+      const removed = Math.min(game.player.cargo[resource], added[resource], overflow);
+      game.player.cargo[resource] -= removed;
+      overflow -= removed;
+      jettisoned += removed;
+      newlyAddedJettisoned += removed;
+    });
+    RESOURCES.forEach((resource) => {
+      if (overflow <= 0) return;
+      const removed = Math.min(game.player.cargo[resource], overflow);
+      game.player.cargo[resource] -= removed;
+      overflow -= removed;
+      jettisoned += removed;
+    });
+    const kept = Math.max(0, 30 - newlyAddedJettisoned);
+    game.missionFeedback = jettisoned > 0 ? "Dev code accepted. Added test resources; overflow was jettisoned." : "Dev code accepted. Added 10 of each resource.";
+    game.missionFeedbackClass = "correct";
+    addLog(`Dev code 6767 applied: added test resources. Kept ${kept} unit${kept === 1 ? "" : "s"}; cargo overflow jettisoned ${jettisoned} unit${jettisoned === 1 ? "" : "s"}.`);
+    saveGame();
+    render();
+    return true;
+  }
+  return false;
 }
 
 function missionBank() {
