@@ -17,6 +17,29 @@ const MAX_FIGHTER_LOSS_RATE = 0.65;
 const ESCAPE_POD_CASH_PENALTY = 0;
 const PIRATE_MIN_SECTORS_FROM_START = 3;
 const RESOURCES = ["Ore", "Food", "Tech"];
+
+const PLANET_UPGRADE_TRACKS = ["production", "industry", "defense", "fighterBays", "research"];
+const PLANET_PRODUCTION_RESOURCES = ["Ore", "Food", "Tech", "Fighters"];
+const PLANET_UPGRADE_BASE_COSTS = {
+  production: { Ore: 8, Food: 8, Tech: 4 },
+  industry: { Ore: 12, Food: 4, Tech: 6 },
+  defense: { Ore: 10, Food: 6, Tech: 8, Fighters: 5 },
+  fighterBays: { Ore: 8, Food: 10, Tech: 8 },
+  research: { Ore: 4, Food: 6, Tech: 14 },
+};
+const PLANET_TYPE_DATA = {
+  Rocky: { description: "Ore-rich stone worlds with practical industry and modest research potential.", profile: { Ore: 3, Food: 1, Tech: 2, Fighters: 0.25, defense: 5, strengths: "High Ore, low Food, moderate Tech, low Fighters" }, caps: { production: 7, industry: 8, defense: 5, fighterBays: 4, research: 3 }, tech: ["Refinery Grid", "Planetary Cannon", "Industrial Foundry"] },
+  Water: { description: "Ocean colonies grow food quickly and support balanced civilian research.", profile: { Ore: 1, Food: 3, Tech: 2, Fighters: 0.2, defense: 4, strengths: "High Food, low Ore, moderate Tech, low Fighters" }, caps: { production: 8, industry: 4, defense: 4, fighterBays: 3, research: 5 }, tech: ["Colony Growth Network", "Trade Beacon", "Shield Grid"] },
+  "Gas Giant": { description: "High-atmosphere platforms harvest strange energy for advanced Tech work.", profile: { Ore: 1, Food: 1, Tech: 4, Fighters: 0.2, defense: 5, strengths: "High Tech, low Ore, low Food, low Fighters" }, caps: { production: 6, industry: 5, defense: 5, fighterBays: 4, research: 8 }, tech: ["Fuel Reactor", "Planetary Warp Core", "Deep Scanner Array"] },
+  Fire: { description: "Volcanic worlds forge Ore and Tech while demanding imported food support.", profile: { Ore: 3, Food: 0.5, Tech: 3, Fighters: 0.55, defense: 7, strengths: "High Ore, high Tech, very low Food, moderate Fighters" }, caps: { production: 6, industry: 8, defense: 7, fighterBays: 5, research: 4 }, tech: ["Industrial Furnace", "Planetary Cannon", "Shield Grid"] },
+  Boreal: { description: "Cold forest worlds balance colony growth, resource work, and steady defenses.", profile: { Ore: 2, Food: 2, Tech: 1.5, Fighters: 0.3, defense: 5, strengths: "Balanced Ore/Food, low-to-moderate Tech, low Fighters" }, caps: { production: 7, industry: 6, defense: 5, fighterBays: 4, research: 5 }, tech: ["Colony Network", "Trade Beacon", "Resource Refinery"] },
+  Icy: { description: "Frozen labs and mineral seams favor Tech discoveries over agriculture.", profile: { Ore: 2, Food: 0.75, Tech: 3, Fighters: 0.25, defense: 6, strengths: "Moderate Ore, moderate/high Tech, low Food, low Fighters" }, caps: { production: 5, industry: 5, defense: 6, fighterBays: 3, research: 7 }, tech: ["Cryo Research Lab", "Shield Grid", "Scanner Array"] },
+  Jungle: { description: "Dense bio-worlds overflow with Food and can nurture light Fighter support.", profile: { Ore: 0.75, Food: 4, Tech: 1, Fighters: 0.55, defense: 4, strengths: "Very high Food, low Ore, low Tech, moderate Fighters" }, caps: { production: 9, industry: 4, defense: 4, fighterBays: 5, research: 3 }, tech: ["Bio-Dome Network", "Fighter Hatchery", "Colony Growth Network"] },
+  Desert: { description: "Harsh solar colonies provide dependable Ore, Tech, and defensible outposts.", profile: { Ore: 2, Food: 0.75, Tech: 2, Fighters: 0.3, defense: 6, strengths: "Moderate Ore, moderate Tech, low Food, low Fighters" }, caps: { production: 5, industry: 6, defense: 6, fighterBays: 4, research: 4 }, tech: ["Solar Array", "Trade Beacon", "Defense Grid"] },
+  Crystal: { description: "Resonant crystal crusts create exceptional Tech paths with lighter colonies.", profile: { Ore: 2, Food: 0.5, Tech: 5, Fighters: 0.2, defense: 4, strengths: "Very high Tech, moderate Ore, low Food, low Fighters" }, caps: { production: 6, industry: 5, defense: 4, fighterBays: 3, research: 9 }, tech: ["Research Spire", "Scanner Array", "Tech Refinery"] },
+  Fortress: { description: "Militarized strongpoints excel at defense and planet-stored Fighter production.", profile: { Ore: 2, Food: 2, Tech: 2, Fighters: 1.4, defense: 10, strengths: "High Fighters, moderate Ore, Food, and Tech" }, caps: { production: 6, industry: 7, defense: 9, fighterBays: 9, research: 5 }, tech: ["Fighter Factory", "Planetary Cannon", "Interdiction Field", "Shield Grid"] },
+  "Pirate Homeworld": { description: "Future-only deep-threat capital world for late-game pirate systems.", profile: { Ore: 4, Food: 2, Tech: 4, Fighters: 2, defense: 14, strengths: "Very high Fighters, high Tech, high Ore, moderate Food" }, caps: { production: 9, industry: 9, defense: 10, fighterBays: 10, research: 8 }, tech: ["Black Market Foundry", "Fighter Armada", "Interdiction Field", "Planetary Warp Core"] },
+};
 const MAX_SECTOR = 50;
 const DEFAULT_MAP_ZOOM = 1;
 const MIN_MAP_ZOOM = 0.75;
@@ -355,13 +378,7 @@ function createSectorMap() {
     if (economy) Object.assign(sector, economy);
     if ([1, 5, 8, 45].includes(number)) sector.hasShipyard = true;
     if ([1, 5, 8, 45].includes(number)) sector.portType = number === 1 ? "Core Port" : number === 45 ? "Frontier Starbase" : "Major Station";
-    if (type === "planet") sector.planet = {
-      id: `planet-${number}`,
-      name: planetNames[number % planetNames.length],
-      owner: null,
-      productionLevel: 1,
-      stored: { Ore: 0, Food: 0, Tech: 0 },
-    };
+    if (type === "planet") sector.planet = createPlanetState(number, planetNames[number % planetNames.length], routeRole, dangerLevel);
   }
 
   return sectors;
@@ -416,6 +433,135 @@ function createPortEconomy(number) {
 function stableNumber(number, salt = 0) {
   const raw = Math.sin((number + 1) * 9301 + salt * 49297) * 233280;
   return Math.abs(Math.floor(raw));
+}
+
+function choosePlanetType(sectorNumber, routeRole = "tunnel", dangerLevel = 0) {
+  const early = ["Rocky", "Water", "Boreal", "Desert", "Jungle"];
+  const general = ["Rocky", "Water", "Boreal", "Desert", "Jungle", "Gas Giant", "Icy"];
+  const deadEnd = ["Fortress", "Crystal", "Icy", "Fire", "Rocky", "Gas Giant"];
+  const dangerous = ["Fortress", "Fire", "Crystal", "Icy", "Desert"];
+  const pool = dangerLevel >= 3 ? dangerous : routeRole === "deadEnd" || routeRole === "tunnel" ? deadEnd : sectorNumber <= 20 ? early : general;
+  return pool[stableNumber(sectorNumber, 91) % pool.length];
+}
+
+function getPlanetTypeProfile(type) {
+  return PLANET_TYPE_DATA[type] || PLANET_TYPE_DATA.Rocky;
+}
+
+function createPlanetState(sectorNumber, name, routeRole, dangerLevel) {
+  const type = choosePlanetType(sectorNumber, routeRole, dangerLevel);
+  return normalizePlanetState({
+    id: `planet-${sectorNumber}`,
+    name,
+    owner: null,
+    productionLevel: 1,
+    stored: { Ore: 0, Food: 0, Tech: 0, Fighters: 0 },
+    type,
+  }, sectorNumber, routeRole, dangerLevel);
+}
+
+function normalizePlanetState(planet = {}, sectorNumber = Number(String(planet.id || "").replace(/\D+/g, "")) || 1, routeRole = "tunnel", dangerLevel = 0) {
+  const type = planet.type && PLANET_TYPE_DATA[planet.type] ? planet.type : choosePlanetType(sectorNumber, routeRole, dangerLevel);
+  const data = getPlanetTypeProfile(type);
+  const stored = { Ore: 0, Food: 0, Tech: 0, Fighters: 0, ...(planet.stored || {}) };
+  PLANET_PRODUCTION_RESOURCES.forEach((resource) => { stored[resource] = Math.max(0, Math.floor(Number(stored[resource]) || 0)); });
+  const legacyProduction = Math.max(1, Math.floor(Number(planet.productionLevel) || 1));
+  const upgrades = { production: legacyProduction, industry: 1, defense: 0, fighterBays: 0, research: 0, ...(planet.upgrades || {}) };
+  PLANET_UPGRADE_TRACKS.forEach((track) => { upgrades[track] = Math.max(track === "production" || track === "industry" ? 1 : 0, Math.floor(Number(upgrades[track]) || 0)); });
+  upgrades.production = Math.max(upgrades.production, legacyProduction);
+  const caps = { ...data.caps, ...(planet.upgradeCaps || {}) };
+  PLANET_UPGRADE_TRACKS.forEach((track) => { upgrades[track] = Math.min(upgrades[track], caps[track]); });
+  return {
+    ...planet,
+    id: planet.id || `planet-${sectorNumber}`,
+    name: planet.name || `Planet ${sectorNumber}`,
+    owner: planet.owner || null,
+    productionLevel: upgrades.production,
+    stored,
+    type,
+    typeDescription: data.description,
+    productionProfile: { ...data.profile },
+    upgradeCaps: caps,
+    upgrades,
+    tech: {
+      unlocked: Array.isArray(planet.tech?.unlocked) ? planet.tech.unlocked : [],
+      available: Array.isArray(planet.tech?.available) && planet.tech.available.length ? planet.tech.available : [...data.tech],
+    },
+  };
+}
+
+function formatProduction(production) {
+  return PLANET_PRODUCTION_RESOURCES.map((resource) => `+${production[resource] || 0} ${resource}`).join(", ");
+}
+
+function getPlanetProduction(planet) {
+  const normalized = normalizePlanetState(planet);
+  const profile = getPlanetTypeProfile(normalized.type).profile;
+  const upgrades = normalized.upgrades;
+  const base = Math.max(1, upgrades.production);
+  const industryBonus = Math.max(0, upgrades.industry - 1);
+  const researchBonus = Math.max(0, upgrades.research);
+  const fighterBonus = Math.max(0, upgrades.fighterBays);
+  return {
+    Ore: Math.max(0, Math.ceil(profile.Ore * base + industryBonus * 1.2)),
+    Food: Math.max(0, Math.ceil(profile.Food * base + Math.max(0, base - 1) * 0.25)),
+    Tech: Math.max(0, Math.ceil(profile.Tech * base + industryBonus * 0.7 + researchBonus * 1.6)),
+    Fighters: Math.max(0, Math.floor(profile.Fighters * base + fighterBonus * (1 + profile.Fighters))),
+  };
+}
+
+function getPlanetProductionPreview(planet, track) {
+  const preview = normalizePlanetState(planet);
+  if (track && preview.upgrades[track] < preview.upgradeCaps[track]) {
+    preview.upgrades[track] += 1;
+    if (track === "production") preview.productionLevel = preview.upgrades.production;
+  }
+  return getPlanetProduction(preview);
+}
+
+function getPlanetDefenseRating(planet) {
+  const normalized = normalizePlanetState(planet);
+  const data = getPlanetTypeProfile(normalized.type);
+  const storedFighters = normalized.stored.Fighters || 0;
+  const futureTechBonus = (normalized.tech.unlocked || []).length * 3;
+  // TODO: Future multiplayer invasion logic can compare attacking fleets against this rating.
+  return Math.round(data.profile.defense + normalized.upgrades.defense * 8 + normalized.upgrades.fighterBays * 3 + Math.sqrt(storedFighters) * 2 + futureTechBonus);
+}
+
+function getPlanetUpgradeCost(planet, track) {
+  const normalized = normalizePlanetState(planet);
+  const level = normalized.upgrades[track] || 0;
+  const base = PLANET_UPGRADE_BASE_COSTS[track] || {};
+  return Object.fromEntries(Object.entries(base).map(([resource, amount]) => [resource, Math.ceil(amount * Math.pow(level + 1, 1.8))]));
+}
+
+function getPlanetUpgradeMissing(planet, track) {
+  const cost = getPlanetUpgradeCost(planet, track);
+  const stored = normalizePlanetState(planet).stored;
+  return Object.fromEntries(Object.entries(cost).filter(([resource, amount]) => (stored[resource] || 0) < amount).map(([resource, amount]) => [resource, amount - (stored[resource] || 0)]));
+}
+
+function canAffordPlanetUpgrade(planet, track) {
+  return Object.keys(getPlanetUpgradeMissing(planet, track)).length === 0;
+}
+
+function formatResourceAmounts(amounts) {
+  const entries = Object.entries(amounts).filter(([, amount]) => amount > 0);
+  return entries.length ? entries.map(([resource, amount]) => `${amount} ${resource}`).join(", ") : "None";
+}
+
+function planetUpgradeLabel(track) {
+  return ({ production: "Production", industry: "Industry", defense: "Defense", fighterBays: "Fighter Bays", research: "Research" })[track] || titleCase(track);
+}
+
+function planetUpgradeBenefit(planet, track) {
+  const nextPreview = formatProduction(getPlanetProductionPreview(planet, track));
+  if (track === "production") return `Increases base production. Next preview: ${nextPreview}.`;
+  if (track === "industry") return `Improves Ore and Tech processing. Next preview: ${nextPreview}.`;
+  if (track === "defense") return `Increases Defense Rating to ${getPlanetDefenseRating({ ...planet, upgrades: { ...planet.upgrades, defense: planet.upgrades.defense + 1 } })}. Future-ready for invasions and planetary shields.`;
+  if (track === "fighterBays") return `Increases planet-stored Fighter production. Next preview: ${nextPreview}.`;
+  if (track === "research") return `Increases Tech output and future tech potential. Next preview: ${nextPreview}.`;
+  return `Next preview: ${nextPreview}.`;
 }
 
 function getSectorFlavor(type, number) {
@@ -597,6 +743,14 @@ function defaultStats() {
     anomaliesScanned: 0,
     resourcesDeposited: 0,
     planetUpgrades: 0,
+    planetProductionCollected: 0,
+    planetOreProduced: 0,
+    planetFoodProduced: 0,
+    planetTechProduced: 0,
+    planetFightersProduced: 0,
+    planetUpgradesPurchased: 0,
+    highestPlanetProductionLevel: 1,
+    highestPlanetDefenseRating: 0,
     techSold: 0,
     missionsClaimed: 0,
     resourcesSold: 0,
@@ -681,7 +835,11 @@ function migrateGameState(saved = {}) {
   if (!merged.player.lastTurnRefreshDate) merged.player.lastTurnRefreshDate = todayKey();
   if (!sectorMap[merged.player.currentSector]) merged.player.currentSector = 1;
 
-  merged.planets = saved.planets || {};
+  merged.planets = Object.fromEntries(Object.entries(saved.planets || {}).map(([id, planet]) => {
+    const sectorNumber = Number(String(id).replace(/\D+/g, "")) || Number(String(planet.id || "").replace(/\D+/g, "")) || 1;
+    const sector = sectorMap[sectorNumber] || {};
+    return [id, normalizePlanetState({ ...(sector.planet || {}), ...planet }, sectorNumber, sector.routeRole, sector.dangerLevel)];
+  }));
   merged.pirates = mergePirateEncounters(saved.pirates);
   merged.activeMissions = Array.isArray(saved.activeMissions) && saved.activeMissions.length > 0 ? saved.activeMissions.map(rehydrateBoardMission).slice(0, 3) : fresh.activeMissions;
   merged.completedMissions = Array.isArray(saved.completedMissions) ? saved.completedMissions : [];
@@ -1075,14 +1233,42 @@ function sellFighters(amountValue) {
 }
 
 function renderPlanet(sector) {
-  const planet = getPlanetState(sector);
-  if (!planet.owner) return `<h3>${planet.name}</h3><p>This planet is unowned and ready for a peaceful classroom colony.</p><button data-action="claim">Claim Planet</button>`;
-  return `<h3>${planet.name}</h3><div class="planet-grid">
-    ${stat("Owner", planet.owner)}${stat("Production", `Level ${planet.productionLevel}`)}${stat("Stored Ore", planet.stored.Ore)}${stat("Stored Food", planet.stored.Food)}${stat("Stored Tech", planet.stored.Tech)}
-  </div><div class="button-row">
-    ${RESOURCES.map((resource) => `<button data-action="deposit" data-resource="${resource}">Deposit ${resource}</button>`).join("")}
-    <button data-action="upgradePlanet">Upgrade Production</button><button data-action="collectProduction">Collect Planet Production</button>
-  </div><p class="cooldown">${productionStatusText()}</p>`;
+  const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
+  const profile = getPlanetTypeProfile(planet.type);
+  const preview = getPlanetProduction(planet);
+  const capStats = PLANET_UPGRADE_TRACKS.map((track) => stat(planetUpgradeLabel(track), `${planet.upgrades[track]}/${planet.upgradeCaps[track]}`)).join("");
+  const techList = (planet.tech.available || profile.tech).map((tech) => `<li>${tech}</li>`).join("");
+  if (!planet.owner) {
+    return `<section class="planet-panel"><h3>${planet.name}</h3><p><span class="planet-type-badge">${planet.type}</span></p><p class="help-text">${planet.typeDescription}</p><div class="production-preview"><strong>Production Strengths:</strong> ${profile.profile.strengths}<br><strong>Current preview:</strong> ${formatProduction(preview)}</div><details class="compact-section"><summary>Scanner upgrade cap preview</summary><div class="planet-grid">${capStats}</div></details><button data-action="claim">Claim Planet</button></section>`;
+  }
+  return `<section class="planet-panel"><h3>${planet.name}</h3><p><span class="planet-type-badge">${planet.type}</span> <span class="defense-badge">Defense Rating: ${getPlanetDefenseRating(planet)}</span></p><p class="help-text">${planet.typeDescription}</p>
+  <div class="planet-grid">${stat("Owner", planet.owner)}${stat("Stored Ore", planet.stored.Ore)}${stat("Stored Food", planet.stored.Food)}${stat("Stored Tech", planet.stored.Tech)}${stat("Stored Fighters", planet.stored.Fighters)}</div>
+  <div class="production-preview"><strong>Current Collection:</strong> ${formatProduction(preview)}</div>
+  <h3>Planet Upgrade Tracks</h3><div class="planet-grid">${capStats}</div>
+  <div class="planet-upgrade-grid">${PLANET_UPGRADE_TRACKS.map((track) => renderPlanetUpgradeCard(planet, track)).join("")}</div>
+  <h3>Planet Logistics</h3><div class="button-row">${RESOURCES.map((resource) => `<button data-action="deposit" data-resource="${resource}">Deposit ${resource}</button>`).join("")}<button data-action="collectProduction">Collect Planet Production</button></div>
+  ${renderPlanetFighterTransfer(planet)}
+  <details class="compact-section future-tech"><summary>Future Tech Potential</summary><p class="help-text">Descriptive scaffolding only; functional tech trees arrive in a later update.</p><ul>${techList}</ul></details>
+  <p class="cooldown">${productionStatusText()}</p></section>`;
+}
+
+function renderPlanetUpgradeCard(planet, track) {
+  const label = planetUpgradeLabel(track);
+  const level = planet.upgrades[track];
+  const cap = planet.upgradeCaps[track];
+  const capped = level >= cap;
+  const cost = capped ? {} : getPlanetUpgradeCost(planet, track);
+  const missing = capped ? {} : getPlanetUpgradeMissing(planet, track);
+  const canAfford = !capped && Object.keys(missing).length === 0;
+  return `<div class="planet-upgrade-card ${capped ? "maxed" : ""}"><h4>Upgrade ${label}</h4><p class="progress-text">Level ${level}/${cap} ${capped ? `<span class="max-badge">MAX</span>` : ""}</p><p>${planetUpgradeBenefit(planet, track)}</p>${capped ? `<p class="reward-text">This track is at its ${planet.type} cap.</p>` : `<p class="cost-line">Cost: ${formatResourceAmounts(cost)}</p>${canAfford ? `<p class="reward-text">Resources ready on planet.</p>` : `<p class="missing-line">Missing: ${formatResourceAmounts(missing)}</p>`}<button data-action="upgradePlanet" data-track="${track}" ${canAfford ? "" : "disabled"}>Upgrade ${label}</button>`}</div>`;
+}
+
+function renderPlanetFighterTransfer(planet) {
+  if (typeof game.player.fighterCapacity !== "number") return "";
+  const shipSpace = Math.max(0, game.player.fighterCapacity - game.player.fighters);
+  const canLoad = planet.owner === game.player.pilotName && planet.stored.Fighters > 0 && shipSpace > 0;
+  const canUnload = planet.owner === game.player.pilotName && game.player.fighters > 0;
+  return `<div class="fighter-transfer mini-card"><h3>Fighter Transfer</h3>${stat("Ship Fighters", `${game.player.fighters}/${game.player.fighterCapacity}`)}${stat("Planet Fighters", planet.stored.Fighters)}<p class="help-text">Planet Fighters do not use cargo space. Transfers respect ship fighter capacity.</p><div class="button-row"><button data-action="loadPlanetFighters" data-amount="1" ${canLoad ? "" : "disabled"}>Load 1 Fighter to Ship</button><button data-action="loadPlanetFighters" data-amount="10" ${canLoad ? "" : "disabled"}>Load 10 Fighters to Ship</button><button data-action="loadPlanetFighters" data-amount="max" ${canLoad ? "" : "disabled"}>Load Max Fighters to Ship</button><button data-action="unloadPlanetFighters" data-amount="1" ${canUnload ? "" : "disabled"}>Unload 1 Fighter</button><button data-action="unloadPlanetFighters" data-amount="10" ${canUnload ? "" : "disabled"}>Unload 10 Fighters</button><button data-action="unloadPlanetFighters" data-amount="max" ${canUnload ? "" : "disabled"}>Unload Max Fighters</button></div></div>`;
 }
 
 function renderAsteroid() {
@@ -1100,14 +1286,17 @@ function wireLocationButtons() {
   panels.location.querySelectorAll("[data-action='sell']").forEach((button) => button.addEventListener("click", () => sellResource(button.dataset.resource, Number(button.dataset.amount))));
   panels.location.querySelector("[data-action='claim']")?.addEventListener("click", claimPlanet);
   panels.location.querySelectorAll("[data-action='deposit']").forEach((button) => button.addEventListener("click", () => depositToPlanet(button.dataset.resource)));
-  panels.location.querySelector("[data-action='upgradePlanet']")?.addEventListener("click", upgradePlanet);
+  panels.location.querySelectorAll("[data-action='upgradePlanet']").forEach((button) => button.addEventListener("click", () => upgradePlanet(button.dataset.track || "production")));
   panels.location.querySelector("[data-action='collectProduction']")?.addEventListener("click", collectPlanetProduction);
+  panels.location.querySelectorAll("[data-action='loadPlanetFighters']").forEach((button) => button.addEventListener("click", () => transferPlanetFighters("load", button.dataset.amount)));
+  panels.location.querySelectorAll("[data-action='unloadPlanetFighters']").forEach((button) => button.addEventListener("click", () => transferPlanetFighters("unload", button.dataset.amount)));
   panels.location.querySelector("[data-action='mine']")?.addEventListener("click", mineAsteroids);
   panels.location.querySelector("[data-action='scan']")?.addEventListener("click", scanAnomaly);
   panels.location.querySelector("[data-action='repair']")?.addEventListener("click", repairHull);
   panels.location.querySelectorAll("[data-action='refuel']").forEach((button) => button.addEventListener("click", () => buyFuel(button.dataset.amount)));
   panels.location.querySelectorAll("[data-action='buyShip']").forEach((button) => button.addEventListener("click", () => buyShip(button.dataset.ship)));
   panels.location.querySelectorAll("[data-action='buyFighters']").forEach((button) => button.addEventListener("click", () => buyFighters(button.dataset.amount)));
+  panels.location.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => sellFighters(button.dataset.amount)));
   panels.location.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => sellFighters(button.dataset.amount)));
   panels.location.querySelectorAll("[data-action='pirateCombat']").forEach((button) => button.addEventListener("click", () => resolvePirateCombat(button.dataset.mode)));
   panels.location.querySelector("[data-action='boardPirate']")?.addEventListener("click", boardPirateShip);
@@ -1197,7 +1386,7 @@ function renderAchievementsPanel() {
 function renderStatsPanel() {
   const s = game.stats;
   panels.stats.innerHTML = `<h2 id="statsHeading">Career Stats</h2><details class="compact-section"><summary>Show career stats</summary><div class="stats-grid">
-    ${stat("Rank", currentRank())}${stat("Reputation", game.player.reputation)}${stat("Reputation Title", reputationTitle(game.player.reputation))}${stat("Combat Rank", combatRankTitle())}${stat("Next Combat Rank", nextCombatRankProgress())}${stat("Pirates Defeated", game.player.piratesDefeated)}${stat("Combat Wins", game.player.combatWins)}${stat("Combat Losses", game.player.combatLosses)}${stat("Ships Captured", game.player.shipsCaptured)}${stat("Fighters Lost", game.player.fightersLost || 0)}${stat("Fighters Destroyed", game.player.fightersDestroyed || 0)}${stat("Hull Damage Taken", game.player.playerHullDamageTaken || 0)}${stat("Pirate Hull Damaged", game.player.pirateHullDamageDealt || 0)}${stat("Fighters Bought", game.player.fightersBought || 0)}${stat("Fighters Sold", game.player.fightersSold || 0)}${stat("Bounties Earned", game.player.bountiesEarned || 0)}${stat("Strongholds Cleared", game.player.strongholdsCleared || 0)}${stat("Visited Sectors", s.visitedSectors.length)}${stat("Trade Credits", s.creditsEarnedFromTrade)}${stat("Resources Mined", s.resourcesMined)}${stat("Ore Mined", s.oreMined)}${stat("Math Missions", s.mathMissionsCompleted)}${stat("Basic Missions", s.basicMissionsCompleted || 0)}${stat("Standard Missions", s.standardMissionsCompleted || 0)}${stat("Advanced Missions", s.advancedMissionsCompleted || 0)}${stat("Expert Missions", s.expertMissionsCompleted || 0)}${stat("Elite Missions", s.eliteMissionsCompleted || 0)}${stat("Planets Claimed", s.planetsClaimed)}${stat("Anomalies Scanned", s.anomaliesScanned)}${stat("Resources Deposited", s.resourcesDeposited)}${stat("Planet Upgrades", s.planetUpgrades)}${stat("Tech Sold", s.techSold)}${stat("Board Missions", s.missionsClaimed)}${stat("Resources Sold", s.resourcesSold)}
+    ${stat("Rank", currentRank())}${stat("Reputation", game.player.reputation)}${stat("Reputation Title", reputationTitle(game.player.reputation))}${stat("Combat Rank", combatRankTitle())}${stat("Next Combat Rank", nextCombatRankProgress())}${stat("Pirates Defeated", game.player.piratesDefeated)}${stat("Combat Wins", game.player.combatWins)}${stat("Combat Losses", game.player.combatLosses)}${stat("Ships Captured", game.player.shipsCaptured)}${stat("Fighters Lost", game.player.fightersLost || 0)}${stat("Fighters Destroyed", game.player.fightersDestroyed || 0)}${stat("Hull Damage Taken", game.player.playerHullDamageTaken || 0)}${stat("Pirate Hull Damaged", game.player.pirateHullDamageDealt || 0)}${stat("Fighters Bought", game.player.fightersBought || 0)}${stat("Fighters Sold", game.player.fightersSold || 0)}${stat("Bounties Earned", game.player.bountiesEarned || 0)}${stat("Strongholds Cleared", game.player.strongholdsCleared || 0)}${stat("Visited Sectors", s.visitedSectors.length)}${stat("Trade Credits", s.creditsEarnedFromTrade)}${stat("Resources Mined", s.resourcesMined)}${stat("Ore Mined", s.oreMined)}${stat("Math Missions", s.mathMissionsCompleted)}${stat("Basic Missions", s.basicMissionsCompleted || 0)}${stat("Standard Missions", s.standardMissionsCompleted || 0)}${stat("Advanced Missions", s.advancedMissionsCompleted || 0)}${stat("Expert Missions", s.expertMissionsCompleted || 0)}${stat("Elite Missions", s.eliteMissionsCompleted || 0)}${stat("Planets Claimed", s.planetsClaimed)}${stat("Anomalies Scanned", s.anomaliesScanned)}${stat("Resources Deposited", s.resourcesDeposited)}${stat("Planet Upgrades", s.planetUpgrades)}${stat("Planet Collections", s.planetProductionCollected || 0)}${stat("Planet Ore Produced", s.planetOreProduced || 0)}${stat("Planet Food Produced", s.planetFoodProduced || 0)}${stat("Planet Tech Produced", s.planetTechProduced || 0)}${stat("Planet Fighters Produced", s.planetFightersProduced || 0)}${stat("Highest Planet Production", s.highestPlanetProductionLevel || 1)}${stat("Highest Planet Defense", s.highestPlanetDefenseRating || 0)}${stat("Tech Sold", s.techSold)}${stat("Board Missions", s.missionsClaimed)}${stat("Resources Sold", s.resourcesSold)}
   </div></details>`;
 }
 
@@ -1250,12 +1439,12 @@ function sellResource(resource, amount) {
 
 function claimPlanet() {
   const sector = sectorMap[game.player.currentSector];
-  const planet = getPlanetState(sector);
+  const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
   if (planet.owner) return;
   planet.owner = game.player.pilotName;
   game.planets[planet.id] = planet;
   game.stats.planetsClaimed += 1;
-  addLog(`Claimed planet ${planet.name}.`);
+  addLog(`Claimed ${planet.type} planet ${planet.name}.`);
   completeTutorialStep("claim");
   saveGame();
   render();
@@ -1263,7 +1452,7 @@ function claimPlanet() {
 
 function depositToPlanet(resource) {
   const sector = sectorMap[game.player.currentSector];
-  const planet = getPlanetState(sector);
+  const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
   if (!planet.owner || game.player.cargo[resource] <= 0) return addAndRender(`No ${resource} available to deposit.`);
   game.player.cargo[resource] -= 1;
   planet.stored[resource] += 1;
@@ -1275,16 +1464,25 @@ function depositToPlanet(resource) {
   render();
 }
 
-function upgradePlanet() {
-  const planet = getPlanetState(sectorMap[game.player.currentSector]);
-  if (planet.stored.Ore < 10 || planet.stored.Food < 10 || planet.stored.Tech < 5) return addAndRender("Planet needs 10 Ore, 10 Food, and 5 Tech stored to upgrade.");
-  planet.stored.Ore -= 10;
-  planet.stored.Food -= 10;
-  planet.stored.Tech -= 5;
-  planet.productionLevel += 1;
-  game.planets[planet.id] = planet;
+function upgradePlanet(track = "production") {
+  const sector = sectorMap[game.player.currentSector];
+  const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
+  if (!planet.owner || planet.owner !== game.player.pilotName) return addAndRender("Only your owned planets can be upgraded.");
+  if (!PLANET_UPGRADE_TRACKS.includes(track)) return addAndRender("Unknown planet upgrade track.");
+  const label = planetUpgradeLabel(track);
+  if (planet.upgrades[track] >= planet.upgradeCaps[track]) return addAndRender(`${label} is already at the ${planet.type} cap.`);
+  const missing = getPlanetUpgradeMissing(planet, track);
+  if (Object.keys(missing).length > 0) return addAndRender(`${planet.name} needs ${formatResourceAmounts(missing)} more to upgrade ${label}.`);
+  const cost = getPlanetUpgradeCost(planet, track);
+  Object.entries(cost).forEach(([resource, amount]) => { planet.stored[resource] -= amount; });
+  planet.upgrades[track] += 1;
+  if (track === "production") planet.productionLevel = planet.upgrades.production;
+  game.planets[planet.id] = normalizePlanetState(planet, sector.number, sector.routeRole, sector.dangerLevel);
   game.stats.planetUpgrades += 1;
-  addLog(`Upgraded ${planet.name} to production level ${planet.productionLevel}.`);
+  game.stats.planetUpgradesPurchased = (game.stats.planetUpgradesPurchased || 0) + 1;
+  game.stats.highestPlanetProductionLevel = Math.max(game.stats.highestPlanetProductionLevel || 1, game.planets[planet.id].upgrades.production);
+  game.stats.highestPlanetDefenseRating = Math.max(game.stats.highestPlanetDefenseRating || 0, getPlanetDefenseRating(game.planets[planet.id]));
+  addLog(`Upgraded ${planet.name} ${label} to level ${planet.upgrades[track]}. New production preview: ${formatProduction(getPlanetProduction(game.planets[planet.id]))}.`);
   completeTutorialStep("upgradePlanet");
   saveGame();
   render();
@@ -1293,16 +1491,52 @@ function upgradePlanet() {
 function collectPlanetProduction() {
   const now = Date.now();
   if (now - game.lastProductionAt < PRODUCTION_COOLDOWN_MS) return addAndRender("Planet production is still cooling down.");
-  const owned = Object.values(game.planets).filter((planet) => planet.owner === game.player.pilotName);
+  const owned = Object.values(game.planets).map((planet) => normalizePlanetState(planet)).filter((planet) => planet.owner === game.player.pilotName);
   if (owned.length === 0) return addAndRender("Claim a planet before collecting production.");
+  const totals = { Ore: 0, Food: 0, Tech: 0, Fighters: 0 };
   owned.forEach((planet) => {
-    planet.stored.Ore += planet.productionLevel;
-    planet.stored.Food += planet.productionLevel;
-    planet.stored.Tech += Math.floor(planet.productionLevel / 2);
+    const production = getPlanetProduction(planet);
+    PLANET_PRODUCTION_RESOURCES.forEach((resource) => {
+      planet.stored[resource] += production[resource];
+      totals[resource] += production[resource];
+    });
+    game.planets[planet.id] = planet;
+    game.stats.highestPlanetDefenseRating = Math.max(game.stats.highestPlanetDefenseRating || 0, getPlanetDefenseRating(planet));
   });
   game.lastProductionAt = now;
-  addLog(`Collected production from ${owned.length} owned planet${owned.length === 1 ? "" : "s"}.`);
+  game.stats.planetProductionCollected = (game.stats.planetProductionCollected || 0) + owned.length;
+  game.stats.planetOreProduced = (game.stats.planetOreProduced || 0) + totals.Ore;
+  game.stats.planetFoodProduced = (game.stats.planetFoodProduced || 0) + totals.Food;
+  game.stats.planetTechProduced = (game.stats.planetTechProduced || 0) + totals.Tech;
+  game.stats.planetFightersProduced = (game.stats.planetFightersProduced || 0) + totals.Fighters;
+  const message = owned.length === 1
+    ? `Collected production from ${owned[0].name}: ${formatProduction(totals)}.`
+    : `Collected planet production: ${formatProduction(totals)} from ${owned.length} planets.`;
+  addLog(message);
   completeTutorialStep("collectProduction");
+  saveGame();
+  render();
+}
+
+function transferPlanetFighters(direction, amountValue) {
+  const sector = sectorMap[game.player.currentSector];
+  const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
+  if (planet.owner !== game.player.pilotName) return addAndRender("Only owned planets can transfer Fighters.");
+  const shipSpace = Math.max(0, game.player.fighterCapacity - game.player.fighters);
+  const max = direction === "load" ? Math.min(planet.stored.Fighters, shipSpace) : game.player.fighters;
+  const requested = amountValue === "max" ? max : Math.floor(Number(amountValue) || 0);
+  const amount = Math.max(0, Math.min(max, requested));
+  if (amount <= 0) return addAndRender(direction === "load" ? "No ship fighter capacity or planet Fighters available." : "No ship Fighters available to unload.");
+  if (direction === "load") {
+    planet.stored.Fighters -= amount;
+    game.player.fighters += amount;
+    addLog(`Loaded ${amount} Fighter${amount === 1 ? "" : "s"} from ${planet.name} to ship.`);
+  } else {
+    game.player.fighters -= amount;
+    planet.stored.Fighters += amount;
+    addLog(`Unloaded ${amount} Fighter${amount === 1 ? "" : "s"} from ship to ${planet.name}.`);
+  }
+  game.planets[planet.id] = planet;
   saveGame();
   render();
 }
@@ -1671,6 +1905,11 @@ function missionTemplates() {
     { id: "claim-1", title: "Homestead Charter", objective: "Claim 1 planet.", metric: "planetsClaimed", target: 1, reward: { credits: 160, Food: 2 } },
     { id: "deposit-10", title: "Colony Supply Run", objective: "Deposit 10 resources on planets.", metric: "resourcesDeposited", target: 10, reward: { fuel: 5, turns: 2 } },
     { id: "planet-upgrade-1", title: "Builder Contract", objective: "Upgrade a planet.", metric: "planetUpgrades", target: 1, reward: { credits: 200, Tech: 1 } },
+    { id: "planet-track-1", title: "Track Specialist", objective: "Upgrade any planet track.", metric: "planetUpgradesPurchased", target: 1, reward: { credits: 220, Tech: 1 } },
+    { id: "planet-production-3", title: "Production Charter", objective: "Reach planet Production level 3.", metric: "highestPlanetProductionLevel", target: 3, reward: { credits: 260, Ore: 2 } },
+    { id: "planet-fighters-10", title: "Colony Flight Deck", objective: "Produce 10 Fighters from planets.", metric: "planetFightersProduced", target: 10, reward: { credits: 300, fighters: 2 } },
+    { id: "planet-storage-50", title: "Colony Warehouse", objective: "Store 50 total resources on planets.", metric: "planetStoredResources", target: 50, reward: { credits: 280, Food: 2 } },
+    { id: "planet-defense-25", title: "Shield Survey", objective: "Reach Defense Rating 25 on any planet.", metric: "highestPlanetDefenseRating", target: 25, reward: { credits: 320, Tech: 2 } },
     { id: "sell-tech-5", title: "Circuit Broker", objective: "Sell 5 Tech.", metric: "techSold", target: 5, reward: { credits: 180, fuel: 3 } },
     { id: "credits-1000", title: "Four-Digit Ledger", objective: "Reach 1000 credits.", metric: "credits", target: 1000, reward: { turns: 4, fuel: 4 } },
     { id: "pirates-1", title: "Bounty Basics", objective: "Defeat 1 NPC pirate.", metric: "piratesDefeated", target: 1, reward: { credits: 220, reputation: 3 } },
@@ -1701,6 +1940,10 @@ function missionProgress(mission) {
   if (template.metric === "fightersBought") return game.player.fightersBought || game.stats.fightersBought || 0;
   if (template.metric === "strongholdsCleared") return game.player.strongholdsCleared || game.stats.strongholdsCleared || 0;
   if (template.metric === "highThreatPiratesDefeated") return game.stats.highThreatPiratesDefeated || 0;
+  if (template.metric === "planetStoredResources") return Object.values(game.planets || {}).reduce((sum, planet) => {
+    const normalized = normalizePlanetState(planet);
+    return sum + PLANET_PRODUCTION_RESOURCES.reduce((resourceSum, resource) => resourceSum + (normalized.stored[resource] || 0), 0);
+  }, 0);
   return game.stats[template.metric] || 0;
 }
 
@@ -1791,7 +2034,7 @@ function achievementDefinitions() {
     { id: "anomaly-whisperer", title: "Anomaly Whisperer", description: "Scan 5 anomalies.", check: () => game.stats.anomaliesScanned >= 5 },
     { id: "mission-runner", title: "Mission Runner", description: "Complete 5 math missions.", check: () => game.stats.mathMissionsCompleted >= 5 },
     { id: "cargo-goblin", title: "Cargo Goblin", description: "Reach cargo capacity 40 or higher.", check: () => game.player.cargoCapacity >= 40 },
-    { id: "planet-builder", title: "Planet Builder", description: "Upgrade any planet to level 3.", check: () => Object.values(game.planets).some((planet) => planet.productionLevel >= 3) },
+    { id: "planet-builder", title: "Planet Builder", description: "Upgrade any planet to level 3.", check: () => Object.values(game.planets).some((planet) => normalizePlanetState(planet).upgrades.production >= 3) },
     { id: "credit-climber", title: "Credit Climber", description: "Reach 2000 credits.", check: () => game.player.credits >= 2000 },
     { id: "sector-scout", title: "Sector Scout", description: "Visit 15 unique sectors.", check: () => game.stats.visitedSectors.length >= 15 },
     { id: "first-bounty", title: "First Bounty", description: "Defeat your first NPC pirate.", check: () => game.player.piratesDefeated >= 1 },
@@ -2383,7 +2626,7 @@ function todayKey() {
   const day = String(now.getDate()).padStart(2, "0");
   return `${now.getFullYear()}-${month}-${day}`;
 }
-function getPlanetState(sector) { return game.planets[sector.planet.id] || JSON.parse(JSON.stringify(sector.planet)); }
+function getPlanetState(sector) { return normalizePlanetState(game.planets[sector.planet.id] || JSON.parse(JSON.stringify(sector.planet)), sector.number, sector.routeRole, sector.dangerLevel); }
 function productionStatusText() {
   if (!game.lastProductionAt) return "Production is ready. Cooldown starts after collection.";
   const remaining = PRODUCTION_COOLDOWN_MS - (Date.now() - game.lastProductionAt);
