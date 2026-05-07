@@ -1,6 +1,11 @@
 const STORAGE_KEY = "sectorDriftSaveV1";
 const PRODUCTION_COOLDOWN_MS = 10 * 60 * 1000;
-const BASE_MAX_TURNS = 40;
+const STARTING_TURNS = 100;
+const DAILY_TURN_GRANT = 100;
+const BASE_MAX_TURN_BANK = 500;
+const ENGINE_TURN_BANK_BONUS = 50;
+const ENGINE_DAILY_TURN_BONUS = 10;
+const FUEL_COST_PER_UNIT = 8;
 const FIGHTER_COST = 15;
 const BOARDING_HULL_THRESHOLD = 5;
 const BOARDING_MAX_PIRATE_FIGHTERS = 3;
@@ -504,8 +509,8 @@ function defaultGameState() {
       credits: 500,
       fuel: starter.maxFuel,
       maxFuel: starter.maxFuel,
-      turns: BASE_MAX_TURNS,
-      maxTurns: BASE_MAX_TURNS,
+      turns: STARTING_TURNS,
+      maxTurns: calculateMaxTurnBank(1),
       lastTurnRefreshDate: today,
       cargoCapacity: starter.cargoCapacity,
       currentSector: 1,
@@ -539,9 +544,22 @@ function defaultGameState() {
     missionLocked: false,
     missionFeedback: "Solve the mission for credits, fuel, turns, or cargo.",
     missionFeedbackClass: "",
+    selectedMissionTier: 2,
     ui: { mapZoom: DEFAULT_MAP_ZOOM },
     lastProductionAt: 0,
   };
+}
+
+function incrementTierMissionStat(tier) {
+  const keys = {
+    1: "basicMissionsCompleted",
+    2: "standardMissionsCompleted",
+    3: "advancedMissionsCompleted",
+    4: "expertMissionsCompleted",
+    5: "eliteMissionsCompleted",
+  };
+  const key = keys[normalizeMissionTier(tier)];
+  game.stats[key] = (game.stats[key] || 0) + 1;
 }
 
 function defaultStats() {
@@ -551,6 +569,11 @@ function defaultStats() {
     resourcesMined: 0,
     oreMined: 0,
     mathMissionsCompleted: 0,
+    basicMissionsCompleted: 0,
+    standardMissionsCompleted: 0,
+    advancedMissionsCompleted: 0,
+    expertMissionsCompleted: 0,
+    eliteMissionsCompleted: 0,
     planetsClaimed: 0,
     anomaliesScanned: 0,
     resourcesDeposited: 0,
@@ -602,12 +625,12 @@ function migrateGameState(saved = {}) {
 
   merged.player.maxFuel = calculateFuelCapacity(ship, merged.player.upgrades);
   merged.player.maxHull = ship.maxHull + Math.max(0, (merged.player.upgrades.shield || 1) - 1) * 4;
-  merged.player.maxTurns = calculateMaxTurns(merged.player.upgrades.engine);
+  merged.player.maxTurns = calculateMaxTurnBank(merged.player.upgrades.engine);
   merged.player.cargoCapacity = calculateCargoCapacity(ship, merged.player.upgrades);
   merged.player.fighterCapacity = calculateFighterCapacity(ship, merged.player.upgrades);
   merged.player.fuel = Math.max(0, Math.min(typeof merged.player.fuel === "number" ? merged.player.fuel : merged.player.maxFuel, merged.player.maxFuel));
   merged.player.hull = Math.max(1, Math.min(typeof merged.player.hull === "number" ? merged.player.hull : merged.player.maxHull, merged.player.maxHull));
-  merged.player.turns = Math.max(0, Math.min(typeof merged.player.turns === "number" ? merged.player.turns : merged.player.maxTurns, merged.player.maxTurns));
+  merged.player.turns = Math.max(0, Math.min(typeof merged.player.turns === "number" ? merged.player.turns : STARTING_TURNS, merged.player.maxTurns));
   merged.player.fighters = Math.min(merged.player.fighters, merged.player.fighterCapacity);
   if (!merged.player.lastTurnRefreshDate) merged.player.lastTurnRefreshDate = todayKey();
   if (!sectorMap[merged.player.currentSector]) merged.player.currentSector = 1;
@@ -634,6 +657,7 @@ function migrateGameState(saved = {}) {
     merged.log.unshift("Legacy save detected: over-cap upgrades were preserved for this ship instead of being clamped.");
     merged.player.legacyUpgradeNoteShown = true;
   }
+  merged.selectedMissionTier = normalizeMissionTier(saved.selectedMissionTier || saved.currentMission?.tier || fresh.selectedMissionTier);
   merged.currentMission = rehydrateMission(saved.currentMission);
   merged.missionFeedbackClass = saved.missionFeedbackClass || "";
   merged.ui = { ...fresh.ui, ...(saved.ui || {}) };
@@ -669,12 +693,12 @@ function renderShipPanel() {
   panels.ship.innerHTML = `
     <h2 id="shipHeading">Ship Status</h2>
     <div class="stat-grid">
-      ${stat("Pilot", p.pilotName)}${stat("Rank", currentRank())}${stat("Reputation", `${p.reputation} · ${reputationTitle(p.reputation)}`)}${stat("Ship", p.shipName)}${stat("Credits", p.credits)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Turns", `${p.turns}/${p.maxTurns}`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Sector", p.currentSector)}${stat("Cargo Space", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Base Power", ship.basePower)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Hazard Resist", ship.hazardResist + Math.max(0, p.upgrades.shield - 1))}
+      ${stat("Pilot", p.pilotName)}${stat("Rank", currentRank())}${stat("Reputation", `${p.reputation} · ${reputationTitle(p.reputation)}`)}${stat("Ship", p.shipName)}${stat("Credits", p.credits)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Turns", `${p.turns}/${p.maxTurns} bank`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Sector", p.currentSector)}${stat("Cargo Space", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Base Power", ship.basePower)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Hazard Resist", ship.hazardResist + Math.max(0, p.upgrades.shield - 1))}
     </div>
     <p class="help-text">${ship.description}</p>
     ${renderEmergencyWarpControl()}
     ${p.legacyUpgradeOverride ? `<p class="cooldown">Legacy upgrade override active: ${upgradeReductionSummary(p.upgrades, caps)}</p>` : ""}
-    ${p.turns <= 0 ? `<p class="turn-warning">Out of turns. Complete missions for bonus turns or return tomorrow.</p>` : ""}
+    ${p.turns <= 0 ? `<p class="turn-warning">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : ""}
     ${cargoSpaceLeft() < 0 ? `<p class="turn-warning">Cargo is over capacity. Sell, deposit, or dump cargo before buying more.</p>` : ""}
     <h3>Cargo</h3>
     <div class="cargo-grid">${RESOURCES.map((r) => `<div class="resource"><span class="label">${r}</span><span class="value">${p.cargo[r]}</span></div>`).join("")}</div>
@@ -701,7 +725,7 @@ function renderSectorPanel() {
     <div class="travel-grid">
       ${sector.adjacent.map((number) => `<button type="button" ${cannotTravel ? "disabled" : ""} data-action="travel" data-sector="${number}">${scannerTravelLabel(number)}</button>`).join("")}
     </div>
-    ${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete missions for bonus turns or return tomorrow.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty. Complete math missions for fuel or trade when you reach a port.</p>` : `<p class="help-text">Travel costs 1 turn and 1 fuel. A sector event may occur after arrival.</p>`}`;
+    ${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty. Complete math missions for fuel or trade when you reach a port.</p>` : `<p class="help-text">Travel costs 1 turn and 1 fuel. A sector event may occur after arrival.</p>`}`;
   panels.sector.querySelectorAll("[data-action='travel']").forEach((button) => button.addEventListener("click", () => travelToSector(Number(button.dataset.sector))));
   panels.sector.querySelector("[data-map-zoom='out']")?.addEventListener("click", () => zoomMap(-MAP_ZOOM_STEP));
   panels.sector.querySelector("[data-map-zoom='in']")?.addEventListener("click", () => zoomMap(MAP_ZOOM_STEP));
@@ -861,7 +885,7 @@ function navigationRecommendation(number) {
   if (number === game.player.currentSector) return "You are here. Review adjacent lanes before moving.";
   if (!getVisibleSectorNumbers().includes(number)) return "Upgrade scanners to reveal more.";
   if (!sectorMap[game.player.currentSector].adjacent.includes(number)) return "Not directly connected from current sector.";
-  if (game.player.fuel <= 0 || game.player.turns <= 0) return travelBlockedReason() === "Fuel empty" ? "Fuel is empty. Complete math missions for fuel or trade when you reach a port." : "Out of turns. Complete missions for bonus turns or return tomorrow.";
+  if (game.player.fuel <= 0 || game.player.turns <= 0) return travelBlockedReason() === "Fuel empty" ? "Fuel is empty. Complete math missions for fuel or trade when you reach a port." : "Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.";
   if (canSeeDanger(number) && sector.dangerLevel > 0) return "Danger detected. Repair or upgrade shields before entering.";
   return "Direct jump available.";
 }
@@ -900,7 +924,18 @@ function renderPort(sector) {
       <button data-action="buy" data-resource="${resource}" data-amount="1" ${buyDisabled}>Buy 1</button><button data-action="buy" data-resource="${resource}" data-amount="5" ${buyDisabled}>Buy 5</button>
       <button data-action="sell" data-resource="${resource}" data-amount="1">Sell 1</button><button data-action="sell" data-resource="${resource}" data-amount="5">Sell 5</button>
     </div></div>`;
-  }).join("")}</div>${renderRepairPanel(sector)}${sector.hasShipyard ? renderShipyardPanel() : ""}`;
+  }).join("")}</div>${renderRefuelPanel()}${renderRepairPanel(sector)}${sector.hasShipyard ? renderShipyardPanel() : ""}`;
+}
+
+function renderRefuelPanel() {
+  const missing = Math.max(0, game.player.maxFuel - game.player.fuel);
+  const fuelButton = (label, amount) => {
+    const units = amount === "full" ? missing : Math.min(Number(amount), missing);
+    const cost = units * FUEL_COST_PER_UNIT;
+    const disabled = units <= 0 || game.player.credits < cost ? "disabled" : "";
+    return `<button data-action="refuel" data-amount="${amount}" ${disabled}>${label}${units > 0 ? ` (${cost} credits)` : ""}</button>`;
+  };
+  return `<h3>Refuel Service</h3><div class="mini-card">${stat("Fuel", `${game.player.fuel}/${game.player.maxFuel}`)}${stat("Fuel Price", `${FUEL_COST_PER_UNIT} credits each`)}<div class="button-row">${fuelButton("Buy 5 fuel", 5)}${fuelButton("Buy 10 fuel", 10)}${fuelButton("Fill tank", "full")}</div>${missing <= 0 ? `<p class="help-text">Fuel tank is already full.</p>` : ""}</div>`;
 }
 
 function renderRepairPanel(sector) {
@@ -974,11 +1009,11 @@ function renderPlanet(sector) {
 function renderAsteroid() {
   const disabled = game.player.fuel <= 0 || game.player.turns <= 0 || cargoSpaceLeft() <= 0;
   const sector = sectorMap[game.player.currentSector];
-  return `<h3>Asteroid Field</h3><p>Spend 1 turn and 1 fuel to mine Ore. Scanner upgrades improve results.${sector.dangerLevel > 0 ? " Dangerous sectors may damage hull after mining." : ""}</p><button data-action="mine" ${disabled ? "disabled" : ""}>Mine Asteroids</button>${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete missions for bonus turns or return tomorrow.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty.</p>` : cargoSpaceLeft() <= 0 ? `<p class="cooldown">Cargo is full.</p>` : ""}`;
+  return `<h3>Asteroid Field</h3><p>Spend 1 turn and 1 fuel to mine Ore. Scanner upgrades improve results.${sector.dangerLevel > 0 ? " Dangerous sectors may damage hull after mining." : ""}</p><button data-action="mine" ${disabled ? "disabled" : ""}>Mine Asteroids</button>${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty.</p>` : cargoSpaceLeft() <= 0 ? `<p class="cooldown">Cargo is full.</p>` : ""}`;
 }
 
 function renderAnomaly() {
-  return `<h3>Mysterious Anomaly</h3><p>Spend 1 turn to scan carefully. Better scanners improve your chance of helpful discoveries.</p><button data-action="scan" ${game.player.turns <= 0 ? "disabled" : ""}>Scan Anomaly</button>${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete missions for bonus turns or return tomorrow.</p>` : ""}`;
+  return `<h3>Mysterious Anomaly</h3><p>Spend 1 turn to scan carefully. Better scanners improve your chance of helpful discoveries.</p><button data-action="scan" ${game.player.turns <= 0 ? "disabled" : ""}>Scan Anomaly</button>${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : ""}`;
 }
 
 function wireLocationButtons() {
@@ -991,6 +1026,7 @@ function wireLocationButtons() {
   panels.location.querySelector("[data-action='mine']")?.addEventListener("click", mineAsteroids);
   panels.location.querySelector("[data-action='scan']")?.addEventListener("click", scanAnomaly);
   panels.location.querySelector("[data-action='repair']")?.addEventListener("click", repairHull);
+  panels.location.querySelectorAll("[data-action='refuel']").forEach((button) => button.addEventListener("click", () => buyFuel(button.dataset.amount)));
   panels.location.querySelectorAll("[data-action='buyShip']").forEach((button) => button.addEventListener("click", () => buyShip(button.dataset.ship)));
   panels.location.querySelectorAll("[data-action='buyFighters']").forEach((button) => button.addEventListener("click", () => buyFighters(button.dataset.amount)));
   panels.location.querySelectorAll("[data-action='pirateCombat']").forEach((button) => button.addEventListener("click", () => resolvePirateCombat(button.dataset.mode)));
@@ -1000,10 +1036,21 @@ function wireLocationButtons() {
 function renderMathMission() {
   const mission = game.currentMission;
   const done = game.missionLocked;
-  panels.math.innerHTML = `<h2 id="mathHeading">Math Mission</h2><p><strong>${mission.prompt}</strong></p><p class="help-text">Answer format: ${mission.format}</p>
+  const selectedTier = normalizeMissionTier(game.selectedMissionTier || mission.tier || 2);
+  const options = missionTiers().map((tier) => `<option value="${tier.tier}" ${tier.tier === selectedTier ? "selected" : ""}>${tier.tierName} ${tier.rewardMultiplier}x</option>`).join("");
+  panels.math.innerHTML = `<h2 id="mathHeading">Math Mission</h2>
+    <label class="mission-tier-picker" for="missionTier">Choose next mission difficulty</label>
+    <select id="missionTier">${options}</select>
+    <p class="help-text">Basic missions give smaller rewards but are good for quick fuel and turn recovery. Changing difficulty affects the next mission, not this active question.</p>
+    <p class="mission-meta">Difficulty: ${mission.tierName} · Reward: ${mission.rewardMultiplier}x · Skill: ${mission.skillTag}</p>
+    <p><strong>${mission.prompt}</strong></p><p class="help-text">Answer format: ${mission.format}</p>
     <input id="missionAnswer" type="text" autocomplete="off" aria-label="Math mission answer">
     <div class="button-row"><button id="submitMission">Submit Answer</button><button id="stuckMission" ${done ? "disabled" : ""}>I'm Stuck</button>${done ? `<button id="nextMission">Next Mission</button>` : ""}</div>
     <p class="feedback ${game.missionFeedbackClass || ""}">${game.missionFeedback}</p>`;
+  document.getElementById("missionTier")?.addEventListener("change", (event) => {
+    game.selectedMissionTier = normalizeMissionTier(event.target.value);
+    saveGame();
+  });
   document.getElementById("submitMission")?.addEventListener("click", submitMissionAnswer);
   document.getElementById("stuckMission")?.addEventListener("click", () => {
     game.missionFeedback = mission.hint;
@@ -1012,7 +1059,7 @@ function renderMathMission() {
     renderMathMission();
   });
   document.getElementById("nextMission")?.addEventListener("click", () => {
-    game.currentMission = generateMission();
+    game.currentMission = generateMission(game.selectedMissionTier);
     game.missionAttempts = 0;
     game.missionLocked = false;
     game.missionFeedback = "Solve the mission for credits, fuel, turns, or cargo.";
@@ -1070,7 +1117,7 @@ function renderAchievementsPanel() {
 function renderStatsPanel() {
   const s = game.stats;
   panels.stats.innerHTML = `<h2 id="statsHeading">Career Stats</h2><details class="compact-section"><summary>Show career stats</summary><div class="stats-grid">
-    ${stat("Rank", currentRank())}${stat("Reputation", game.player.reputation)}${stat("Reputation Title", reputationTitle(game.player.reputation))}${stat("Pirates Defeated", game.player.piratesDefeated)}${stat("Combat Wins", game.player.combatWins)}${stat("Combat Losses", game.player.combatLosses)}${stat("Ships Captured", game.player.shipsCaptured)}${stat("Visited Sectors", s.visitedSectors.length)}${stat("Trade Credits", s.creditsEarnedFromTrade)}${stat("Resources Mined", s.resourcesMined)}${stat("Ore Mined", s.oreMined)}${stat("Math Missions", s.mathMissionsCompleted)}${stat("Planets Claimed", s.planetsClaimed)}${stat("Anomalies Scanned", s.anomaliesScanned)}${stat("Resources Deposited", s.resourcesDeposited)}${stat("Planet Upgrades", s.planetUpgrades)}${stat("Tech Sold", s.techSold)}${stat("Board Missions", s.missionsClaimed)}${stat("Resources Sold", s.resourcesSold)}
+    ${stat("Rank", currentRank())}${stat("Reputation", game.player.reputation)}${stat("Reputation Title", reputationTitle(game.player.reputation))}${stat("Pirates Defeated", game.player.piratesDefeated)}${stat("Combat Wins", game.player.combatWins)}${stat("Combat Losses", game.player.combatLosses)}${stat("Ships Captured", game.player.shipsCaptured)}${stat("Visited Sectors", s.visitedSectors.length)}${stat("Trade Credits", s.creditsEarnedFromTrade)}${stat("Resources Mined", s.resourcesMined)}${stat("Ore Mined", s.oreMined)}${stat("Math Missions", s.mathMissionsCompleted)}${stat("Basic Missions", s.basicMissionsCompleted || 0)}${stat("Standard Missions", s.standardMissionsCompleted || 0)}${stat("Advanced Missions", s.advancedMissionsCompleted || 0)}${stat("Expert Missions", s.expertMissionsCompleted || 0)}${stat("Elite Missions", s.eliteMissionsCompleted || 0)}${stat("Planets Claimed", s.planetsClaimed)}${stat("Anomalies Scanned", s.anomaliesScanned)}${stat("Resources Deposited", s.resourcesDeposited)}${stat("Planet Upgrades", s.planetUpgrades)}${stat("Tech Sold", s.techSold)}${stat("Board Missions", s.missionsClaimed)}${stat("Resources Sold", s.resourcesSold)}
   </div></details>`;
 }
 
@@ -1224,6 +1271,21 @@ function scanAnomaly() {
   render();
 }
 
+function buyFuel(amount) {
+  const missing = Math.max(0, game.player.maxFuel - game.player.fuel);
+  if (missing <= 0) return addAndRender("Fuel tank is already full.");
+  const requested = amount === "full" ? missing : Number(amount);
+  const units = Math.max(0, Math.min(missing, Math.floor(requested)));
+  const cost = units * FUEL_COST_PER_UNIT;
+  if (units <= 0) return addAndRender("Choose a valid fuel amount.");
+  if (game.player.credits < cost) return addAndRender("Not enough credits to refuel.");
+  game.player.credits -= cost;
+  game.player.fuel = Math.min(game.player.maxFuel, game.player.fuel + units);
+  addLog(`Refueled ${units} fuel for ${cost} credits.`);
+  saveGame();
+  render();
+}
+
 function repairHull() {
   const sector = sectorMap[game.player.currentSector];
   const cost = repairCost(sector);
@@ -1259,7 +1321,7 @@ function buyShip(shipId) {
   game.player.cargoCapacity = nextCapacity;
   game.player.fighterCapacity = calculateFighterCapacity(ship, game.player.upgrades);
   game.player.fighters = Math.min(game.player.fighters, game.player.fighterCapacity);
-  game.player.maxTurns = calculateMaxTurns(game.player.upgrades.engine);
+  game.player.maxTurns = calculateMaxTurnBank(game.player.upgrades.engine);
   game.player.fuel = Math.min(game.player.fuel, game.player.maxFuel);
   game.player.hull = Math.min(game.player.hull, game.player.maxHull);
   game.player.turns = Math.min(game.player.turns, game.player.maxTurns);
@@ -1272,6 +1334,7 @@ function buyShip(shipId) {
 function submitMissionAnswer() {
   const input = document.getElementById("missionAnswer").value.trim();
   if (handleDevCode(input)) return;
+  if (applyDevCode(input)) return;
   if (game.missionLocked) {
     game.missionFeedback = "Mission is locked. Use Next Mission to continue.";
     game.missionFeedbackClass = "locked";
@@ -1280,10 +1343,10 @@ function submitMissionAnswer() {
     return;
   }
   const mission = game.currentMission;
-  if (applyDevCode(input)) return;
   if (mission.check(input)) {
     awardMissionReward();
     game.stats.mathMissionsCompleted += 1;
+    incrementTierMissionStat(mission.tier);
     completeTutorialStep("math");
     game.missionLocked = true;
     game.missionFeedbackClass = "correct";
@@ -1349,15 +1412,76 @@ function handleDevCode(input) {
   return false;
 }
 
+function missionTiers() {
+  return [
+    { tier: 1, tierName: "Basic", rewardMultiplier: 1, reward: { credits: [40, 70], fuel: [3, 5], turns: [8, 15], resources: [1, 2] }, skillTag: "Basic Practice" },
+    { tier: 2, tierName: "Standard", rewardMultiplier: 2, reward: { credits: [80, 140], fuel: [6, 10], turns: [16, 30], resources: [2, 4] }, skillTag: "Algebra Foundations" },
+    { tier: 3, tierName: "Advanced", rewardMultiplier: 4, reward: { credits: [160, 280], fuel: [10, 18], turns: [35, 60], resources: [4, 7] }, skillTag: "Algebra Reasoning" },
+    { tier: 4, tierName: "Expert", rewardMultiplier: 7, reward: { credits: [300, 500], fuel: [18, 30], turns: [70, 110], resources: [7, 10] }, skillTag: "Algebra 2" },
+    { tier: 5, tierName: "Elite", rewardMultiplier: 10, reward: { credits: [500, 800], fuel: [30, 45], turns: [120, 180], resources: [10, 15] }, skillTag: "Algebra 2 Mastery" },
+  ];
+}
+
+function missionTierByNumber(tier) {
+  return missionTiers().find((entry) => entry.tier === Number(tier)) || missionTiers()[1];
+}
+
+function normalizeMissionTier(tier) {
+  return missionTierByNumber(tier).tier;
+}
+
+function withTier(mission) {
+  const tier = missionTierByNumber(mission.tier);
+  return {
+    ...mission,
+    tier: tier.tier,
+    tierName: tier.tierName,
+    rewardMultiplier: tier.rewardMultiplier,
+    skillTag: mission.skillTag || tier.skillTag,
+  };
+}
+
 function missionBank() {
   return [
-    { id: "linear-1", prompt: "Solve for x: 3x + 7 = 22", format: "number", answers: ["5"], hint: "Subtract 7 first, then divide by 3.", explanation: "3x + 7 = 22 → 3x = 15 → x = 5." },
-    { id: "function-1", prompt: "Evaluate f(4) if f(x) = 2x² - 3", format: "number", answers: ["29"], hint: "Replace x with 4 before using the exponent.", explanation: "2(4²) - 3 = 32 - 3 = 29." },
-    { id: "domain-1", prompt: "For g(x)=1/(x-6), what value is not in the domain?", format: "number", answers: ["6"], hint: "The denominator cannot equal 0.", explanation: "x - 6 cannot be 0, so x cannot be 6." },
-    { id: "factor-1", prompt: "Factor: x² + 5x + 6", format: "type factors like (x+2)(x+3)", answers: ["(x+2)(x+3)", "(x+3)(x+2)"], hint: "Find two numbers that multiply to 6 and add to 5.", explanation: "2 and 3 multiply to 6 and add to 5, so the factors are (x+2)(x+3)." },
-    { id: "slope-1", prompt: "Find the slope through (2, 5) and (6, 13).", format: "number", answers: ["2"], hint: "Use change in y divided by change in x.", explanation: "(13 - 5) / (6 - 2) = 8 / 4 = 2." },
-    { id: "exponent-1", prompt: "Simplify: x³ · x⁴", format: "power form like x^7", answers: ["x^7", "x7"], hint: "When multiplying powers with the same base, add exponents.", explanation: "x³ · x⁴ = x^(3+4) = x^7." },
-  ];
+    { id: "basic-multiply-1", tier: 1, prompt: "Calculate: 7 × 8", format: "Enter a number.", answers: ["56"], hint: "Use multiplication facts or add eight groups of seven.", explanation: "7 × 8 = 56.", skillTag: "Multiplication" },
+    { id: "basic-add-1", tier: 1, prompt: "Calculate: 12 + 9", format: "Enter a number.", answers: ["21"], hint: "Add 10, then subtract 1.", explanation: "12 + 9 = 21.", skillTag: "Integer Arithmetic" },
+    { id: "basic-one-step-1", tier: 1, prompt: "Solve for x: x + 5 = 13", format: "Enter a number.", answers: ["8"], hint: "Undo adding 5 by subtracting 5 from both sides.", explanation: "x + 5 = 13 → x = 8.", skillTag: "One-Step Equations" },
+    { id: "basic-one-step-2", tier: 1, prompt: "Solve for x: 3x = 21", format: "Enter a number.", answers: ["7"], hint: "Undo multiplying by 3 by dividing both sides by 3.", explanation: "3x = 21 → x = 7.", skillTag: "One-Step Equations" },
+    { id: "basic-evaluate-1", tier: 1, prompt: "Evaluate: 2(6) + 1", format: "Enter a number.", answers: ["13"], hint: "Multiply first, then add.", explanation: "2(6) + 1 = 12 + 1 = 13.", skillTag: "Expression Evaluation" },
+    { id: "basic-integers-1", tier: 1, prompt: "Calculate: -4 + 11", format: "Enter a number.", answers: ["7"], hint: "Move 11 spaces right from -4.", explanation: "-4 + 11 = 7.", skillTag: "Integer Arithmetic" },
+    { id: "basic-subtract-1", tier: 1, prompt: "Calculate: 30 - 17", format: "Enter a number.", answers: ["13"], hint: "Subtract 10, then subtract 7 more.", explanation: "30 - 17 = 13.", skillTag: "Integer Arithmetic" },
+    { id: "basic-evaluate-2", tier: 1, prompt: "Evaluate when x = 4: x + 9", format: "Enter a number.", answers: ["13"], hint: "Replace x with the given value.", explanation: "When x = 4, x + 9 = 13.", skillTag: "Expression Evaluation" },
+
+    { id: "linear-1", tier: 2, prompt: "Solve for x: 3x + 7 = 22", format: "Enter a number.", answers: ["5"], hint: "Subtract 7 first, then divide by 3.", explanation: "3x + 7 = 22 → 3x = 15 → x = 5.", skillTag: "Two-Step Equations" },
+    { id: "function-1", tier: 2, prompt: "Evaluate f(4) if f(x) = 2x² - 3", format: "Enter a number.", answers: ["29"], hint: "Replace x with 4 before using the exponent.", explanation: "2(4²) - 3 = 32 - 3 = 29.", skillTag: "Function Evaluation" },
+    { id: "slope-1", tier: 2, prompt: "Find the slope through (2, 5) and (6, 13).", format: "Enter slope as an integer or fraction.", answers: ["2", "2/1"], hint: "Use change in y divided by change in x.", explanation: "(13 - 5) / (6 - 2) = 8 / 4 = 2.", skillTag: "Slope" },
+    { id: "exponent-1", tier: 2, prompt: "Simplify: x³ · x⁴", format: "Enter simplified power form using ^, such as x^n.", answers: ["x^7", "x7"], hint: "When multiplying powers with the same base, add exponents.", explanation: "x³ · x⁴ = x^(3+4) = x^7.", skillTag: "Exponent Rules" },
+    { id: "standard-factor-1", tier: 2, prompt: "Factor: x² - 25", format: "Enter factored form using parentheses.", answers: ["(x-5)(x+5)", "(x+5)(x-5)"], hint: "This is a difference of squares.", explanation: "x² - 25 = x² - 5² = (x - 5)(x + 5).", skillTag: "Factoring" },
+    { id: "standard-linear-2", tier: 2, prompt: "Solve for x: 2x - 9 = 15", format: "Enter a number.", answers: ["12"], hint: "Add 9 first, then divide by 2.", explanation: "2x - 9 = 15 → 2x = 24 → x = 12.", skillTag: "Two-Step Equations" },
+    { id: "standard-function-2", tier: 2, prompt: "If h(x)=x²+2x, find h(3).", format: "Enter a number.", answers: ["15"], hint: "Substitute the input everywhere x appears.", explanation: "h(3)=3²+2(3)=9+6=15.", skillTag: "Function Evaluation" },
+    { id: "standard-slope-2", tier: 2, prompt: "Find the slope through (1, 2) and (5, 10).", format: "Enter slope as an integer or fraction.", answers: ["2", "2/1"], hint: "Divide vertical change by horizontal change.", explanation: "(10 - 2) / (5 - 1) = 8 / 4 = 2.", skillTag: "Slope" },
+
+    { id: "factor-1", tier: 3, prompt: "Factor: x² + 5x + 6", format: "Enter factored form using parentheses.", answers: ["(x+2)(x+3)", "(x+3)(x+2)"], hint: "Find two numbers that multiply to 6 and add to 5.", explanation: "2 and 3 multiply to 6 and add to 5, so the factors are (x+2)(x+3).", skillTag: "Factoring Trinomials" },
+    { id: "domain-1", tier: 3, prompt: "For g(x)=1/(x-6), what value is not in the domain?", format: "Enter the excluded x-value.", answers: ["6"], hint: "The denominator cannot equal 0.", explanation: "x - 6 cannot be 0, so x cannot be 6.", skillTag: "Domain Restrictions" },
+    { id: "advanced-quadratic-1", tier: 3, prompt: "Solve: x² - 9 = 0", format: "Enter both solutions separated by commas.", answers: ["-3,3", "3,-3"], hint: "Factor as a difference of squares, then set each factor to 0.", explanation: "x² - 9 = (x - 3)(x + 3), so x = 3 or x = -3.", skillTag: "Quadratics" },
+    { id: "advanced-asymptote-1", tier: 3, prompt: "For y=2/(x+4), give the vertical asymptote x-value.", format: "Enter the vertical asymptote x-value.", answers: ["-4"], hint: "Set the denominator equal to 0.", explanation: "x + 4 = 0, so the vertical asymptote is x = -4.", skillTag: "Rational Functions" },
+    { id: "advanced-rational-1", tier: 3, prompt: "Simplify: (x²+3x)/(x)", format: "Enter a simplified expression.", answers: ["x+3"], hint: "Factor the numerator before canceling the common factor.", explanation: "(x²+3x)/x = x(x+3)/x = x+3, with x ≠ 0.", skillTag: "Rational Expressions" },
+    { id: "advanced-factor-2", tier: 3, prompt: "Factor: x² - x - 12", format: "Enter factored form using parentheses.", answers: ["(x-4)(x+3)", "(x+3)(x-4)"], hint: "Find two numbers that multiply to -12 and add to -1.", explanation: "-4 and 3 multiply to -12 and add to -1.", skillTag: "Factoring Trinomials" },
+    { id: "advanced-system-1", tier: 3, prompt: "If x+y=10 and x-y=2, find x.", format: "Enter a number.", answers: ["6"], hint: "Add the equations to eliminate y.", explanation: "Adding gives 2x = 12, so x = 6.", skillTag: "Systems Reasoning" },
+    { id: "advanced-vertex-1", tier: 3, prompt: "For y=(x-2)²+5, give the vertex.", format: "Enter an ordered pair.", answers: ["(2,5)", "2,5"], hint: "Use vertex form y=(x-h)²+k.", explanation: "The vertex is (h, k), which is (2, 5).", skillTag: "Quadratic Features" },
+
+    { id: "expert-rational-1", tier: 4, prompt: "Solve: 1/x = 1/5", format: "Enter a number.", answers: ["5"], hint: "Cross multiply, while remembering x cannot be 0.", explanation: "1/x = 1/5 → 5 = x, and x = 5 is allowed.", skillTag: "Rational Equations" },
+    { id: "expert-restrictions-1", tier: 4, prompt: "List restrictions for 3/((x-2)(x+1)).", format: "Enter all restrictions separated by commas.", answers: ["2,-1", "-1,2", "x=2,x=-1", "x=-1,x=2"], hint: "Each factor in the denominator cannot equal 0.", explanation: "x - 2 = 0 gives 2, and x + 1 = 0 gives -1.", skillTag: "Excluded Values" },
+    { id: "expert-log-expand-1", tier: 4, prompt: "Expand: log(ab)", format: "Enter an expanded logarithmic expression.", answers: ["log(a)+log(b)", "loga+logb"], hint: "A product inside one log becomes a sum of logs.", explanation: "log(ab) = log(a) + log(b).", skillTag: "Log Rules" },
+    { id: "expert-log-condense-1", tier: 4, prompt: "Condense: log(x) + log(4)", format: "Enter one condensed logarithm.", answers: ["log(4x)", "log(4*x)", "log(x*4)", "log(x4)"], hint: "A sum of logs becomes a log of a product.", explanation: "log(x) + log(4) = log(4x).", skillTag: "Log Rules" },
+    { id: "expert-rewrite-1", tier: 4, prompt: "Rewrite 2³ = 8 in logarithmic form.", format: "Enter the equation in log form.", answers: ["log_2(8)=3", "log2(8)=3", "log_2 8=3"], hint: "The base of the exponent becomes the base of the logarithm.", explanation: "2³ = 8 rewrites as log base 2 of 8 equals 3.", skillTag: "Exponential/Log Rewrites" },
+    { id: "expert-factor-1", tier: 4, prompt: "Factor: 2x² + 7x + 3", format: "Enter factored form using parentheses.", answers: ["(2x+1)(x+3)", "(x+3)(2x+1)"], hint: "Use grouping or the ac method.", explanation: "2x² + 7x + 3 factors as (2x + 1)(x + 3).", skillTag: "Harder Factoring" },
+
+    { id: "elite-log-solve-1", tier: 5, prompt: "Solve: log₂(x) = 5", format: "Enter a number.", answers: ["32"], hint: "Rewrite the logarithmic equation as an exponential equation.", explanation: "log₂(x)=5 means 2⁵=x, so x=32.", skillTag: "Logarithmic Equations" },
+    { id: "elite-rational-1", tier: 5, prompt: "Solve: 2/(x-1) = 4, with exclusions checked.", format: "Enter a number.", answers: ["1.5", "3/2"], hint: "First note the excluded value, then multiply both sides by the denominator.", explanation: "x cannot be 1. 2 = 4(x - 1), so 6 = 4x and x = 3/2.", skillTag: "Rational Equations" },
+    { id: "elite-log-expand-1", tier: 5, prompt: "Expand: log(x²y/3)", format: "Enter an expanded logarithmic expression.", answers: ["2log(x)+log(y)-log(3)", "2logx+logy-log3"], hint: "Use power, product, and quotient log rules.", explanation: "log(x²y/3)=log(x²)+log(y)-log(3)=2log(x)+log(y)-log(3).", skillTag: "Log Rules" },
+    { id: "elite-exponential-1", tier: 5, prompt: "Solve: 3^x = 81", format: "Enter a number.", answers: ["4"], hint: "Rewrite the right side as a power with the same base.", explanation: "81 = 3⁴, so x = 4.", skillTag: "Exponential Equations" },
+  ].map(withTier);
 }
 
 function rehydrateMission(savedMission) {
@@ -1366,8 +1490,10 @@ function rehydrateMission(savedMission) {
   return attachMissionChecker(base || bank[Math.floor(Math.random() * bank.length)]);
 }
 
-function generateMission() {
-  const missions = missionBank();
+function generateMission(tier = 2) {
+  const selectedTier = normalizeMissionTier(tier);
+  const tierMissions = missionBank().filter((mission) => mission.tier === selectedTier);
+  const missions = tierMissions.length > 0 ? tierMissions : missionBank().filter((mission) => mission.tier === 2);
   return attachMissionChecker(missions[Math.floor(Math.random() * missions.length)]);
 }
 
@@ -1409,30 +1535,39 @@ function applyDevCode(input) {
 }
 
 function awardMissionReward() {
-  const roll = Math.random();
-  if (roll < 0.34) {
-    const credits = 50 + Math.floor(Math.random() * 71);
-    game.player.credits += credits;
-    game.missionFeedback = `Correct. Awarded ${credits} credits.`;
-    addLog(`Correct mission answer. Awarded ${credits} credits.`);
-  } else if (roll < 0.62) {
-    const fuel = 2 + Math.floor(Math.random() * 4) + Math.floor(game.player.upgrades.engine / 3);
-    game.player.fuel = Math.min(game.player.maxFuel, game.player.fuel + fuel);
-    game.missionFeedback = `Correct. Awarded ${fuel} fuel.`;
-    addLog(`Correct mission answer. Awarded ${fuel} fuel.`);
-  } else if (roll < 0.82) {
-    const turns = 1 + Math.floor(Math.random() * 3);
-    game.player.turns = Math.min(game.player.maxTurns, game.player.turns + turns);
-    game.missionFeedback = `Correct. Awarded ${turns} bonus turn${turns === 1 ? "" : "s"}.`;
-    addLog(`Correct mission answer. Awarded ${turns} bonus turn${turns === 1 ? "" : "s"}.`);
-  } else {
-    const resource = RESOURCES[Math.floor(Math.random() * RESOURCES.length)];
-    const amount = Math.min(cargoSpaceLeft(), 1 + Math.floor(Math.random() * 3));
-    if (amount > 0) game.player.cargo[resource] += amount;
-    game.missionFeedback = amount > 0 ? `Correct. Awarded ${amount} ${resource}.` : "Correct. Cargo is full, so you received 60 credits instead.";
-    if (amount === 0) game.player.credits += 60;
-    addLog(amount > 0 ? `Correct mission answer. Awarded ${amount} ${resource}.` : "Correct mission answer. Cargo full, awarded 60 credits.");
-  }
+  const mission = game.currentMission || missionTierByNumber(game.selectedMissionTier);
+  const tier = missionTierByNumber(mission.tier);
+  const reward = tier.reward;
+  const resource = RESOURCES[Math.floor(Math.random() * RESOURCES.length)];
+  const credits = randomInt(reward.credits[0], reward.credits[1]);
+  const requestedFuel = randomInt(reward.fuel[0], reward.fuel[1]);
+  const requestedTurns = randomInt(reward.turns[0], reward.turns[1]);
+  const requestedResources = randomInt(reward.resources[0], reward.resources[1]);
+  const fuelAwarded = Math.max(0, Math.min(requestedFuel, game.player.maxFuel - game.player.fuel));
+  const turnAwarded = Math.max(0, Math.min(requestedTurns, game.player.maxTurns - game.player.turns));
+  const resourceAwarded = Math.max(0, Math.min(requestedResources, cargoSpaceLeft()));
+  const fuelOverflow = requestedFuel - fuelAwarded;
+  const turnOverflow = requestedTurns - turnAwarded;
+  const resourceOverflow = requestedResources - resourceAwarded;
+  const substituteCredits = fuelOverflow * 4 + resourceOverflow * 18;
+  const substituteTurns = Math.min(Math.max(0, game.player.maxTurns - game.player.turns - turnAwarded), Math.floor(resourceOverflow / 2));
+  const totalCredits = credits + substituteCredits;
+
+  game.player.credits += totalCredits;
+  game.player.fuel = Math.min(game.player.maxFuel, game.player.fuel + fuelAwarded);
+  game.player.turns = Math.min(game.player.maxTurns, game.player.turns + turnAwarded + substituteTurns);
+  if (resourceAwarded > 0) game.player.cargo[resource] += resourceAwarded;
+
+  const parts = [`${totalCredits} credits`];
+  if (fuelAwarded > 0) parts.push(`${fuelAwarded} fuel`);
+  if (turnAwarded + substituteTurns > 0) parts.push(`${turnAwarded + substituteTurns} turn${turnAwarded + substituteTurns === 1 ? "" : "s"}`);
+  if (resourceAwarded > 0) parts.push(`${resourceAwarded} ${resource}`);
+  if (fuelOverflow > 0) parts.push(`${fuelOverflow} fuel converted to credits`);
+  if (resourceOverflow > 0) parts.push(`${resourceOverflow} cargo overflow converted`);
+  if (turnOverflow > 0) parts.push(`${turnOverflow} turn${turnOverflow === 1 ? "" : "s"} capped by bank`);
+
+  game.missionFeedback = `Correct (${tier.tierName} ${tier.rewardMultiplier}x). Awarded ${parts.join(", ")}.`;
+  addLog(`Correct ${tier.tierName} mission answer. Awarded ${parts.join(", ")}.`);
 }
 
 function upgradeShip(key) {
@@ -1446,7 +1581,7 @@ function upgradeShip(key) {
   if (key === "engine") {
     game.player.maxFuel = calculateFuelCapacity(currentShip(), game.player.upgrades);
     game.player.fuel = Math.min(game.player.maxFuel, game.player.fuel + 2);
-    game.player.maxTurns = calculateMaxTurns(game.player.upgrades.engine);
+    game.player.maxTurns = calculateMaxTurnBank(game.player.upgrades.engine);
   }
   if (key === "scanner") updateScannerReveals();
   if (key === "shield") {
@@ -1814,7 +1949,7 @@ function maybeTravelEvent() {
 
 function spendTurn(action) {
   if (game.player.turns <= 0) {
-    addAndRender("Out of turns. Complete missions for bonus turns or return tomorrow.");
+    addAndRender("Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.");
     return false;
   }
   if ((action === "travel" || action === "mine") && game.player.fuel <= 0) {
@@ -1879,11 +2014,14 @@ function formatReward(reward) {
 
 function refreshDailyTurns() {
   const today = todayKey();
-  game.player.maxTurns = calculateMaxTurns(game.player.upgrades.engine);
+  game.player.maxTurns = calculateMaxTurnBank(game.player.upgrades.engine);
   if (game.player.lastTurnRefreshDate !== today) {
-    game.player.turns = game.player.maxTurns;
+    const grant = calculateDailyTurnGrant(game.player.upgrades.engine);
+    const before = game.player.turns;
+    game.player.turns = Math.min(game.player.maxTurns, game.player.turns + grant);
     game.player.lastTurnRefreshDate = today;
-    addLog(`Daily turns refreshed to ${game.player.maxTurns}.`);
+    const added = game.player.turns - before;
+    addLog(`Daily turn grant added: +${added} turns${added < grant ? ` (${grant - added} over bank limit)` : ""}.`);
     return true;
   }
   return false;
@@ -2004,10 +2142,14 @@ function upgradeReductionSummary(upgrades, caps) {
   return over.map(([key, level]) => `${titleCase(key.replace(/([A-Z])/g, " $1"))} ${level}/${caps[key]}`).join(", ");
 }
 
+function randomInt(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
+
 function calculateCargoCapacity(ship = currentShip(), upgrades = game.player.upgrades) { return ship.cargoCapacity + Math.max(0, (upgrades.cargoHold || 1) - 1) * 10; }
 function calculateFuelCapacity(ship = currentShip(), upgrades = game.player.upgrades) { return ship.maxFuel + Math.max(0, (upgrades.engine || 1) - 1) * 4; }
 function calculateFighterCapacity(ship = currentShip(), upgrades = game.player.upgrades) { return ship.fighterCapacity + Math.max(0, (upgrades.shield || 1) - 1) * 5; }
-function calculateMaxTurns(engineLevel) { return BASE_MAX_TURNS + Math.max(0, engineLevel - 1) * 3; }
+function calculateMaxTurnBank(engineLevel) { return BASE_MAX_TURN_BANK + Math.max(0, engineLevel - 1) * ENGINE_TURN_BANK_BONUS; }
+function calculateDailyTurnGrant(engineLevel) { return DAILY_TURN_GRANT + Math.max(0, engineLevel - 1) * ENGINE_DAILY_TURN_BONUS; }
+function calculateMaxTurns(engineLevel) { return calculateMaxTurnBank(engineLevel); }
 function repairCost(sector = sectorMap[game.player.currentSector]) {
   if (!sector?.repairService) return 0;
   const missing = Math.max(0, game.player.maxHull - game.player.hull);

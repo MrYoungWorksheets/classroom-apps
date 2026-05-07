@@ -26,7 +26,7 @@ body {
   line-height: 1.45;
 }
 
-button, input { font: inherit; }
+button, input, select { font: inherit; }
 
 .hero {
   display: flex;
@@ -162,7 +162,7 @@ button:disabled {
   flex: 0 0 auto;
 }
 
-input {
+input, select {
   width: 100%;
   border: 1px solid var(--line-soft);
   border-radius: 10px;
@@ -172,8 +172,18 @@ input {
   margin: 0.65rem 0;
 }
 
-.flavor, .help-text, .feedback, .cooldown, .footer-note, .empty-note {
+.flavor, .help-text, .feedback, .cooldown, .footer-note, .empty-note, .mission-meta, .mission-tier-picker {
   color: var(--muted);
+}
+
+.mission-meta {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.mission-tier-picker {
+  display: block;
+  margin-top: 0.65rem;
 }
 
 .feedback.correct { color: var(--good); }
