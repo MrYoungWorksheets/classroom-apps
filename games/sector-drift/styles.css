@@ -472,3 +472,88 @@ details.compact-section summary {
   opacity: 0.78;
   border-color: rgba(255, 184, 107, 0.35);
 }
+
+.planet-panel {
+  border: 1px solid rgba(89, 211, 255, 0.22);
+  border-radius: 14px;
+  padding: 0.9rem;
+  background: linear-gradient(135deg, rgba(14, 35, 60, 0.78), rgba(18, 20, 38, 0.86));
+}
+
+.planet-type-badge,
+.defense-badge,
+.max-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.22rem 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.planet-type-badge {
+  color: #09111d;
+  background: linear-gradient(135deg, #8df3ff, #c9ff9a);
+}
+
+.defense-badge {
+  color: #ffe8a3;
+  border: 1px solid rgba(255, 218, 112, 0.42);
+  background: rgba(255, 179, 71, 0.12);
+}
+
+.production-preview {
+  margin: 0.75rem 0;
+  padding: 0.7rem;
+  border-radius: 12px;
+  color: #dff9ff;
+  background: rgba(89, 211, 255, 0.1);
+  border: 1px solid rgba(89, 211, 255, 0.24);
+}
+
+.planet-upgrade-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.planet-upgrade-card {
+  border: 1px solid rgba(154, 240, 255, 0.18);
+  border-radius: 12px;
+  padding: 0.75rem;
+  background: rgba(5, 11, 24, 0.55);
+}
+
+.planet-upgrade-card h4 {
+  margin: 0 0 0.35rem;
+  color: #9af0ff;
+}
+
+.planet-upgrade-card.maxed {
+  opacity: 0.78;
+}
+
+.cost-line {
+  color: #c9ff9a;
+  font-weight: 700;
+}
+
+.missing-line {
+  color: #ffb3b3;
+  font-weight: 700;
+}
+
+.max-badge {
+  color: #07101d;
+  background: #ffd66b;
+  margin-left: 0.35rem;
+}
+
+.future-tech ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.fighter-transfer {
+  margin-top: 0.75rem;
+}

@@ -226,6 +226,72 @@ vm.runInContext(`
   assert(shipUnlockStatus(SHIPS.starWardenFrigate).unlocked, 'Star Warden Frigate should unlock at reputation 75+');
   assert(!shipUnlockStatus(SHIPS.blackfinRaider).unlocked, 'locked pirate ships should not be purchasable');
 
+
+  // Planet type, migration, upgrade clarity, production, and Fighter storage checks.
+  game = defaultGameState();
+  const generatedPlanets = Object.values(sectorMap).filter((sector) => sector.type === 'planet').map((sector) => getPlanetState(sector));
+  assert(generatedPlanets.length > 0, 'generated planets should exist');
+  for (const planet of generatedPlanets) {
+    assert(planet.type, 'every generated planet needs a type');
+    assert(planet.upgradeCaps && PLANET_UPGRADE_TRACKS.every((track) => planet.upgradeCaps[track] !== undefined), 'every generated planet needs upgrade caps');
+    assert(planet.upgrades && PLANET_UPGRADE_TRACKS.every((track) => planet.upgrades[track] !== undefined), 'every generated planet needs upgrade tracks');
+    assert(planet.stored.Fighters === 0, 'every generated planet needs stored Fighters');
+  }
+  assert(new Set(generatedPlanets.map((planet) => planet.type)).size > 1, 'planet types should vary');
+  const oldSave = migrateGameState({ planets: { 'planet-14': { id: 'planet-14', name: 'Old Rock', owner: 'Cadet', productionLevel: 4, stored: { Ore: 7, Food: 8, Tech: 9 } } } });
+  const migratedPlanet = oldSave.planets['planet-14'];
+  assert(migratedPlanet.owner === 'Cadet', 'old owned planets remain owned');
+  assert(migratedPlanet.upgrades.production === 4 && migratedPlanet.productionLevel === 4, 'old productionLevel maps to production upgrade');
+  assert(migratedPlanet.stored.Ore === 7 && migratedPlanet.stored.Food === 8 && migratedPlanet.stored.Tech === 9, 'old stored resources are preserved');
+  assert(migratedPlanet.stored.Fighters === 0, 'old planets gain stored Fighters');
+
+  const rocky = normalizePlanetState({ id: 'planet-101', name: 'Rocky Test', type: 'Rocky', stored: { Ore: 1000, Food: 1000, Tech: 1000, Fighters: 1000 } }, 101);
+  const fortress = normalizePlanetState({ id: 'planet-102', name: 'Fortress Test', type: 'Fortress', stored: { Ore: 1000, Food: 1000, Tech: 1000, Fighters: 1000 } }, 102);
+  const crystal = normalizePlanetState({ id: 'planet-103', name: 'Crystal Test', type: 'Crystal' }, 103);
+  const water = normalizePlanetState({ id: 'planet-104', name: 'Water Test', type: 'Water' }, 104);
+  const jungle = normalizePlanetState({ id: 'planet-105', name: 'Jungle Test', type: 'Jungle' }, 105);
+  const fire = normalizePlanetState({ id: 'planet-106', name: 'Fire Test', type: 'Fire' }, 106);
+  assert(getPlanetUpgradeCost(rocky, 'production').Ore < getPlanetUpgradeCost({ ...rocky, upgrades: { ...rocky.upgrades, production: 4 } }, 'production').Ore, 'planet upgrade costs should increase');
+  assert(PLANET_UPGRADE_TRACKS.every((track) => rocky.upgradeCaps[track] !== undefined), 'each upgrade track has a cap');
+  assert(Object.keys(getPlanetUpgradeMissing(normalizePlanetState({ ...rocky, stored: { Ore: 0, Food: 0, Tech: 0, Fighters: 0 } }), 'production')).length > 0, 'upgrade card data can show missing resources');
+  assert(getPlanetProductionPreview(rocky, 'production').Ore > getPlanetProduction(rocky).Ore, 'upgrading production changes preview');
+  assert(getPlanetProductionPreview(fortress, 'fighterBays').Fighters > getPlanetProduction(fortress).Fighters, 'upgrading fighter bays changes Fighter preview');
+  assert(getPlanetProductionPreview(crystal, 'research').Tech > getPlanetProduction(crystal).Tech, 'upgrading research changes Tech preview');
+  assert(getPlanetDefenseRating({ ...rocky, upgrades: { ...rocky.upgrades, defense: 2 } }) > getPlanetDefenseRating(rocky), 'upgrading defense changes defense rating');
+  assert(PLANET_PRODUCTION_RESOURCES.every((resource) => getPlanetProduction(rocky)[resource] !== undefined), 'planet production returns all resources');
+  assert(getPlanetProduction(fortress).Fighters > getPlanetProduction(rocky).Fighters, 'Fortress produces more Fighters than Rocky');
+  assert(getPlanetProduction(crystal).Tech > getPlanetProduction(water).Tech, 'Crystal produces more Tech than Water');
+  assert(getPlanetProduction(jungle).Food > getPlanetProduction(fire).Food, 'Jungle produces more Food than Fire');
+
+  game = defaultGameState();
+  const planetSector = Object.values(sectorMap).find((sector) => sector.type === 'planet');
+  game.player.currentSector = planetSector.number;
+  claimPlanet();
+  game.lastProductionAt = 0;
+  const claimed = game.planets[planetSector.planet.id];
+  claimed.upgrades.fighterBays = claimed.upgradeCaps.fighterBays > 0 ? 1 : 0;
+  game.planets[claimed.id] = claimed;
+  const cargoBeforeProduction = cargoUsed();
+  collectPlanetProduction();
+  assert(game.planets[claimed.id].stored.Fighters >= 0, 'collected production stores Fighters on planets');
+  assert(cargoUsed() === cargoBeforeProduction, 'planet Fighter production does not affect cargo');
+
+  game.planets[claimed.id].stored.Fighters = 20;
+  game.player.fighters = 0;
+  const cargoBeforeLoad = cargoUsed();
+  transferPlanetFighters('load', 'max');
+  assert(game.player.fighters <= game.player.fighterCapacity, 'loading fighters respects fighterCapacity');
+  assert(cargoUsed() === cargoBeforeLoad, 'loading fighters does not affect cargo');
+  const ownedFightersAfterLoad = game.player.fighters;
+  game.planets[claimed.id].owner = 'Someone Else';
+  transferPlanetFighters('load', '1');
+  assert(game.player.fighters === ownedFightersAfterLoad, 'cannot load fighters from unowned planet');
+  game.planets[claimed.id].owner = game.player.pilotName;
+  game.planets[claimed.id].stored.Fighters = 1;
+  game.player.fighters = 0;
+  transferPlanetFighters('load', '10');
+  assert(game.player.fighters === 1, 'cannot load more fighters than planet has');
+
   // Mission board combat progress and existing system guards.
   game = defaultGameState();
   game.player.piratesDefeated = 1;
