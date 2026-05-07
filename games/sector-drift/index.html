@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sector Drift | Space Trading Prototype</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Classroom Space Trading Prototype</p>
+      <h1>Sector Drift</h1>
+      <p class="subtitle">Explore slow, numbered space lanes. Trade carefully, build planets, and complete math missions to keep drifting.</p>
+    </div>
+    <button id="resetButton" class="danger-button" type="button">Reset Prototype</button>
+  </header>
+
+  <main class="dashboard" aria-live="polite">
+    <section class="panel" id="shipPanel" aria-labelledby="shipHeading"></section>
+    <section class="panel sector-panel" id="sectorPanel" aria-labelledby="sectorHeading"></section>
+    <section class="panel" id="locationPanel" aria-labelledby="locationHeading"></section>
+    <section class="panel math-panel" id="mathPanel" aria-labelledby="mathHeading"></section>
+    <section class="panel" id="upgradePanel" aria-labelledby="upgradeHeading"></section>
+    <section class="panel log-panel" id="logPanel" aria-labelledby="logHeading"></section>
+  </main>
+
+  <footer class="footer-note">
+    <p>No combat, no leaderboards, no multiplayer yet. Progress saves only on this device using localStorage.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
