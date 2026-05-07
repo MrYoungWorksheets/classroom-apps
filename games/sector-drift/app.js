@@ -287,8 +287,13 @@ function migrateGameState(state) {
   const player = state.player || {};
   const shipId = player.shipId && SHIPS[player.shipId] ? player.shipId : shipIdFromName(player.shipName);
   const ship = SHIPS[shipId];
-  const upgrades = { cargoHold: 1, engine: 1, scanner: 1, shield: 1, ...(player.upgrades || {}) };
-  Object.keys(upgrades).forEach((key) => upgrades[key] = Math.min(Math.max(1, Number(upgrades[key]) || 1), ship.upgradeCaps[key]));
+  const rawUpgrades = { cargoHold: 1, engine: 1, scanner: 1, shield: 1, ...(player.upgrades || {}) };
+  const upgrades = {};
+  Object.keys(rawUpgrades).forEach((key) => upgrades[key] = Math.max(1, Number(rawUpgrades[key]) || 1));
+  const hasOverCapUpgrade = Object.keys(ship.upgradeCaps).some((key) => upgrades[key] > ship.upgradeCaps[key]);
+  const legacyUpgradeOverride = Boolean(player.legacyUpgradeOverride || hasOverCapUpgrade);
+  if (!legacyUpgradeOverride) Object.keys(upgrades).forEach((key) => upgrades[key] = Math.min(upgrades[key], ship.upgradeCaps[key]));
+  const shouldLogLegacy = hasOverCapUpgrade && !player.legacyUpgradeNoteShown;
   state.player = {
     pilotName: "Cadet",
     credits: 500,
@@ -300,6 +305,8 @@ function migrateGameState(state) {
     shipName: ship.name,
     upgrades,
     ownedShips: Array.from(new Set([...(player.ownedShips || []), shipId])),
+    legacyUpgradeOverride,
+    legacyUpgradeNoteShown: Boolean(player.legacyUpgradeNoteShown || shouldLogLegacy),
   };
   state.player.cargo = { Ore: 0, Food: 0, Tech: 0, ...(player.cargo || {}) };
   state.player.cargoCapacity = calculateCargoCapacity(ship, upgrades);
@@ -311,6 +318,9 @@ function migrateGameState(state) {
   state.visitedSectors = normalizeSectorList(state.visitedSectors, state.player.currentSector);
   state.revealedSectors = normalizeSectorList(state.revealedSectors, state.player.currentSector);
   state.log = Array.isArray(state.log) ? state.log.slice(0, 8) : [];
+  if (shouldLogLegacy && !state.log.includes("Legacy save detected. Existing upgrade levels were preserved.")) {
+    state.log = ["Legacy save detected. Existing upgrade levels were preserved.", ...state.log].slice(0, 8);
+  }
   state.currentMission = rehydrateMission(state.currentMission);
   updateScannerReveals(state);
   return state;
@@ -442,7 +452,7 @@ function renderRepairPanel(sector) {
 }
 
 function renderShipyard() {
-  return `<div class="shipyard-panel"><h3>Shipyard</h3><p class="help-text">Buying a ship preserves planets, missions, visited sectors, cargo, and progress. Upgrades above the new ship caps are safely reduced.</p>
+  return `<div class="shipyard-panel"><h3>Shipyard</h3><p class="help-text">Buying a ship preserves planets, missions, visited sectors, and progress. Shipyards block purchases when your current cargo will not fit.</p>
     <div class="ship-grid">${Object.values(SHIPS).map((ship) => renderShipCard(ship)).join("")}</div></div>`;
 }
 
@@ -450,9 +460,14 @@ function renderShipCard(ship) {
   const owned = game.player.ownedShips.includes(ship.shipId);
   const current = game.player.shipId === ship.shipId;
   const affordable = game.player.credits >= ship.basePrice;
+  const purchaseUpgrades = capUpgradesForShip(game.player.upgrades, ship);
+  const effectiveCargoCapacity = calculateCargoCapacity(ship, purchaseUpgrades);
+  const cargoOverflow = Math.max(0, cargoUsed() - effectiveCargoCapacity);
+  const cargoMessage = cargoOverflow > 0 ? `Needs ${cargoOverflow} more cargo space` : "Cargo fits";
   return `<div class="mini-card ship-card ${current ? "current-ship" : ""}"><h3>${ship.name}</h3><p>${ship.description}</p>
-    <div class="stat-grid compact">${stat("Price", ship.basePrice === 0 ? "Starter" : ship.basePrice)}${stat("Hull", ship.maxHull)}${stat("Fuel", ship.baseFuelCapacity)}${stat("Cargo", ship.baseCargoCapacity)}${stat("Resist", `+${ship.hazardResistance}`)}${stat("Caps", `C${ship.upgradeCaps.cargoHold} E${ship.upgradeCaps.engine} S${ship.upgradeCaps.scanner} Sh${ship.upgradeCaps.shield}`)}</div>
-    <button data-action="buyShip" data-ship="${ship.shipId}" ${current || owned || !affordable ? "disabled" : ""}>${current ? "Current Ship" : owned ? "Owned" : affordable ? `Buy for ${ship.basePrice}` : `Need ${ship.basePrice}`}</button></div>`;
+    <div class="stat-grid compact">${stat("Price", ship.basePrice === 0 ? "Starter" : ship.basePrice)}${stat("Hull", ship.maxHull)}${stat("Fuel", ship.baseFuelCapacity)}${stat("Cargo", effectiveCargoCapacity)}${stat("Resist", `+${ship.hazardResistance}`)}${stat("Caps", `C${ship.upgradeCaps.cargoHold} E${ship.upgradeCaps.engine} S${ship.upgradeCaps.scanner} Sh${ship.upgradeCaps.shield}`)}</div>
+    <p class="${cargoOverflow > 0 ? "cooldown" : "help-text"}">${cargoMessage}</p>
+    <button data-action="buyShip" data-ship="${ship.shipId}" ${current || owned || !affordable || cargoOverflow > 0 ? "disabled" : ""}>${current ? "Current Ship" : owned ? "Owned" : cargoOverflow > 0 ? "Cargo Too Full" : affordable ? `Buy for ${ship.basePrice}` : `Need ${ship.basePrice}`}</button></div>`;
 }
 
 function renderPlanet(sector) {
@@ -525,7 +540,8 @@ function renderUpgradePanel() {
     const cap = ship.upgradeCaps[key];
     const cost = level * 250;
     const maxed = level >= cap;
-    return `<div class="mini-card"><h3>${name}</h3><p>Level ${level}/${cap} ${maxed ? `<strong class="max-tag">MAX</strong>` : ""}</p><p class="help-text">${desc}</p><button data-upgrade="${key}" ${maxed || game.player.credits < cost ? "disabled" : ""}>${maxed ? "MAX" : `Upgrade for ${cost}`}</button></div>`;
+    const legacy = game.player.legacyUpgradeOverride && level > cap;
+    return `<div class="mini-card"><h3>${name}</h3><p>Level ${level}/${cap} ${legacy ? `<strong class="legacy-tag">Legacy</strong>` : maxed ? `<strong class="max-tag">MAX</strong>` : ""}</p><p class="help-text">${desc}</p><button data-upgrade="${key}" ${maxed || game.player.credits < cost ? "disabled" : ""}>${maxed ? "MAX" : `Upgrade for ${cost}`}</button></div>`;
   }).join("")}</div>`;
   panels.upgrade.querySelectorAll("[data-upgrade]").forEach((button) => button.addEventListener("click", () => upgradeShip(button.dataset.upgrade)));
 }
@@ -623,17 +639,24 @@ function repairHull() {
 function buyShip(shipId) {
   const ship = SHIPS[shipId];
   if (!ship || game.player.ownedShips.includes(shipId) || game.player.credits < ship.basePrice) return;
+  const cappedUpgrades = capUpgradesForShip(game.player.upgrades, ship);
+  const newCargoCapacity = calculateCargoCapacity(ship, cappedUpgrades);
+  const cargoOverflow = cargoUsed() - newCargoCapacity;
+  if (cargoOverflow > 0) return addAndRender(`This ship cannot hold your current cargo. Sell, deposit, or dump at least ${cargoOverflow} cargo before buying it.`);
+  const reductions = upgradeReductionSummary(game.player.upgrades, ship);
+  if (reductions && !confirm(`Switching to the ${ship.name} will reduce upgrades to this ship's caps: ${reductions}. Continue?`)) return;
   game.player.credits -= ship.basePrice;
   game.player.ownedShips.push(shipId);
   game.player.shipId = shipId;
   game.player.shipName = ship.name;
-  game.player.upgrades = capUpgradesForShip(game.player.upgrades, ship);
-  game.player.cargoCapacity = calculateCargoCapacity(ship, game.player.upgrades);
+  game.player.upgrades = cappedUpgrades;
+  game.player.legacyUpgradeOverride = false;
+  game.player.legacyUpgradeNoteShown = true;
+  game.player.cargoCapacity = newCargoCapacity;
   game.player.maxFuel = calculateFuelCapacity(ship, game.player.upgrades);
   game.player.fuel = Math.min(game.player.maxFuel, game.player.fuel + Math.floor(ship.baseFuelCapacity / 2));
   game.player.maxHull = ship.maxHull;
   game.player.hull = ship.maxHull;
-  trimCargoToCapacity();
   updateScannerReveals(game);
   addLog(`Purchased and launched the ${ship.name}. Upgrade caps and hull stats updated.`);
   saveGame();
@@ -910,6 +933,13 @@ function capUpgradesForShip(upgrades, ship) {
   const capped = { ...upgrades };
   Object.keys(ship.upgradeCaps).forEach((key) => capped[key] = Math.min(capped[key] || 1, ship.upgradeCaps[key]));
   return capped;
+}
+
+function upgradeReductionSummary(upgrades, ship) {
+  return Object.keys(ship.upgradeCaps)
+    .filter((key) => (upgrades[key] || 1) > ship.upgradeCaps[key])
+    .map((key) => `${titleCase(key.replace(/([A-Z])/g, " $1"))} ${upgrades[key]}→${ship.upgradeCaps[key]}`)
+    .join(", ");
 }
 
 function calculateCargoCapacity(ship, upgrades) { return ship.baseCargoCapacity + (upgrades.cargoHold - 1) * 10; }
