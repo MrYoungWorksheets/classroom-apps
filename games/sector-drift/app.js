@@ -526,6 +526,8 @@ function defaultGameState() {
       fightersLost: 0,
       fightersDestroyed: 0,
       fightersBought: 0,
+      playerHullDamageTaken: 0,
+      pirateHullDamageDealt: 0,
       upgrades: { cargoHold: 1, engine: 1, scanner: 1, shield: 1 },
       ownedShips: [starter.id],
       legacyUpgradeOverride: false,
@@ -572,6 +574,8 @@ function defaultStats() {
     fightersLost: 0,
     fightersDestroyed: 0,
     fightersBought: 0,
+    playerHullDamageTaken: 0,
+    pirateHullDamageDealt: 0,
     reputation: 0,
     alignmentStatus: "Independent",
     combatRank: "Civilian Pilot",
@@ -610,6 +614,8 @@ function migrateGameState(saved = {}) {
   merged.player.fightersLost = Math.max(0, Math.floor(typeof merged.player.fightersLost === "number" ? merged.player.fightersLost : 0));
   merged.player.fightersDestroyed = Math.max(0, Math.floor(typeof merged.player.fightersDestroyed === "number" ? merged.player.fightersDestroyed : 0));
   merged.player.fightersBought = Math.max(0, Math.floor(typeof merged.player.fightersBought === "number" ? merged.player.fightersBought : 0));
+  merged.player.playerHullDamageTaken = Math.max(0, Math.floor(typeof merged.player.playerHullDamageTaken === "number" ? merged.player.playerHullDamageTaken : 0));
+  merged.player.pirateHullDamageDealt = Math.max(0, Math.floor(typeof merged.player.pirateHullDamageDealt === "number" ? merged.player.pirateHullDamageDealt : 0));
   merged.player.ownedShips = Array.isArray(saved.player?.ownedShips) ? saved.player.ownedShips.map(shipIdFromName).filter((id) => SHIPS[id]) : [ship.id];
   if (!merged.player.ownedShips.includes(ship.id)) merged.player.ownedShips.push(ship.id);
 
@@ -1100,7 +1106,7 @@ function renderAchievementsPanel() {
 function renderStatsPanel() {
   const s = game.stats;
   panels.stats.innerHTML = `<h2 id="statsHeading">Career Stats</h2><details class="compact-section"><summary>Show career stats</summary><div class="stats-grid">
-    ${stat("Rank", currentRank())}${stat("Reputation", game.player.reputation)}${stat("Alignment", reputationTitle(game.player.reputation))}${stat("Combat Rank", combatRankTitle())}${stat("Next Combat Rank", nextCombatRankProgress())}${stat("Pirates Defeated", game.player.piratesDefeated)}${stat("Combat Wins", game.player.combatWins)}${stat("Combat Losses", game.player.combatLosses)}${stat("Ships Captured", game.player.shipsCaptured)}${stat("Fighters Lost", game.player.fightersLost || 0)}${stat("Fighters Destroyed", game.player.fightersDestroyed || 0)}${stat("Fighters Bought", game.player.fightersBought || 0)}${stat("Visited Sectors", s.visitedSectors.length)}${stat("Trade Credits", s.creditsEarnedFromTrade)}${stat("Resources Mined", s.resourcesMined)}${stat("Ore Mined", s.oreMined)}${stat("Math Missions", s.mathMissionsCompleted)}${stat("Planets Claimed", s.planetsClaimed)}${stat("Anomalies Scanned", s.anomaliesScanned)}${stat("Resources Deposited", s.resourcesDeposited)}${stat("Planet Upgrades", s.planetUpgrades)}${stat("Tech Sold", s.techSold)}${stat("Board Missions", s.missionsClaimed)}${stat("Resources Sold", s.resourcesSold)}
+    ${stat("Rank", currentRank())}${stat("Reputation", game.player.reputation)}${stat("Alignment", reputationTitle(game.player.reputation))}${stat("Combat Rank", combatRankTitle())}${stat("Next Combat Rank", nextCombatRankProgress())}${stat("Pirates Defeated", game.player.piratesDefeated)}${stat("Combat Wins", game.player.combatWins)}${stat("Combat Losses", game.player.combatLosses)}${stat("Ships Captured", game.player.shipsCaptured)}${stat("Fighters Lost", game.player.fightersLost || 0)}${stat("Fighters Destroyed", game.player.fightersDestroyed || 0)}${stat("Hull Damage Taken", game.player.playerHullDamageTaken || 0)}${stat("Pirate Hull Damaged", game.player.pirateHullDamageDealt || 0)}${stat("Fighters Bought", game.player.fightersBought || 0)}${stat("Visited Sectors", s.visitedSectors.length)}${stat("Trade Credits", s.creditsEarnedFromTrade)}${stat("Resources Mined", s.resourcesMined)}${stat("Ore Mined", s.oreMined)}${stat("Math Missions", s.mathMissionsCompleted)}${stat("Planets Claimed", s.planetsClaimed)}${stat("Anomalies Scanned", s.anomaliesScanned)}${stat("Resources Deposited", s.resourcesDeposited)}${stat("Planet Upgrades", s.planetUpgrades)}${stat("Tech Sold", s.techSold)}${stat("Board Missions", s.missionsClaimed)}${stat("Resources Sold", s.resourcesSold)}
   </div></details>`;
 }
 
@@ -1719,13 +1725,11 @@ function resolvePirateCombat(mode = "engage") {
   } else if (ratio >= (cautious ? 0.58 : 0.66)) {
     const pirateFighterLoss = Math.max(2, Math.ceil((game.player.fighters * (cautious ? 0.22 : 0.34)) + currentShip().basePower / 3));
     const pirateHullLoss = Math.max(3, Math.ceil((playerPower / Math.max(6, pirate.threatLevel * 2)) * (cautious ? 0.45 : 0.65)));
-    pirate.fighters = Math.max(0, pirate.fighters - pirateFighterLoss);
-    pirate.hull = Math.max(0, pirate.hull - pirateHullLoss);
-    game.player.fightersDestroyed = (game.player.fightersDestroyed || 0) + pirateFighterLoss;
+    const pirateDamageReport = applyPirateCombatDamage(pirate, pirateFighterLoss, pirateHullLoss);
     const fighterLoss = Math.min(game.player.fighters, Math.ceil(Math.max(1, piratePower / 12) * (cautious ? 0.65 : 1)));
     const hullDamage = cautious ? Math.max(0, Math.ceil(pirate.threatLevel / 3) - 1) : Math.max(1, Math.ceil(pirate.threatLevel / 2));
     const damageReport = applyCombatDamage(fighterLoss, hullDamage, "skirmish");
-    addLog(`Skirmish report: ${pirate.name} lost ${pirateFighterLoss} fighters and ${pirateHullLoss} hull; you lost ${damageReport.fightersLost} fighters and took ${damageReport.hullDamage} hull damage.`);
+    addLog(`Skirmish report: ${pirate.name} lost ${pirateDamageReport.fightersDestroyed} fighters and ${pirateDamageReport.hullDamageDealt} hull; you lost ${damageReport.fightersLost} fighters and took ${damageReport.hullDamage} hull damage.`);
   } else {
     loseCombatToPirates(pirate, cautious);
   }
@@ -1734,24 +1738,51 @@ function resolvePirateCombat(mode = "engage") {
 }
 
 
-function applyCombatDamage(fighterLoss, hullDamage, context = "combat") {
-  const absorbed = Math.min(game.player.fighters, Math.max(0, Math.floor(fighterLoss)));
-  game.player.fighters -= absorbed;
-  const spillover = Math.max(0, Math.floor(fighterLoss) - absorbed);
-  const shieldReduction = Math.floor((game.player.upgrades.shield || 1) / 2);
-  const damage = Math.max(0, Math.floor(hullDamage) + spillover - shieldReduction);
-  game.player.hull = Math.max(0, game.player.hull - damage);
-  game.player.fightersLost = (game.player.fightersLost || 0) + absorbed;
+function applyBoundedLoss(currentValue, requestedLoss) {
+  const current = Math.max(0, Math.floor(Number(currentValue) || 0));
+  const requested = Math.max(0, Math.floor(Number(requestedLoss) || 0));
+  const actualLoss = Math.min(current, requested);
+  return {
+    nextValue: Math.max(0, current - actualLoss),
+    actualLoss,
+  };
+}
+
+function applyPirateCombatDamage(pirate, fighterLoss, hullLoss) {
+  const fighterReport = applyBoundedLoss(pirate.fighters, fighterLoss);
+  pirate.fighters = fighterReport.nextValue;
+  const hullReport = applyBoundedLoss(pirate.hull, hullLoss);
+  pirate.hull = hullReport.nextValue;
+  game.player.fightersDestroyed = (game.player.fightersDestroyed || 0) + fighterReport.actualLoss;
+  game.player.pirateHullDamageDealt = (game.player.pirateHullDamageDealt || 0) + hullReport.actualLoss;
   syncCombatStats(game);
-  if (absorbed > 0 || damage > 0) addLog(`Combat damage (${context}): lost ${absorbed} fighter${absorbed === 1 ? "" : "s"}${damage ? ` and ${damage} hull` : ""}.`);
+  return { fightersDestroyed: fighterReport.actualLoss, hullDamageDealt: hullReport.actualLoss };
+}
+
+function applyCombatDamage(fighterLoss, hullDamage, context = "combat") {
+  const requestedFighterLoss = Math.max(0, Math.floor(Number(fighterLoss) || 0));
+  const fighterReport = applyBoundedLoss(game.player.fighters, requestedFighterLoss);
+  game.player.fighters = fighterReport.nextValue;
+  const spillover = Math.max(0, requestedFighterLoss - fighterReport.actualLoss);
+  const shieldReduction = Math.floor((game.player.upgrades.shield || 1) / 2);
+  const requestedHullDamage = Math.max(0, Math.floor(Number(hullDamage) || 0) + spillover - shieldReduction);
+  const hullReport = applyBoundedLoss(game.player.hull, requestedHullDamage);
+  game.player.hull = hullReport.nextValue;
+  game.player.fightersLost = (game.player.fightersLost || 0) + fighterReport.actualLoss;
+  game.player.playerHullDamageTaken = (game.player.playerHullDamageTaken || 0) + hullReport.actualLoss;
+  syncCombatStats(game);
+  if (fighterReport.actualLoss > 0 || hullReport.actualLoss > 0) addLog(`Combat damage (${context}): lost ${fighterReport.actualLoss} fighter${fighterReport.actualLoss === 1 ? "" : "s"}${hullReport.actualLoss ? ` and ${hullReport.actualLoss} hull` : ""}.`);
   if (game.player.hull <= 0) escapePodReset();
-  return { fightersLost: absorbed, hullDamage: damage };
+  return { fightersLost: fighterReport.actualLoss, hullDamage: hullReport.actualLoss };
 }
 
 function defeatPirate(pirate, verb = "defeated", report = {}) {
   const bounty = Math.max(0, Math.floor(pirate.bounty || 0));
   const reputationGain = Math.round((pirate.reputationReward || 0) * PIRATE_REPUTATION_MULTIPLIER);
-  const enemyDestroyed = Math.max(0, Math.floor(typeof report.pirateFightersLost === "number" ? report.pirateFightersLost : pirate.fighters || 0));
+  const requestedEnemyDestroyed = Math.max(0, Math.floor(typeof report.pirateFightersLost === "number" ? report.pirateFightersLost : pirate.fighters || 0));
+  const fighterReport = applyBoundedLoss(pirate.fighters, requestedEnemyDestroyed);
+  const requestedHullDamage = Math.max(0, Math.floor(typeof report.pirateHullDamageDealt === "number" ? report.pirateHullDamageDealt : pirate.hull || 0));
+  const hullReport = applyBoundedLoss(pirate.hull, requestedHullDamage);
   pirate.defeated = true;
   pirate.fighters = 0;
   pirate.hull = 0;
@@ -1759,11 +1790,12 @@ function defeatPirate(pirate, verb = "defeated", report = {}) {
   addReputation(reputationGain);
   game.player.piratesDefeated += 1;
   game.player.combatWins += 1;
-  game.player.fightersDestroyed = (game.player.fightersDestroyed || 0) + enemyDestroyed;
+  game.player.fightersDestroyed = (game.player.fightersDestroyed || 0) + fighterReport.actualLoss;
+  game.player.pirateHullDamageDealt = (game.player.pirateHullDamageDealt || 0) + hullReport.actualLoss;
   syncCombatStats(game);
   const lost = report.fightersLost ?? 0;
   const hull = report.hullDamage ?? 0;
-  addLog(`Combat report: ${verb} ${pirate.name}. Lost ${lost} fighter${lost === 1 ? "" : "s"}, destroyed ${enemyDestroyed} pirate fighter${enemyDestroyed === 1 ? "" : "s"}, took ${hull} hull damage, earned ${bounty} credits and +${reputationGain} reputation.`);
+  addLog(`Combat report: ${verb} ${pirate.name}. Lost ${lost} fighter${lost === 1 ? "" : "s"}, destroyed ${fighterReport.actualLoss} pirate fighter${fighterReport.actualLoss === 1 ? "" : "s"}, took ${hull} hull damage, earned ${bounty} credits and +${reputationGain} reputation.`);
 }
 
 function loseCombatToPirates(pirate, cautious = false) {
@@ -1892,6 +1924,8 @@ function syncCombatStats(targetGame = game) {
   targetGame.stats.fightersLost = targetGame.player.fightersLost || 0;
   targetGame.stats.fightersDestroyed = targetGame.player.fightersDestroyed || 0;
   targetGame.stats.fightersBought = targetGame.player.fightersBought || 0;
+  targetGame.stats.playerHullDamageTaken = targetGame.player.playerHullDamageTaken || 0;
+  targetGame.stats.pirateHullDamageDealt = targetGame.player.pirateHullDamageDealt || 0;
   targetGame.stats.reputation = targetGame.player.reputation || 0;
   targetGame.stats.alignmentStatus = targetGame.player.alignmentStatus || reputationTitle(targetGame.player.reputation || 0);
   targetGame.stats.combatRank = targetGame.player.combatRank || combatRankTitle(targetGame.player);
@@ -2189,6 +2223,9 @@ if (typeof globalThis !== "undefined" && globalThis.__SECTOR_DRIFT_ENABLE_TEST_H
     getPirateCombatPower,
     estimateCombatRisk,
     pirateIntelStats,
+    applyBoundedLoss,
+    applyCombatDamage,
+    applyPirateCombatDamage,
     setGameForTest(nextGame) {
       game = nextGame;
       selectedSectorNumber = game.player.currentSector;
