@@ -385,3 +385,39 @@ details.compact-section summary {
   .math-panel, .mission-panel, .tutorial-panel { grid-column: span 1; }
   .achievements-panel, .stats-panel, .log-panel { grid-column: span 1; }
 }
+
+.pirate-panel, .fighter-yard {
+  border: 1px solid rgba(255, 107, 122, 0.45);
+  border-radius: 14px;
+  padding: 0.85rem;
+  margin-top: 0.9rem;
+  background: linear-gradient(180deg, rgba(80, 24, 34, 0.38), rgba(19, 40, 48, 0.35));
+}
+
+.threat-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  font-weight: 800;
+  color: #081014;
+  background: var(--warn);
+}
+
+.threat-1, .threat-2 { background: var(--warn); }
+.threat-3 { background: #ff996b; }
+.threat-4, .threat-5 { background: var(--danger); color: #fff4f5; }
+
+.combat-button {
+  border-color: rgba(255, 209, 102, 0.65);
+  background: linear-gradient(180deg, #463818, #251d0c);
+}
+
+.boarding-button {
+  border-color: rgba(142, 246, 178, 0.65);
+  background: linear-gradient(180deg, #17412b, #0d2518);
+}
+
+.locked-ship {
+  opacity: 0.78;
+  border-color: rgba(255, 184, 107, 0.35);
+}
