@@ -280,6 +280,88 @@
     .useful-link {
       background: #526170;
       text-align: center;
+      border: 0;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(0, 0, 0, 0.64);
+    }
+
+    .modal-overlay[hidden] {
+      display: none;
+    }
+
+    .pin-modal {
+      width: min(420px, 100%);
+      border: 1px solid rgba(213, 225, 237, 0.95);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .pin-modal label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .pin-modal input {
+      width: 100%;
+      min-height: 46px;
+      border: 1px solid #c7d8ea;
+      border-radius: 7px;
+      padding: 9px 12px;
+      font: inherit;
+      color: var(--ink);
+      background: var(--soft);
+    }
+
+    .pin-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .pin-button {
+      min-height: 42px;
+      border: 0;
+      border-radius: 7px;
+      padding: 9px 14px;
+      color: #ffffff;
+      background: var(--blue);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .pin-button.secondary {
+      background: #526170;
+    }
+
+    .pin-button:hover,
+    .pin-button:focus {
+      background: var(--blue-dark);
+      outline: none;
+    }
+
+    .pin-message {
+      min-height: 1.45em;
+      color: var(--red);
+      font-weight: 700;
     }
 
     @media (max-width: 920px) {
@@ -367,6 +449,9 @@
       { title: 'Algebra 2 Honors', assignments: algebra2HonorsAssignments }
     ];
 
+    const SECTOR_DRIFT_PIN = "4242";
+    const SECTOR_DRIFT_URL = 'games/sector-drift/';
+
     const usefulLinks = [
       { title: 'Desmos', link: 'https://www.desmos.com/calculator' },
       { title: 'ClassLink', link: 'https://myapps.classlink.com/home' },
@@ -380,6 +465,12 @@
         title: 'Audio Math Visualizer',
         description: 'Upload an MP3 or WAV file and watch math-inspired visuals react to the sound.',
         link: 'audio-math-visualizer/'
+      },
+      {
+        title: 'Sector Drift',
+        description: 'Enter the launch code to open Sector Drift.',
+        link: SECTOR_DRIFT_URL,
+        requiresPin: true
       }
     ];
     // ===== END EDITABLE DATA =====
@@ -453,9 +544,56 @@
     }
 
     function renderUsefulLinks() {
-      document.getElementById('usefulLinks').innerHTML = usefulLinks.map(item => (
-        `<a class="useful-link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(item.description || item.title)}" aria-label="${escapeHtml(item.description || item.title)}">${escapeHtml(item.title)}</a>`
-      )).join('');
+      document.getElementById('usefulLinks').innerHTML = usefulLinks.map(item => {
+        const title = escapeHtml(item.title);
+        const description = escapeHtml(item.description || item.title);
+
+        if (item.requiresPin) {
+          return `<button class="useful-link" type="button" data-sector-drift-gate title="${description}" aria-label="${description}">${title}</button>`;
+        }
+
+        return `<a class="useful-link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer" title="${description}" aria-label="${description}">${title}</a>`;
+      }).join('');
+    }
+
+    function openSectorDriftGate() {
+      const modal = document.getElementById('sectorDriftModal');
+      const input = document.getElementById('sectorDriftPin');
+      document.getElementById('sectorDriftMessage').textContent = '';
+      input.value = '';
+      modal.hidden = false;
+      input.focus();
+    }
+
+    function closeSectorDriftGate() {
+      document.getElementById('sectorDriftModal').hidden = true;
+    }
+
+    function submitSectorDriftPin(event) {
+      event.preventDefault();
+      const input = document.getElementById('sectorDriftPin');
+      const message = document.getElementById('sectorDriftMessage');
+
+      if (input.value.trim() === SECTOR_DRIFT_PIN) {
+        window.location.href = SECTOR_DRIFT_URL;
+        return;
+      }
+
+      message.textContent = 'Access denied. Ask Mr. Young for the launch code.';
+      input.select();
+    }
+
+    function setupSectorDriftGate() {
+      document.getElementById('usefulLinks').addEventListener('click', event => {
+        const gateButton = event.target.closest('[data-sector-drift-gate]');
+        if (gateButton) openSectorDriftGate();
+      });
+
+      document.getElementById('sectorDriftForm').addEventListener('submit', submitSectorDriftPin);
+      document.getElementById('sectorDriftCancel').addEventListener('click', closeSectorDriftGate);
+      document.getElementById('sectorDriftModal').addEventListener('click', event => {
+        if (event.target.id === 'sectorDriftModal') closeSectorDriftGate();
+      });
     }
 
     function renderToday() {
@@ -471,6 +609,7 @@
       renderToday();
       renderAssignments();
       renderUsefulLinks();
+      setupSectorDriftGate();
     });
   </script>
 </head>
@@ -504,5 +643,21 @@
       </section>
     </div>
   </main>
+
+  <div class="modal-overlay" id="sectorDriftModal" hidden>
+    <form class="pin-modal" id="sectorDriftForm" aria-labelledby="sector-drift-title">
+      <h2 id="sector-drift-title">Sector Drift Launch Code</h2>
+      <p class="muted">Enter the classroom PIN before opening Sector Drift.</p>
+      <label for="sectorDriftPin">
+        Launch code
+        <input id="sectorDriftPin" name="sectorDriftPin" type="password" inputmode="numeric" autocomplete="off">
+      </label>
+      <p class="pin-message" id="sectorDriftMessage" aria-live="polite"></p>
+      <div class="pin-actions">
+        <button class="pin-button secondary" type="button" id="sectorDriftCancel">Cancel</button>
+        <button class="pin-button" type="submit">Launch</button>
+      </div>
+    </form>
+  </div>
 </body>
 </html>
