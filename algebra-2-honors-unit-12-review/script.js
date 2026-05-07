@@ -48,6 +48,188 @@ let state = {
   answers: {}
 };
 
+const THEME_STORAGE_KEY = 'unit12ReviewTheme';
+const CHAOS_STORAGE_KEY = 'unit12ReviewChaosPalette';
+const DEFAULT_THEME = 'dark';
+const CHAOS_THEMES = [
+  {
+    name: 'Radioactive Flamingo',
+    bg: '#ff4fd8',
+    panel: '#39ff14',
+    panelStrong: '#9d00ff',
+    card: '#ffff33',
+    cardBorder: '#00e5ff',
+    text: '#111111',
+    muted: '#3b164c',
+    accent: '#ff6b00',
+    accentStrong: '#111111',
+    buttonBg: '#00e5ff',
+    buttonText: '#111111',
+    success: '#005c2f',
+    warning: '#5a2d00',
+    danger: '#7a001f',
+    inputBg: '#ffffff',
+    inputBorder: '#111111',
+    shadow: 'rgba(17, 17, 17, 0.36)'
+  },
+  {
+    name: 'Mustard Aquarium',
+    bg: '#d9a300',
+    panel: '#00a6a6',
+    panelStrong: '#ff7a00',
+    card: '#ffe66d',
+    cardBorder: '#ff00a8',
+    text: '#111827',
+    muted: '#34204f',
+    accent: '#ff00a8',
+    accentStrong: '#111827',
+    buttonBg: '#b000ff',
+    buttonText: '#ffffff',
+    success: '#005c46',
+    warning: '#6b3500',
+    danger: '#8c0038',
+    inputBg: '#fffbe6',
+    inputBorder: '#111827',
+    shadow: 'rgba(52, 32, 79, 0.34)'
+  },
+  {
+    name: 'Goblin Lava Lamp',
+    bg: '#34135c',
+    panel: '#7cff00',
+    panelStrong: '#fff200',
+    card: '#baff39',
+    cardBorder: '#ffef00',
+    text: '#111111',
+    muted: '#442200',
+    accent: '#ff4b00',
+    accentStrong: '#111111',
+    buttonBg: '#ff4b00',
+    buttonText: '#111111',
+    success: '#00613b',
+    warning: '#5a3500',
+    danger: '#9b1d00',
+    inputBg: '#ffffff',
+    inputBorder: '#34135c',
+    shadow: 'rgba(52, 19, 92, 0.38)'
+  },
+  {
+    name: 'Blueberry Peach Detention',
+    bg: '#006bff',
+    panel: '#ffd1b3',
+    panelStrong: '#7fffd4',
+    card: '#ffe0c7',
+    cardBorder: '#111111',
+    text: '#111111',
+    muted: '#16324f',
+    accent: '#00d084',
+    accentStrong: '#111111',
+    buttonBg: '#111111',
+    buttonText: '#7fffd4',
+    success: '#007a3d',
+    warning: '#855400',
+    danger: '#a61717',
+    inputBg: '#ffffff',
+    inputBorder: '#111111',
+    shadow: 'rgba(0, 20, 80, 0.35)'
+  },
+  {
+    name: 'Swamp Princess Spreadsheet',
+    bg: '#556b2f',
+    panel: '#d8bfd8',
+    panelStrong: '#ffd700',
+    card: '#e6e6fa',
+    cardBorder: '#ff6347',
+    text: '#111111',
+    muted: '#2f3b1f',
+    accent: '#ff6347',
+    accentStrong: '#111111',
+    buttonBg: '#ff6347',
+    buttonText: '#111111',
+    success: '#176b34',
+    warning: '#6b4b00',
+    danger: '#991b1b',
+    inputBg: '#fffaf0',
+    inputBorder: '#111111',
+    shadow: 'rgba(47, 59, 31, 0.35)'
+  }
+];
+
+
+
+function getStoredValue(key){
+  try { return window.localStorage.getItem(key); }
+  catch (error) { return null; }
+}
+function setStoredValue(key, value){
+  try { window.localStorage.setItem(key, value); }
+  catch (error) { /* Theme persistence is optional if storage is blocked. */ }
+}
+function sanitizeThemeChoice(value){return ['light','dark','chaos'].includes(value) ? value : DEFAULT_THEME;}
+function cssVarName(key){return `--${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`;}
+function applyChaosPalette(index){
+  const palette = CHAOS_THEMES[index] || CHAOS_THEMES[0];
+  Object.entries(palette).forEach(([key, value]) => {
+    if(key !== 'name') document.documentElement.style.setProperty(cssVarName(key), value);
+  });
+  setStoredValue(CHAOS_STORAGE_KEY, String(CHAOS_THEMES.indexOf(palette)));
+  return palette;
+}
+function clearChaosPalette(){
+  if(!document.documentElement.style) return;
+  CHAOS_THEMES.forEach(palette => {
+    Object.keys(palette).forEach(key => {
+      if(key !== 'name') document.documentElement.style.removeProperty(cssVarName(key));
+    });
+  });
+}
+function randomChaosIndex(excludeIndex = -1){
+  if(CHAOS_THEMES.length <= 1) return 0;
+  let next = Math.floor(Math.random() * CHAOS_THEMES.length);
+  while(next === excludeIndex) next = Math.floor(Math.random() * CHAOS_THEMES.length);
+  return next;
+}
+function updateThemeControls(theme, paletteName = ''){
+  document.querySelectorAll('[data-theme-choice]').forEach(button => {
+    const selected = button.dataset.themeChoice === theme;
+    button.setAttribute('aria-pressed', String(selected));
+  });
+  const rerollButton = document.getElementById('rerollChaosBtn');
+  const message = document.getElementById('themeMessage');
+  if(rerollButton) rerollButton.classList.toggle('hidden', theme !== 'chaos');
+  if(message){
+    if(theme === 'chaos') message.textContent = `You were warned. Palette: ${paletteName}.`;
+    else if(theme === 'dark') message.textContent = 'Dark Mode is on by default.';
+    else message.textContent = 'Light Mode restored.';
+  }
+}
+function applyTheme(theme, options = {}){
+  const safeTheme = sanitizeThemeChoice(theme);
+  let paletteName = '';
+  document.documentElement.dataset.theme = safeTheme;
+  if(safeTheme === 'chaos'){
+    const storedIndex = Number(getStoredValue(CHAOS_STORAGE_KEY));
+    const currentIndex = Number.isInteger(options.paletteIndex) ? options.paletteIndex : Number.isInteger(storedIndex) && CHAOS_THEMES[storedIndex] ? storedIndex : randomChaosIndex();
+    paletteName = applyChaosPalette(currentIndex).name;
+  } else {
+    clearChaosPalette();
+  }
+  setStoredValue(THEME_STORAGE_KEY, safeTheme);
+  updateThemeControls(safeTheme, paletteName);
+}
+function initializeThemeControls(){
+  applyTheme(sanitizeThemeChoice(getStoredValue(THEME_STORAGE_KEY) || DEFAULT_THEME));
+  document.querySelectorAll('[data-theme-choice]').forEach(button => {
+    button.addEventListener('click', () => {
+      if(button.dataset.themeChoice === 'chaos') applyTheme('chaos', {paletteIndex: randomChaosIndex(Number(getStoredValue(CHAOS_STORAGE_KEY)))});
+      else applyTheme(button.dataset.themeChoice);
+    });
+  });
+  const rerollButton = document.getElementById('rerollChaosBtn');
+  if(rerollButton){
+    rerollButton.addEventListener('click', () => applyTheme('chaos', {paletteIndex: randomChaosIndex(Number(getStoredValue(CHAOS_STORAGE_KEY)))}));
+  }
+}
+
 function freshRecord(){
   return {attempts:0, status:'Not Started', hintUsed:false, solutionShown:false, firstAttemptCorrect:false, completedWithHelp:false, needsReview:false, originalStatus:'Not Started'};
 }
@@ -520,4 +702,5 @@ window.addEventListener('beforeprint', () => {if(state.view === 'summary') updat
 document.getElementById('startOverBtn').addEventListener('click', startOver);
 document.getElementById('prevPageBtn').addEventListener('click', () => {state.topicPage -= 1;renderTopic();window.scrollTo({top:0, behavior:'smooth'});});
 document.getElementById('nextPageBtn').addEventListener('click', () => {state.topicPage += 1;renderTopic();window.scrollTo({top:0, behavior:'smooth'});});
+initializeThemeControls();
 updateProgress();

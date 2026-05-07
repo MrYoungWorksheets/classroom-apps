@@ -30,6 +30,15 @@ Completed Stage 2 behavior:
 - The final summary diagnoses weak skill tags, names the top weak areas, and recommends exact problem IDs to retry.
 - Worked solutions render the short answer, ordered steps, and common mistake in a Chromebook-friendly format.
 
+
+## Theme controls
+
+The app now starts in **Dark Mode** by default, using charcoal/slate backgrounds with soft high-contrast text for classroom-friendly viewing. Students can switch to **Light Mode** to restore the original bright look as closely as possible.
+
+A student-facing **Don’t Click This** joke mode applies a curated ridiculous palette and shows a **Reroll Chaos** button for swapping to another silly-but-usable palette. Chaos mode uses fixed safe palettes only; it does not use flashing, strobe effects, rapid animation, moving text, tiny text, or physically uncomfortable patterns.
+
+The selected theme, including the current chaos palette when applicable, is saved with `localStorage` so the choice persists after reload.
+
 ## Stage 3 TODO list
 
 1. Add printable/PDF export.
