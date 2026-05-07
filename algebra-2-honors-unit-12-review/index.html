@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -28,6 +28,15 @@
           <p class="meta">Choose topics in any order, practice problems, use hints, and review worked solutions.</p>
         </div>
         <div class="header-tools">
+          <div class="theme-controls" aria-label="Theme controls">
+            <div class="theme-button-row">
+              <button class="theme-btn" type="button" data-theme-choice="light" aria-pressed="false">Light Mode</button>
+              <button class="theme-btn" type="button" data-theme-choice="dark" aria-pressed="true">Dark Mode</button>
+              <button class="theme-btn" type="button" data-theme-choice="chaos" aria-pressed="false">Don&rsquo;t Click This</button>
+              <button class="theme-btn theme-reroll hidden" type="button" id="rerollChaosBtn">Reroll Chaos</button>
+            </div>
+            <span id="themeMessage" class="theme-message" aria-live="polite"></span>
+          </div>
           <button class="btn secondary" id="dashboardBtn" type="button">Dashboard</button>
           <button class="btn reset" id="startOverBtn" type="button">START OVER</button>
         </div>
