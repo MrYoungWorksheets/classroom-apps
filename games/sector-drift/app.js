@@ -113,7 +113,7 @@ const SHIPS = {
     boardingBonus: 2,
     captureResistance: 3,
     hazardResist: 1,
-    unlock: { reputation: 10, text: "Requires reputation 10+" },
+    unlock: { reputation: 10, combatRank: "Patrol Volunteer", text: "Requires reputation 10+ or Patrol Volunteer rank" },
     upgradeCaps: { cargoHold: 5, engine: 6, scanner: 6, shield: 7 },
   },
   marshalCorvette: {
@@ -129,7 +129,7 @@ const SHIPS = {
     boardingBonus: 3,
     captureResistance: 4,
     hazardResist: 2,
-    unlock: { reputation: 40, text: "Requires reputation 40+ (Sector Defender)" },
+    unlock: { reputation: 40, combatRank: "Lane Guard", text: "Requires reputation 40+ or Lane Guard rank" },
     upgradeCaps: { cargoHold: 6, engine: 7, scanner: 7, shield: 8 },
   },
   starWardenFrigate: {
@@ -145,7 +145,7 @@ const SHIPS = {
     boardingBonus: 4,
     captureResistance: 5,
     hazardResist: 3,
-    unlock: { reputation: 75, text: "Requires reputation 75+ (Star Marshal)" },
+    unlock: { reputation: 75, combatRank: "Marshal", text: "Requires reputation 75+ or Marshal rank" },
     upgradeCaps: { cargoHold: 6, engine: 8, scanner: 8, shield: 9 },
   },
   deepRouteFreighter: {
@@ -513,12 +513,19 @@ function defaultGameState() {
       maxHull: starter.maxHull,
       cargo: { Ore: 0, Food: 0, Tech: 0 },
       reputation: 0,
+      lawfulReputation: 0,
+      pirateReputation: 0,
+      alignmentStatus: "Independent",
+      combatRank: "Civilian Pilot",
       fighters: 0,
       fighterCapacity: starter.fighterCapacity,
       combatWins: 0,
       combatLosses: 0,
       piratesDefeated: 0,
       shipsCaptured: 0,
+      fightersLost: 0,
+      fightersDestroyed: 0,
+      fightersBought: 0,
       upgrades: { cargoHold: 1, engine: 1, scanner: 1, shield: 1 },
       ownedShips: [starter.id],
       legacyUpgradeOverride: false,
@@ -562,7 +569,12 @@ function defaultStats() {
     combatWins: 0,
     combatLosses: 0,
     shipsCaptured: 0,
+    fightersLost: 0,
+    fightersDestroyed: 0,
+    fightersBought: 0,
     reputation: 0,
+    alignmentStatus: "Independent",
+    combatRank: "Civilian Pilot",
   };
 }
 
@@ -587,12 +599,17 @@ function migrateGameState(saved = {}) {
   merged.player.shipName = ship.name;
   merged.player.cargo = { ...fresh.player.cargo, ...(saved.player?.cargo || {}) };
   merged.player.upgrades = { ...fresh.player.upgrades, ...(saved.player?.upgrades || {}) };
-  merged.player.reputation = typeof merged.player.reputation === "number" ? merged.player.reputation : 0;
+  merged.player.reputation = clampReputation(typeof merged.player.reputation === "number" ? merged.player.reputation : 0);
+  merged.player.lawfulReputation = Math.max(0, Math.floor(typeof merged.player.lawfulReputation === "number" ? merged.player.lawfulReputation : Math.max(0, merged.player.reputation)));
+  merged.player.pirateReputation = Math.max(0, Math.floor(typeof merged.player.pirateReputation === "number" ? merged.player.pirateReputation : Math.max(0, -merged.player.reputation)));
   merged.player.fighters = Math.max(0, Math.floor(typeof merged.player.fighters === "number" ? merged.player.fighters : 0));
   merged.player.combatWins = Math.max(0, Math.floor(typeof merged.player.combatWins === "number" ? merged.player.combatWins : 0));
   merged.player.combatLosses = Math.max(0, Math.floor(typeof merged.player.combatLosses === "number" ? merged.player.combatLosses : 0));
   merged.player.piratesDefeated = Math.max(0, Math.floor(typeof merged.player.piratesDefeated === "number" ? merged.player.piratesDefeated : 0));
   merged.player.shipsCaptured = Math.max(0, Math.floor(typeof merged.player.shipsCaptured === "number" ? merged.player.shipsCaptured : 0));
+  merged.player.fightersLost = Math.max(0, Math.floor(typeof merged.player.fightersLost === "number" ? merged.player.fightersLost : 0));
+  merged.player.fightersDestroyed = Math.max(0, Math.floor(typeof merged.player.fightersDestroyed === "number" ? merged.player.fightersDestroyed : 0));
+  merged.player.fightersBought = Math.max(0, Math.floor(typeof merged.player.fightersBought === "number" ? merged.player.fightersBought : 0));
   merged.player.ownedShips = Array.isArray(saved.player?.ownedShips) ? saved.player.ownedShips.map(shipIdFromName).filter((id) => SHIPS[id]) : [ship.id];
   if (!merged.player.ownedShips.includes(ship.id)) merged.player.ownedShips.push(ship.id);
 
@@ -625,6 +642,7 @@ function migrateGameState(saved = {}) {
   if (!Array.isArray(merged.tutorial.completedSteps)) merged.tutorial.completedSteps = [];
   merged.achievements = Array.isArray(saved.achievements) ? saved.achievements : [];
   merged.stats = { ...fresh.stats, ...(saved.stats || {}) };
+  refreshCombatIdentity(merged);
   syncCombatStats(merged);
   merged.visitedSectors = normalizeSectorList(saved.visitedSectors || saved.stats?.visitedSectors || fresh.visitedSectors, merged.player.currentSector);
   merged.revealedSectors = normalizeSectorList(saved.revealedSectors || merged.visitedSectors, merged.player.currentSector);
@@ -669,7 +687,7 @@ function renderShipPanel() {
   panels.ship.innerHTML = `
     <h2 id="shipHeading">Ship Status</h2>
     <div class="stat-grid">
-      ${stat("Pilot", p.pilotName)}${stat("Rank", currentRank())}${stat("Reputation", `${p.reputation} · ${reputationTitle(p.reputation)}`)}${stat("Ship", p.shipName)}${stat("Credits", p.credits)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Turns", `${p.turns}/${p.maxTurns}`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Sector", p.currentSector)}${stat("Cargo Space", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Base Power", ship.basePower)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Hazard Resist", ship.hazardResist + Math.max(0, p.upgrades.shield - 1))}
+      ${stat("Pilot", p.pilotName)}${stat("Rank", currentRank())}${stat("Reputation", p.reputation)}${stat("Alignment", reputationTitle(p.reputation))}${stat("Combat Rank", combatRankTitle())}${stat("Ship", p.shipName)}${stat("Credits", p.credits)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Turns", `${p.turns}/${p.maxTurns}`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Sector", p.currentSector)}${stat("Cargo Space", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Base Power", ship.basePower)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Hazard Resist", ship.hazardResist + Math.max(0, p.upgrades.shield - 1))}
     </div>
     <p class="help-text">${ship.description}</p>
     ${renderEmergencyWarpControl()}
@@ -933,9 +951,19 @@ function renderPirateEncounterPanel() {
   const pirate = currentPirateEncounter();
   if (!pirate) return "";
   const risk = estimateCombatRisk(pirate);
+  const intel = pirateIntelStats(pirate, risk);
   const boardingReady = canBoardPirate(pirate);
   const outmatched = risk.score < 0.72;
-  return `<section class="pirate-panel"><h3>Pirate Encounter</h3><p><span class="threat-badge threat-${pirate.threatLevel}">${pirate.name}</span></p><div class="intel-grid">${stat("Threat Level", pirate.threatLevel)}${stat("Pirate Fighters", pirate.fighters)}${stat("Pirate Hull", `${pirate.hull}/${pirate.maxHull}`)}${stat("Pirate Base Power", pirate.basePower)}${stat("Bounty", `${pirate.bounty} credits`)}${stat("Reputation Reward", `+${pirate.reputationReward}`)}${stat("Scanner Estimate", risk.label)}${stat("Your Power", risk.playerPower)}</div>${outmatched ? `<p class="turn-warning">Warning: your ship is badly outmatched. Retreat is available and combat is optional.</p>` : ""}${game.player.fighters <= 0 && currentShip().basePower < pirate.basePower ? `<p class="turn-warning">Your ship is lightly armed. Buy fighters at a shipyard before challenging strong pirates.</p>` : ""}<div class="button-row"><button class="combat-button" data-action="pirateCombat" data-mode="engage">Engage Pirates</button><button data-action="pirateCombat" data-mode="cautious">Cautious Attack</button><button data-action="pirateCombat" data-mode="retreat">Retreat / Avoid for now</button>${boardingReady ? `<button class="boarding-button" data-action="boardPirate">Board Pirate Ship</button>` : ""}</div><p class="help-text">NPC pirate combat only. Real player targeting and player ship capture are not active.</p></section>`;
+  return `<section class="pirate-panel"><h3>Pirate Encounter</h3><p><span class="threat-badge threat-${pirate.threatLevel}">${pirate.name}</span></p><div class="intel-grid">${intel.map(([label, value]) => stat(label, value)).join("")}</div>${outmatched ? `<p class="turn-warning">Warning: your ship is badly outmatched. Retreat is available and combat is optional.</p>` : ""}${game.player.fighters <= 0 && currentShip().basePower < pirate.basePower ? `<p class="turn-warning">Your ship is lightly armed. Buy fighters at a shipyard before challenging strong pirates.</p>` : ""}<div class="button-row"><button class="combat-button" data-action="pirateCombat" data-mode="engage">Engage Pirates</button><button data-action="pirateCombat" data-mode="cautious">Cautious Attack</button><button data-action="pirateCombat" data-mode="retreat">Retreat / Avoid for now</button>${boardingReady ? `<button class="boarding-button" data-action="boardPirate">Board Pirate Ship</button>` : ""}</div><p class="help-text">NPC pirate combat only. Real player targeting and player ship capture are not active.</p></section>`;
+}
+
+function pirateIntelStats(pirate, risk = estimateCombatRisk(pirate)) {
+  const scanner = game.player.upgrades.scanner || 1;
+  const stats = [["Threat Level", scanner <= 1 ? "Unknown" : risk.threatBand], ["Threat Estimate", risk.label]];
+  if (scanner >= 2) stats.push(["Bounty", `${pirate.bounty} credits`], ["Reputation Reward", `+${pirate.reputationReward}`]);
+  if (scanner >= 3) stats.push(["Pirate Fighters", pirate.fighters], ["Pirate Hull", `${pirate.hull}/${pirate.maxHull}`], ["Pirate Base Power", pirate.basePower]);
+  if (scanner >= 4) stats.push(["Likely Outcome", risk.outcome], ["Your Power", risk.playerPower]);
+  return stats;
 }
 
 function currentPirateEncounter() {
@@ -955,6 +983,8 @@ function buyFighters(amountValue) {
   if (amount <= 0 || game.player.credits < cost) return addAndRender("Not enough credits to buy fighters.");
   game.player.credits -= cost;
   game.player.fighters += amount;
+  game.player.fightersBought = (game.player.fightersBought || 0) + amount;
+  syncCombatStats(game);
   addLog(`Bought ${amount} fighter${amount === 1 ? "" : "s"} for ${cost} credits.`);
   saveGame();
   render();
@@ -1070,7 +1100,7 @@ function renderAchievementsPanel() {
 function renderStatsPanel() {
   const s = game.stats;
   panels.stats.innerHTML = `<h2 id="statsHeading">Career Stats</h2><details class="compact-section"><summary>Show career stats</summary><div class="stats-grid">
-    ${stat("Rank", currentRank())}${stat("Reputation", game.player.reputation)}${stat("Reputation Title", reputationTitle(game.player.reputation))}${stat("Pirates Defeated", game.player.piratesDefeated)}${stat("Combat Wins", game.player.combatWins)}${stat("Combat Losses", game.player.combatLosses)}${stat("Ships Captured", game.player.shipsCaptured)}${stat("Visited Sectors", s.visitedSectors.length)}${stat("Trade Credits", s.creditsEarnedFromTrade)}${stat("Resources Mined", s.resourcesMined)}${stat("Ore Mined", s.oreMined)}${stat("Math Missions", s.mathMissionsCompleted)}${stat("Planets Claimed", s.planetsClaimed)}${stat("Anomalies Scanned", s.anomaliesScanned)}${stat("Resources Deposited", s.resourcesDeposited)}${stat("Planet Upgrades", s.planetUpgrades)}${stat("Tech Sold", s.techSold)}${stat("Board Missions", s.missionsClaimed)}${stat("Resources Sold", s.resourcesSold)}
+    ${stat("Rank", currentRank())}${stat("Reputation", game.player.reputation)}${stat("Alignment", reputationTitle(game.player.reputation))}${stat("Combat Rank", combatRankTitle())}${stat("Next Combat Rank", nextCombatRankProgress())}${stat("Pirates Defeated", game.player.piratesDefeated)}${stat("Combat Wins", game.player.combatWins)}${stat("Combat Losses", game.player.combatLosses)}${stat("Ships Captured", game.player.shipsCaptured)}${stat("Fighters Lost", game.player.fightersLost || 0)}${stat("Fighters Destroyed", game.player.fightersDestroyed || 0)}${stat("Fighters Bought", game.player.fightersBought || 0)}${stat("Visited Sectors", s.visitedSectors.length)}${stat("Trade Credits", s.creditsEarnedFromTrade)}${stat("Resources Mined", s.resourcesMined)}${stat("Ore Mined", s.oreMined)}${stat("Math Missions", s.mathMissionsCompleted)}${stat("Planets Claimed", s.planetsClaimed)}${stat("Anomalies Scanned", s.anomaliesScanned)}${stat("Resources Deposited", s.resourcesDeposited)}${stat("Planet Upgrades", s.planetUpgrades)}${stat("Tech Sold", s.techSold)}${stat("Board Missions", s.missionsClaimed)}${stat("Resources Sold", s.resourcesSold)}
   </div></details>`;
 }
 
@@ -1346,6 +1376,18 @@ function handleDevCode(input) {
     render();
     return true;
   }
+  if (code === "8888") {
+    game.player.fighterCapacity = calculateFighterCapacity(currentShip(), game.player.upgrades);
+    game.player.fighters = game.player.fighterCapacity;
+    game.player.hull = game.player.maxHull;
+    game.player.credits += 1000;
+    game.missionFeedback = "Dev code accepted. Combat test systems loaded.";
+    game.missionFeedbackClass = "correct";
+    addLog("Dev code 8888 applied: fighters filled, hull restored, and 1000 credits added.");
+    saveGame();
+    render();
+    return true;
+  }
   return false;
 }
 
@@ -1475,6 +1517,12 @@ function missionTemplates() {
     { id: "planet-upgrade-1", title: "Builder Contract", objective: "Upgrade a planet.", metric: "planetUpgrades", target: 1, reward: { credits: 200, Tech: 1 } },
     { id: "sell-tech-5", title: "Circuit Broker", objective: "Sell 5 Tech.", metric: "techSold", target: 5, reward: { credits: 180, fuel: 3 } },
     { id: "credits-1000", title: "Four-Digit Ledger", objective: "Reach 1000 credits.", metric: "credits", target: 1000, reward: { turns: 4, fuel: 4 } },
+    { id: "pirate-1", title: "Local Bounty", objective: "Defeat 1 NPC pirate.", metric: "piratesDefeated", target: 1, reward: { credits: 220, reputation: 3 } },
+    { id: "pirate-3", title: "Lane Security Sweep", objective: "Defeat 3 NPC pirates.", metric: "piratesDefeated", target: 3, reward: { credits: 500, turns: 3, reputation: 5 } },
+    { id: "combat-wins-2", title: "Combat Drill", objective: "Win 2 NPC combats.", metric: "combatWins", target: 2, reward: { fighters: 6, fuel: 3 } },
+    { id: "board-pirate-1", title: "Boarding Practice", objective: "Board 1 NPC pirate ship.", metric: "shipsCaptured", target: 1, reward: { credits: 350, reputation: 4 } },
+    { id: "rep-25", title: "Deputy Commission", objective: "Reach reputation 25.", metric: "reputation", target: 25, reward: { credits: 400, turns: 2 } },
+    { id: "fighters-10", title: "Ready the Bay", objective: "Buy 10 fighters.", metric: "fightersBought", target: 10, reward: { credits: 120, fuel: 2 } },
   ];
 }
 
@@ -1490,6 +1538,7 @@ function missionProgress(mission) {
   const template = missionTemplateById(mission.id);
   if (template.metric === "visitedSectors") return game.stats.visitedSectors.length;
   if (template.metric === "credits") return game.player.credits;
+  if (template.metric === "reputation") return game.player.reputation || 0;
   return game.stats[template.metric] || 0;
 }
 
@@ -1522,6 +1571,7 @@ function syncProgressSystems() {
       changed = true;
     }
   });
+  refreshCombatIdentity(game);
   syncCombatStats(game);
   if (updateAchievements()) changed = true;
   return changed;
@@ -1628,13 +1678,18 @@ function estimateCombatRisk(pirate) {
   const piratePower = getPirateCombatPower(pirate);
   const score = playerPower / Math.max(1, piratePower);
   const scanner = game.player.upgrades.scanner || 1;
-  let label = "Dangerous";
-  if (score >= 1.45) label = "Favorable";
-  else if (score >= 1.05) label = "Even Match";
-  else if (score >= 0.72) label = "Risky";
-  if (scanner <= 1) label += " (rough scan)";
-  else if (scanner >= 4) label += ` (${playerPower} vs ${piratePower})`;
-  return { score, label, playerPower, piratePower };
+  let threatBand = "severe";
+  if (pirate.threatLevel <= 2 && score >= 0.85) threatBand = "low";
+  else if (pirate.threatLevel <= 3 || score >= 0.72) threatBand = "moderate";
+  let outcome = "Outmatched";
+  if (score >= 1.35) outcome = "You have the advantage";
+  else if (score >= 0.95) outcome = "Even fight";
+  else if (score >= 0.68) outcome = "Dangerous";
+  let label = "Threat estimate: unclear.";
+  if (scanner === 2) label = `Threat estimate: ${threatBand}.`;
+  else if (scanner === 3) label = `Threat estimate: ${threatBand}; enemy profile partially resolved.`;
+  else if (scanner >= 4) label = `${outcome}.`;
+  return { score, label, threatBand, outcome, playerPower, piratePower };
 }
 
 function resolvePirateCombat(mode = "engage") {
@@ -1659,18 +1714,18 @@ function resolvePirateCombat(mode = "engage") {
   if (ratio >= (cautious ? 1.22 : 1.0)) {
     const fighterLoss = Math.min(game.player.fighters, Math.ceil(Math.min(MAX_FIGHTER_LOSS_RATE, 0.12 + piratePower / Math.max(80, playerPower * 5)) * Math.max(1, game.player.fighters)));
     const hullDamage = cautious ? Math.max(0, Math.ceil(pirate.threatLevel / 3) - 1) : Math.max(0, Math.ceil(pirate.threatLevel / 2) - Math.floor((game.player.upgrades.shield || 1) / 3));
-    applyCombatDamage(fighterLoss, hullDamage, "victory");
-    defeatPirate(pirate, "defeated");
-    addLog(`Victory: ${pirate.name} was defeated. Bounty paid and reputation improved.`);
+    const damageReport = applyCombatDamage(fighterLoss, hullDamage, "victory");
+    defeatPirate(pirate, "routed", { ...damageReport, pirateFightersLost: pirate.fighters });
   } else if (ratio >= (cautious ? 0.58 : 0.66)) {
     const pirateFighterLoss = Math.max(2, Math.ceil((game.player.fighters * (cautious ? 0.22 : 0.34)) + currentShip().basePower / 3));
     const pirateHullLoss = Math.max(3, Math.ceil((playerPower / Math.max(6, pirate.threatLevel * 2)) * (cautious ? 0.45 : 0.65)));
     pirate.fighters = Math.max(0, pirate.fighters - pirateFighterLoss);
     pirate.hull = Math.max(0, pirate.hull - pirateHullLoss);
+    game.player.fightersDestroyed = (game.player.fightersDestroyed || 0) + pirateFighterLoss;
     const fighterLoss = Math.min(game.player.fighters, Math.ceil(Math.max(1, piratePower / 12) * (cautious ? 0.65 : 1)));
     const hullDamage = cautious ? Math.max(0, Math.ceil(pirate.threatLevel / 3) - 1) : Math.max(1, Math.ceil(pirate.threatLevel / 2));
-    applyCombatDamage(fighterLoss, hullDamage, "skirmish");
-    addLog(`Skirmish: ${pirate.name} lost ${pirateFighterLoss} fighters and ${pirateHullLoss} hull, but remains active.`);
+    const damageReport = applyCombatDamage(fighterLoss, hullDamage, "skirmish");
+    addLog(`Skirmish report: ${pirate.name} lost ${pirateFighterLoss} fighters and ${pirateHullLoss} hull; you lost ${damageReport.fightersLost} fighters and took ${damageReport.hullDamage} hull damage.`);
   } else {
     loseCombatToPirates(pirate, cautious);
   }
@@ -1686,20 +1741,29 @@ function applyCombatDamage(fighterLoss, hullDamage, context = "combat") {
   const shieldReduction = Math.floor((game.player.upgrades.shield || 1) / 2);
   const damage = Math.max(0, Math.floor(hullDamage) + spillover - shieldReduction);
   game.player.hull = Math.max(0, game.player.hull - damage);
+  game.player.fightersLost = (game.player.fightersLost || 0) + absorbed;
+  syncCombatStats(game);
   if (absorbed > 0 || damage > 0) addLog(`Combat damage (${context}): lost ${absorbed} fighter${absorbed === 1 ? "" : "s"}${damage ? ` and ${damage} hull` : ""}.`);
   if (game.player.hull <= 0) escapePodReset();
+  return { fightersLost: absorbed, hullDamage: damage };
 }
 
-function defeatPirate(pirate, verb = "defeated") {
+function defeatPirate(pirate, verb = "defeated", report = {}) {
+  const bounty = Math.max(0, Math.floor(pirate.bounty || 0));
+  const reputationGain = Math.round((pirate.reputationReward || 0) * PIRATE_REPUTATION_MULTIPLIER);
+  const enemyDestroyed = Math.max(0, Math.floor(typeof report.pirateFightersLost === "number" ? report.pirateFightersLost : pirate.fighters || 0));
   pirate.defeated = true;
   pirate.fighters = 0;
   pirate.hull = 0;
-  game.player.credits += pirate.bounty;
-  game.player.reputation += Math.round(pirate.reputationReward * PIRATE_REPUTATION_MULTIPLIER);
+  game.player.credits += bounty;
+  addReputation(reputationGain);
   game.player.piratesDefeated += 1;
   game.player.combatWins += 1;
+  game.player.fightersDestroyed = (game.player.fightersDestroyed || 0) + enemyDestroyed;
   syncCombatStats(game);
-  addLog(`${pirate.name} ${verb}: +${pirate.bounty} credits, +${pirate.reputationReward} reputation.`);
+  const lost = report.fightersLost ?? 0;
+  const hull = report.hullDamage ?? 0;
+  addLog(`Combat report: ${verb} ${pirate.name}. Lost ${lost} fighter${lost === 1 ? "" : "s"}, destroyed ${enemyDestroyed} pirate fighter${enemyDestroyed === 1 ? "" : "s"}, took ${hull} hull damage, earned ${bounty} credits and +${reputationGain} reputation.`);
 }
 
 function loseCombatToPirates(pirate, cautious = false) {
@@ -1723,10 +1787,10 @@ function boardPirateShip() {
   if (Math.random() <= chance) {
     const bonus = 80 + pirate.threatLevel * 45;
     game.player.credits += bonus;
-    game.player.reputation += Math.ceil(pirate.reputationReward / 2);
+    addReputation(Math.ceil(pirate.reputationReward / 2));
     game.player.shipsCaptured += 1;
-    defeatPirate(pirate, "boarded and secured");
-    addLog(`Boarding success: recovered ${bonus} bonus credits and a classroom-safe pirate blueprint note for future systems.`);
+    defeatPirate(pirate, "boarded and secured", { fightersLost: 0, hullDamage: 0, pirateFightersLost: pirate.fighters });
+    addLog(`Boarding success: recovered ${bonus} bonus credits, bonus reputation, salvage notes, and a captured pirate tech note for future systems.`);
   } else {
     const fighterLoss = Math.min(game.player.fighters, Math.max(1, pirate.threatLevel));
     const hullDamage = Math.max(2, pirate.threatLevel + 1);
@@ -1745,6 +1809,54 @@ function boardPirateShip() {
   render();
 }
 
+function clampReputation(value) {
+  return Math.max(-100, Math.min(100, Math.round(Number(value) || 0)));
+}
+
+function addReputation(amount) {
+  const change = Math.round(Number(amount) || 0);
+  game.player.reputation = clampReputation((game.player.reputation || 0) + change);
+  if (change > 0) game.player.lawfulReputation = (game.player.lawfulReputation || 0) + change;
+  if (change < 0) game.player.pirateReputation = (game.player.pirateReputation || 0) + Math.abs(change);
+  refreshCombatIdentity(game);
+  return change;
+}
+
+function combatRankTitle(player = game.player) {
+  const rep = player.reputation || 0;
+  const defeated = player.piratesDefeated || 0;
+  const wins = player.combatWins || 0;
+  const captured = player.shipsCaptured || 0;
+  if (rep >= 90 && defeated >= 25) return "Star Marshal";
+  if (rep >= 75 && defeated >= 18) return "Marshal";
+  if (rep >= 60 && defeated >= 12) return "Sector Defender";
+  if (rep >= 40 && defeated >= 8) return "Lane Guard";
+  if (rep >= 25 && defeated >= 5) return "Deputy Pilot";
+  if (rep >= 10 || defeated >= 2 || wins >= 2 || captured >= 1) return "Patrol Volunteer";
+  return "Civilian Pilot";
+}
+
+function nextCombatRankProgress(player = game.player) {
+  const rep = player.reputation || 0;
+  const defeated = player.piratesDefeated || 0;
+  const ranks = [
+    { name: "Patrol Volunteer", text: "10 reputation or 2 pirates defeated", met: rep >= 10 || defeated >= 2 },
+    { name: "Deputy Pilot", text: "25 reputation and 5 pirates defeated", met: rep >= 25 && defeated >= 5 },
+    { name: "Lane Guard", text: "40 reputation and 8 pirates defeated", met: rep >= 40 && defeated >= 8 },
+    { name: "Sector Defender", text: "60 reputation and 12 pirates defeated", met: rep >= 60 && defeated >= 12 },
+    { name: "Marshal", text: "75 reputation and 18 pirates defeated", met: rep >= 75 && defeated >= 18 },
+    { name: "Star Marshal", text: "90 reputation and 25 pirates defeated", met: rep >= 90 && defeated >= 25 },
+  ];
+  const next = ranks.find((rank) => !rank.met);
+  return next ? `${next.name}: ${next.text}` : "All lawful ranks unlocked";
+}
+
+function refreshCombatIdentity(targetGame = game) {
+  targetGame.player.reputation = clampReputation(targetGame.player.reputation || 0);
+  targetGame.player.alignmentStatus = reputationTitle(targetGame.player.reputation);
+  targetGame.player.combatRank = combatRankTitle(targetGame.player);
+}
+
 function reputationTitle(reputation = game.player.reputation || 0) {
   if (reputation <= -75) return "Dread Pirate";
   if (reputation <= -40) return "Raider";
@@ -1755,11 +1867,17 @@ function reputationTitle(reputation = game.player.reputation || 0) {
   return "Star Marshal";
 }
 
+function combatRankMeets(requiredRank) {
+  if (!requiredRank) return false;
+  const ranks = ["Civilian Pilot", "Patrol Volunteer", "Deputy Pilot", "Lane Guard", "Sector Defender", "Marshal", "Star Marshal"];
+  return ranks.indexOf(combatRankTitle()) >= ranks.indexOf(requiredRank);
+}
+
 function shipUnlockStatus(ship) {
   const unlock = ship.unlock;
   if (!unlock) return { unlocked: true, reason: "Available" };
   if (unlock.future || ship.futureLocked) return { unlocked: false, reason: unlock.text };
-  if (unlock.reputation && (game.player.reputation || 0) < unlock.reputation) return { unlocked: false, reason: unlock.text };
+  if (unlock.reputation && (game.player.reputation || 0) < unlock.reputation && !combatRankMeets(unlock.combatRank)) return { unlocked: false, reason: unlock.text };
   if (unlock.rank && currentRank() !== unlock.rank && game.player.credits < (unlock.credits || Infinity)) return { unlocked: false, reason: unlock.text };
   if (unlock.scanner && (game.player.upgrades.scanner || 1) < unlock.scanner && (game.stats.visitedSectors?.length || 0) < (unlock.visitedSectors || Infinity)) return { unlocked: false, reason: unlock.text };
   return { unlocked: true, reason: "Available" };
@@ -1771,13 +1889,22 @@ function syncCombatStats(targetGame = game) {
   targetGame.stats.combatWins = targetGame.player.combatWins || 0;
   targetGame.stats.combatLosses = targetGame.player.combatLosses || 0;
   targetGame.stats.shipsCaptured = targetGame.player.shipsCaptured || 0;
+  targetGame.stats.fightersLost = targetGame.player.fightersLost || 0;
+  targetGame.stats.fightersDestroyed = targetGame.player.fightersDestroyed || 0;
+  targetGame.stats.fightersBought = targetGame.player.fightersBought || 0;
   targetGame.stats.reputation = targetGame.player.reputation || 0;
+  targetGame.stats.alignmentStatus = targetGame.player.alignmentStatus || reputationTitle(targetGame.player.reputation || 0);
+  targetGame.stats.combatRank = targetGame.player.combatRank || combatRankTitle(targetGame.player);
 }
 
-// Future PvP TODO only: a Firebase multiplayer version may add teacher-controlled PvP,
-// reputation penalties for attacking lawful players, careful boarding at low hull,
-// emergency-pod defeat handling, and protected ownership rules. No real player targeting,
-// player ship capture, or multiplayer combat is implemented in this NPC-only version.
+// Future PvP TODO only — do not build until Firebase multiplayer and teacher controls exist.
+// Requirements for that future system: teacher PvP on/off toggle; safe zones with no PvP;
+// no PvP near Sector 1; reputation loss for attacking lawful players; reputation gain for
+// defeating pirates/outlaws; boarding/capture only below 5 hull; defeated players eject to
+// Sector 1; defeated players keep owned planets; defeated players lose active ship/cargo and
+// most carried cash; emergency replacement ship assigned; teacher reset/restore tools. No
+// real player targeting, player ship capture, Firebase, or multiplayer combat is implemented
+// in this NPC-only version.
 
 function maybeTravelEvent() {
   if (Math.random() >= 0.3) return;
@@ -1861,11 +1988,17 @@ function applyReward(reward) {
   if (reward.credits) game.player.credits += reward.credits;
   if (reward.fuel) game.player.fuel = Math.min(game.player.maxFuel, game.player.fuel + reward.fuel);
   if (reward.turns) game.player.turns = Math.min(game.player.maxTurns, game.player.turns + reward.turns);
+  if (reward.reputation) addReputation(reward.reputation);
+  if (reward.fighters) {
+    const amount = Math.min(Math.max(0, game.player.fighterCapacity - game.player.fighters), reward.fighters);
+    game.player.fighters += amount;
+  }
   RESOURCES.forEach((resource) => {
     if (!reward[resource]) return;
     const amount = Math.min(cargoSpaceLeft(), reward[resource]);
     if (amount > 0) game.player.cargo[resource] += amount;
   });
+  syncCombatStats(game);
 }
 
 function formatReward(reward) {
@@ -1873,6 +2006,8 @@ function formatReward(reward) {
   if (reward.credits) parts.push(`${reward.credits} credits`);
   if (reward.fuel) parts.push(`${reward.fuel} fuel`);
   if (reward.turns) parts.push(`${reward.turns} turns`);
+  if (reward.fighters) parts.push(`${reward.fighters} fighters if bay space allows`);
+  if (reward.reputation) parts.push(`+${reward.reputation} reputation`);
   RESOURCES.forEach((resource) => { if (reward[resource]) parts.push(`${reward[resource]} ${resource}`); });
   return parts.join(", ");
 }
@@ -2036,3 +2171,40 @@ function addAndRender(message) { addLog(message); saveGame(); render(); }
 
 // Future multiplayer: teacher dashboard actions such as class reset, roster summaries,
 // progress review, and mission support would connect here in a later server-backed version.
+
+
+if (typeof globalThis !== "undefined" && globalThis.__SECTOR_DRIFT_ENABLE_TEST_HOOKS__ === true) {
+  globalThis.sectorDriftTestHooks = {
+    SHIPS,
+    createPirateEncounters,
+    defaultGameState,
+    migrateGameState,
+    missionTemplates,
+    nextAvailableMission,
+    reputationTitle,
+    combatRankTitle,
+    shipUnlockStatus,
+    canBoardPirate,
+    getPlayerCombatPower,
+    getPirateCombatPower,
+    estimateCombatRisk,
+    pirateIntelStats,
+    setGameForTest(nextGame) {
+      game = nextGame;
+      selectedSectorNumber = game.player.currentSector;
+      return game;
+    },
+    getGameForTest() {
+      return game;
+    },
+    addReputation,
+    defeatPirate,
+    buyShip,
+    buyFighters,
+    handleDevCode,
+    resolvePirateCombat,
+    emergencyWarp,
+    cargoUsed,
+    createActiveMission,
+  };
+}
