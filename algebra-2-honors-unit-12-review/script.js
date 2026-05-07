@@ -48,6 +48,428 @@ let state = {
   answers: {}
 };
 
+const THEME_STORAGE_KEY = 'unit12ReviewTheme';
+const CHAOS_STORAGE_KEY = 'unit12ReviewChaosPalette';
+const DEFAULT_THEME = 'dark';
+const CHAOS_THEMES = [
+  {
+    name: 'Radioactive Flamingo',
+    bg: '#ff4fd8',
+    panel: '#39ff14',
+    panelStrong: '#9d00ff',
+    card: '#ffff33',
+    cardBorder: '#00e5ff',
+    text: '#111111',
+    muted: '#3b164c',
+    accent: '#ff6b00',
+    accentStrong: '#111111',
+    buttonBg: '#00e5ff',
+    buttonText: '#111111',
+    success: '#005c2f',
+    warning: '#5a2d00',
+    danger: '#7a001f',
+    inputBg: '#ffffff',
+    inputBorder: '#111111',
+    shadow: 'rgba(17, 17, 17, 0.36)'
+  },
+  {
+    name: 'Mustard Aquarium',
+    bg: '#d9a300',
+    panel: '#00a6a6',
+    panelStrong: '#ff7a00',
+    card: '#ffe66d',
+    cardBorder: '#ff00a8',
+    text: '#111827',
+    muted: '#34204f',
+    accent: '#ff00a8',
+    accentStrong: '#111827',
+    buttonBg: '#b000ff',
+    buttonText: '#ffffff',
+    success: '#005c46',
+    warning: '#6b3500',
+    danger: '#8c0038',
+    inputBg: '#fffbe6',
+    inputBorder: '#111827',
+    shadow: 'rgba(52, 32, 79, 0.34)'
+  },
+  {
+    name: 'Goblin Lava Lamp',
+    bg: '#34135c',
+    panel: '#7cff00',
+    panelStrong: '#fff200',
+    card: '#baff39',
+    cardBorder: '#ffef00',
+    text: '#111111',
+    muted: '#442200',
+    accent: '#ff4b00',
+    accentStrong: '#111111',
+    buttonBg: '#ff4b00',
+    buttonText: '#111111',
+    success: '#00613b',
+    warning: '#5a3500',
+    danger: '#9b1d00',
+    inputBg: '#ffffff',
+    inputBorder: '#34135c',
+    shadow: 'rgba(52, 19, 92, 0.38)'
+  },
+  {
+    name: 'Blueberry Peach Detention',
+    bg: '#006bff',
+    panel: '#ffd1b3',
+    panelStrong: '#7fffd4',
+    card: '#ffe0c7',
+    cardBorder: '#111111',
+    text: '#111111',
+    muted: '#16324f',
+    accent: '#00d084',
+    accentStrong: '#111111',
+    buttonBg: '#111111',
+    buttonText: '#7fffd4',
+    success: '#007a3d',
+    warning: '#855400',
+    danger: '#a61717',
+    inputBg: '#ffffff',
+    inputBorder: '#111111',
+    shadow: 'rgba(0, 20, 80, 0.35)'
+  },
+  {
+    name: 'Swamp Princess Spreadsheet',
+    bg: '#556b2f',
+    panel: '#d8bfd8',
+    panelStrong: '#ffd700',
+    card: '#e6e6fa',
+    cardBorder: '#ff6347',
+    text: '#111111',
+    muted: '#2f3b1f',
+    accent: '#ff6347',
+    accentStrong: '#111111',
+    buttonBg: '#ff6347',
+    buttonText: '#111111',
+    success: '#176b34',
+    warning: '#6b4b00',
+    danger: '#991b1b',
+    inputBg: '#fffaf0',
+    inputBorder: '#111111',
+    shadow: 'rgba(47, 59, 31, 0.35)'
+  },
+  {
+    name: 'Carnival Accident',
+    bg: '#ff3131',
+    panel: '#ffe600',
+    panelStrong: '#00c2ff',
+    card: '#ffffff',
+    cardBorder: '#7a00ff',
+    text: '#1b1b1b',
+    muted: '#5a275a',
+    accent: '#00ff85',
+    accentStrong: '#ff00aa',
+    buttonBg: '#7a00ff',
+    buttonText: '#ffffff',
+    success: '#166534',
+    warning: '#854d0e',
+    danger: '#b91c1c',
+    inputBg: '#fff7d6',
+    inputBorder: '#ff00aa',
+    shadow: 'rgba(122, 0, 255, 0.35)'
+  },
+  {
+    name: 'Goblin Lemonade Stand',
+    bg: '#b6ff00',
+    panel: '#14532d',
+    panelStrong: '#facc15',
+    card: '#fef08a',
+    cardBorder: '#166534',
+    text: '#102a12',
+    muted: '#365314',
+    accent: '#ec4899',
+    accentStrong: '#7c2d12',
+    buttonBg: '#ec4899',
+    buttonText: '#ffffff',
+    success: '#166534',
+    warning: '#854d0e',
+    danger: '#be123c',
+    inputBg: '#ffffff',
+    inputBorder: '#166534',
+    shadow: 'rgba(20, 83, 45, 0.38)'
+  },
+  {
+    name: 'Algebra Clown Car',
+    bg: '#00f5d4',
+    panel: '#f15bb5',
+    panelStrong: '#fee440',
+    card: '#9b5de5',
+    cardBorder: '#ffffff',
+    text: '#ffffff',
+    muted: '#fff3b0',
+    accent: '#00bbf9',
+    accentStrong: '#fee440',
+    buttonBg: '#fee440',
+    buttonText: '#111111',
+    success: '#bbf7d0',
+    warning: '#fef08a',
+    danger: '#fecdd3',
+    inputBg: '#ffffff',
+    inputBorder: '#00bbf9',
+    shadow: 'rgba(35, 16, 77, 0.42)'
+  },
+  {
+    name: 'Nacho Nebula',
+    bg: '#ff7b00',
+    panel: '#3a0ca3',
+    panelStrong: '#7209b7',
+    card: '#f9c74f',
+    cardBorder: '#4cc9f0',
+    text: '#1a102b',
+    muted: '#5f0f40',
+    accent: '#f72585',
+    accentStrong: '#4361ee',
+    buttonBg: '#4361ee',
+    buttonText: '#ffffff',
+    success: '#166534',
+    warning: '#854d0e',
+    danger: '#be123c',
+    inputBg: '#fff3d1',
+    inputBorder: '#3a0ca3',
+    shadow: 'rgba(58, 12, 163, 0.38)'
+  },
+  {
+    name: 'Toxic Library Carpet',
+    bg: '#2f4f1f',
+    panel: '#8b5cf6',
+    panelStrong: '#22c55e',
+    card: '#d9f99d',
+    cardBorder: '#f97316',
+    text: '#111827',
+    muted: '#3f3f46',
+    accent: '#e11d48',
+    accentStrong: '#facc15',
+    buttonBg: '#e11d48',
+    buttonText: '#ffffff',
+    success: '#166534',
+    warning: '#854d0e',
+    danger: '#b91c1c',
+    inputBg: '#f7fee7',
+    inputBorder: '#8b5cf6',
+    shadow: 'rgba(47, 79, 31, 0.42)'
+  },
+  {
+    name: 'Bubblegum Tax Audit',
+    bg: '#ff8fab',
+    panel: '#fbff12',
+    panelStrong: '#00bbf9',
+    card: '#ffc6ff',
+    cardBorder: '#8338ec',
+    text: '#231942',
+    muted: '#5e548e',
+    accent: '#ff006e',
+    accentStrong: '#3a86ff',
+    buttonBg: '#ff006e',
+    buttonText: '#ffffff',
+    success: '#166534',
+    warning: '#854d0e',
+    danger: '#b91c1c',
+    inputBg: '#ffffff',
+    inputBorder: '#8338ec',
+    shadow: 'rgba(131, 56, 236, 0.34)'
+  },
+  {
+    name: 'Wizard Vomit',
+    bg: '#4c1d95',
+    panel: '#84cc16',
+    panelStrong: '#06b6d4',
+    card: '#bef264',
+    cardBorder: '#f43f5e',
+    text: '#1a1a1a',
+    muted: '#3f6212',
+    accent: '#facc15',
+    accentStrong: '#f43f5e',
+    buttonBg: '#f43f5e',
+    buttonText: '#ffffff',
+    success: '#166534',
+    warning: '#854d0e',
+    danger: '#b91c1c',
+    inputBg: '#f7fee7',
+    inputBorder: '#4c1d95',
+    shadow: 'rgba(76, 29, 149, 0.4)'
+  },
+  {
+    name: 'Unlicensed Aquarium',
+    bg: '#006d77',
+    panel: '#ffddd2',
+    panelStrong: '#83c5be',
+    card: '#edf6f9',
+    cardBorder: '#e29578',
+    text: '#1d3557',
+    muted: '#457b9d',
+    accent: '#ff006e',
+    accentStrong: '#fb8500',
+    buttonBg: '#fb8500',
+    buttonText: '#111111',
+    success: '#166534',
+    warning: '#854d0e',
+    danger: '#b91c1c',
+    inputBg: '#ffffff',
+    inputBorder: '#006d77',
+    shadow: 'rgba(0, 109, 119, 0.35)'
+  },
+  {
+    name: 'Disco Pickle',
+    bg: '#3f6212',
+    panel: '#ff00ff',
+    panelStrong: '#00ffff',
+    card: '#ccff00',
+    cardBorder: '#111111',
+    text: '#111111',
+    muted: '#4a044e',
+    accent: '#ff7a00',
+    accentStrong: '#0000ff',
+    buttonBg: '#0000ff',
+    buttonText: '#ffffff',
+    success: '#166534',
+    warning: '#854d0e',
+    danger: '#b91c1c',
+    inputBg: '#ffffff',
+    inputBorder: '#ff00ff',
+    shadow: 'rgba(17, 17, 17, 0.42)'
+  },
+  {
+    name: 'Cosmic Mustard Incident',
+    bg: '#facc15',
+    panel: '#312e81',
+    panelStrong: '#c026d3',
+    card: '#fde68a',
+    cardBorder: '#0891b2',
+    text: '#1e1b4b',
+    muted: '#713f12',
+    accent: '#db2777',
+    accentStrong: '#0f766e',
+    buttonBg: '#0f766e',
+    buttonText: '#ffffff',
+    success: '#166534',
+    warning: '#854d0e',
+    danger: '#b91c1c',
+    inputBg: '#fff7ed',
+    inputBorder: '#312e81',
+    shadow: 'rgba(49, 46, 129, 0.38)'
+  },
+  {
+    name: 'The Printer Ran Out of Sanity',
+    bg: '#111111',
+    panel: '#fffb00',
+    panelStrong: '#ff00c8',
+    card: '#00ffea',
+    cardBorder: '#ff0000',
+    text: '#111111',
+    muted: '#4b0082',
+    accent: '#ff0000',
+    accentStrong: '#0000ff',
+    buttonBg: '#ff00c8',
+    buttonText: '#111111',
+    success: '#166534',
+    warning: '#854d0e',
+    danger: '#b91c1c',
+    inputBg: '#ffffff',
+    inputBorder: '#ff0000',
+    shadow: 'rgba(255, 0, 200, 0.34)'
+  },
+  {
+    name: 'Principal Walked In',
+    bg: '#1f2937',
+    panel: '#dc2626',
+    panelStrong: '#f97316',
+    card: '#fde047',
+    cardBorder: '#111827',
+    text: '#111827',
+    muted: '#7f1d1d',
+    accent: '#2563eb',
+    accentStrong: '#16a34a',
+    buttonBg: '#111827',
+    buttonText: '#ffffff',
+    success: '#166534',
+    warning: '#854d0e',
+    danger: '#b91c1c',
+    inputBg: '#ffffff',
+    inputBorder: '#dc2626',
+    shadow: 'rgba(17, 24, 39, 0.4)'
+  }
+];
+
+
+
+function getStoredValue(key){
+  try { return window.localStorage.getItem(key); }
+  catch (error) { return null; }
+}
+function setStoredValue(key, value){
+  try { window.localStorage.setItem(key, value); }
+  catch (error) { /* Theme persistence is optional if storage is blocked. */ }
+}
+function sanitizeThemeChoice(value){return ['light','dark','chaos'].includes(value) ? value : DEFAULT_THEME;}
+function cssVarName(key){return `--${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`;}
+function applyChaosPalette(index){
+  const palette = CHAOS_THEMES[index] || CHAOS_THEMES[0];
+  Object.entries(palette).forEach(([key, value]) => {
+    if(key !== 'name') document.documentElement.style.setProperty(cssVarName(key), value);
+  });
+  setStoredValue(CHAOS_STORAGE_KEY, String(CHAOS_THEMES.indexOf(palette)));
+  return palette;
+}
+function clearChaosPalette(){
+  if(!document.documentElement.style) return;
+  CHAOS_THEMES.forEach(palette => {
+    Object.keys(palette).forEach(key => {
+      if(key !== 'name') document.documentElement.style.removeProperty(cssVarName(key));
+    });
+  });
+}
+function randomChaosIndex(excludeIndex = -1){
+  if(CHAOS_THEMES.length <= 1) return 0;
+  let next = Math.floor(Math.random() * CHAOS_THEMES.length);
+  while(next === excludeIndex) next = Math.floor(Math.random() * CHAOS_THEMES.length);
+  return next;
+}
+function updateThemeControls(theme, paletteName = ''){
+  document.querySelectorAll('[data-theme-choice]').forEach(button => {
+    const selected = button.dataset.themeChoice === theme;
+    button.setAttribute('aria-pressed', String(selected));
+  });
+  const rerollButton = document.getElementById('rerollChaosBtn');
+  const message = document.getElementById('themeMessage');
+  if(rerollButton) rerollButton.classList.toggle('hidden', theme !== 'chaos');
+  if(message){
+    if(theme === 'chaos') message.textContent = `You were warned. Palette: ${paletteName}.`;
+    else if(theme === 'dark') message.textContent = 'Dark Mode is on by default.';
+    else message.textContent = 'Light Mode restored.';
+  }
+}
+function applyTheme(theme, options = {}){
+  const safeTheme = sanitizeThemeChoice(theme);
+  let paletteName = '';
+  document.documentElement.dataset.theme = safeTheme;
+  if(safeTheme === 'chaos'){
+    const storedIndex = Number(getStoredValue(CHAOS_STORAGE_KEY));
+    const currentIndex = Number.isInteger(options.paletteIndex) ? options.paletteIndex : Number.isInteger(storedIndex) && CHAOS_THEMES[storedIndex] ? storedIndex : randomChaosIndex();
+    paletteName = applyChaosPalette(currentIndex).name;
+  } else {
+    clearChaosPalette();
+  }
+  setStoredValue(THEME_STORAGE_KEY, safeTheme);
+  updateThemeControls(safeTheme, paletteName);
+}
+function initializeThemeControls(){
+  applyTheme(sanitizeThemeChoice(getStoredValue(THEME_STORAGE_KEY) || DEFAULT_THEME));
+  document.querySelectorAll('[data-theme-choice]').forEach(button => {
+    button.addEventListener('click', () => {
+      if(button.dataset.themeChoice === 'chaos') applyTheme('chaos', {paletteIndex: randomChaosIndex(Number(getStoredValue(CHAOS_STORAGE_KEY)))});
+      else applyTheme(button.dataset.themeChoice);
+    });
+  });
+  const rerollButton = document.getElementById('rerollChaosBtn');
+  if(rerollButton){
+    rerollButton.addEventListener('click', () => applyTheme('chaos', {paletteIndex: randomChaosIndex(Number(getStoredValue(CHAOS_STORAGE_KEY)))}));
+  }
+}
+
 function freshRecord(){
   return {attempts:0, status:'Not Started', hintUsed:false, solutionShown:false, firstAttemptCorrect:false, completedWithHelp:false, needsReview:false, originalStatus:'Not Started'};
 }
@@ -520,4 +942,5 @@ window.addEventListener('beforeprint', () => {if(state.view === 'summary') updat
 document.getElementById('startOverBtn').addEventListener('click', startOver);
 document.getElementById('prevPageBtn').addEventListener('click', () => {state.topicPage -= 1;renderTopic();window.scrollTo({top:0, behavior:'smooth'});});
 document.getElementById('nextPageBtn').addEventListener('click', () => {state.topicPage += 1;renderTopic();window.scrollTo({top:0, behavior:'smooth'});});
+initializeThemeControls();
 updateProgress();
