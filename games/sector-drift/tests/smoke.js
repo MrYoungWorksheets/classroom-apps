@@ -20,10 +20,12 @@ vm.runInContext(`
   function clean(text) { return normalize(text).replace(/[^a-z0-9^=,./()+-]/g, ''); }
   function makeEventTargetStub({ dataset = {}, className = '', parent = null } = {}) {
     const listeners = {};
-    return {
+    const classes = new Set(String(className || '').split(/\s+/).filter(Boolean));
+    const target = {
       dataset,
       className,
       parent,
+      get offsetWidth() { return 1; },
       addEventListener(type, handler) {
         listeners[type] = listeners[type] || [];
         listeners[type].push(handler);
@@ -50,6 +52,12 @@ vm.runInContext(`
         return false;
       },
     };
+    target.classList = {
+      add(value) { classes.add(value); target.className = Array.from(classes).join(' '); },
+      remove(value) { classes.delete(value); target.className = Array.from(classes).join(' '); },
+      contains(value) { return classes.has(value); },
+    };
+    return target;
   }
   function makePanelStub() {
     const panel = makeEventTargetStub();
@@ -599,6 +607,27 @@ vm.runInContext(`
 
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
+  maybeTravelEvent = function () { return false; };
+  resolveSectorDanger = function () { return false; };
+  game.player.upgrades.scanner = 4;
+  sectorMap[2].dangerLevel = 3;
+  sectorMap[2].hazardType = 'radiation';
+  renderSectorPanel();
+  panels.sector.querySelectorAll('[data-map-sector]').find((node) => node.dataset.mapSector === '2').dispatchEvent({ type: 'click' });
+  assert(panels.sector.innerHTML.includes('Danger 3') && panels.sector.innerHTML.includes('Tap again to travel to Sector 2'), 'dangerous adjacent sector still shows travel-ready feedback after first click');
+  panels.sector.querySelectorAll('[data-map-sector]').find((node) => node.dataset.mapSector === '2').dispatchEvent({ type: 'click' });
+  assert(game.player.currentSector === 2, 'danger state alone does not block second-click map travel');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  renderSectorPanel();
+  game.player.fuel = 0;
+  handleMapNodeSelect(2);
+  handleMapNodeSelect(2);
+  assert(game.player.currentSector === 1 && game.ui.lastSectorActionResult?.message.includes('Fuel is empty'), 'blocked map travel reports fuel reason in main-viewer action result');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
   renderSectorPanel();
   assert(panels.sector.innerHTML.includes('Tactical Cockpit') && panels.sector.innerHTML.includes('current-situation'), 'center panel prioritizes current situation above secondary controls');
   assert(panels.sector.innerHTML.includes('<details class="warp-panel collapsible-system compact-section" >'), 'warp/autopilot renders as a collapsed secondary system when no route is active');
@@ -612,6 +641,14 @@ vm.runInContext(`
   assert(panels.sector.innerHTML.includes('data-action="warpStep"'), 'expanded warp controls still expose Engage Autopilot / Warp Step');
   performWarpStep();
   assert(game.player.currentSector === 2, 'expanded warp step behavior still performs autopilot travel');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  game.player.upgrades.scanner = 4;
+  game.revealedSectors = [1];
+  setWarpDestination(3);
+  assert(game.ui.warpDestination === 3 && game.ui.exploratoryWarp === true, 'visible-but-unrevealed target can set controlled exploratory autopilot');
+  assert(game.ui.lastSectorActionResult?.message.includes('Exploratory autopilot'), 'exploratory autopilot route setting warns about dangerous unexplored sectors');
 
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
@@ -686,6 +723,32 @@ vm.runInContext(`
 
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
+  const anomalySector = Object.values(sectorMap).find((sector) => sector.type === 'anomaly');
+  game.player.currentSector = anomalySector.number;
+  game.player.turns = 5;
+  game.player.fuel = 5;
+  Math.random = () => 0.7;
+  scanAnomaly();
+  Math.random = originalRandom;
+  assert(game.ui.lastSectorActionResult?.title === 'Anomaly Scan Complete' && game.ui.lastSectorActionResult.gained.length > 0 && game.ui.lastSectorActionResult.lost.some((item) => item.includes('turn')), 'anomaly scan shows immediate action result with gains and losses');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  const asteroidSector = Object.values(sectorMap).find((sector) => sector.type === 'asteroid');
+  game.player.currentSector = asteroidSector.number;
+  game.player.turns = 5;
+  game.player.fuel = 5;
+  Math.random = () => 0.4;
+  mineAsteroids();
+  Math.random = originalRandom;
+  assert(game.ui.lastSectorActionResult?.title === 'Mining Complete' && game.ui.lastSectorActionResult.gained.some((item) => item.includes('Ore')) && game.ui.lastSectorActionResult.lost.some((item) => item.includes('fuel')), 'asteroid mining shows immediate action result with gains and losses');
+
+  const pulseButton = makeEventTargetStub();
+  pulseActionButton(pulseButton);
+  assert(pulseButton.classList.contains('action-pulse'), 'action button feedback class is applied briefly');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
   game.player.currentSector = 1;
   openScreen('starbase');
   assert(panels.docked.innerHTML.includes('Docking Ledger'), 'starbase docking ledger starts when docking');
@@ -695,6 +758,22 @@ vm.runInContext(`
   buyResource('Ore', 5);
   assert(game.player.cargoCostBasis.Ore.known && game.player.cargoCostBasis.Ore.quantity === 5, 'cargo average purchase price updates on buy');
   assert(Math.round(game.player.cargoCostBasis.Ore.totalCost / game.player.cargoCostBasis.Ore.quantity) === oreBuy, 'cargo cost basis tracks average buy price');
+  buyResource('Food', 10);
+  assert(game.player.cargo.Food === 10 && game.ui.lastSectorActionResult?.message.includes('Bought 10 Food'), 'Buy 10 purchases ten units and reports result');
+  fillCargoWithResource('Tech');
+  assert(game.player.cargo.Tech > 0 && game.dockingLedger.spent > 0 && game.player.cargoCostBasis.Tech.quantity === game.player.cargo.Tech, 'Fill Cargo buys max affordable/cargo Tech and updates cost basis/ledger');
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  game.player.currentSector = 1;
+  game.player.credits = 5000;
+  game.dockingLedger = defaultDockingLedger(game.player.credits, 1);
+  fillBalancedCargo();
+  assert(RESOURCES.every((resource) => game.player.cargo[resource] > 0) && game.ui.lastSectorActionResult?.message.includes('Balanced load purchased'), 'Fill Balanced buys Ore/Food/Tech and reports result');
+  assert(RESOURCES.every((resource) => game.player.cargoCostBasis[resource].quantity === game.player.cargo[resource]) && game.dockingLedger.spent > 0, 'Fill Balanced updates cargo cost basis and docking ledger');
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  game.player.currentSector = 1;
+  buyResource('Ore', 5);
   sellResource('Ore', 2);
   assert(game.dockingLedger.tradeProfit === Math.round((oreSell - oreBuy) * 2), 'selling calculates profit/loss using average cost');
   game.player.fuel = game.player.maxFuel - 2;
@@ -717,6 +796,9 @@ vm.runInContext(`
   game.revealedSectors.push(13);
   renderSectorPanel();
   assert(panels.sector.innerHTML.includes('Pirate Encounter: Scrap Raider') && panels.sector.innerHTML.includes('Attempt Escape / Flee') && panels.sector.innerHTML.includes('Pay Off Pirates'), 'pirate card renders when active pirate exists');
+  game.player.cargoCapacity = 20;
+  defeatPirate(game.pirates[13], 'defeated', { fightersLost: 1, hullDamage: 2 });
+  assert(game.ui.lastSectorActionResult?.title === 'Pirates Defeated' && game.ui.lastSectorActionResult.message.includes('Salvage') && game.ui.lastSectorActionResult.gained.some((item) => item.includes('credits')), 'pirate victory shows prominent reward and salvage result');
 
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
@@ -726,6 +808,10 @@ vm.runInContext(`
   assert(renderNavigationIntel().includes('Mission Target') && renderNavigationIntel().includes(targetQuest.title), 'selected mission target shows mission indicator');
   renderSectorPanel();
   assert(panels.sector.innerHTML.includes('data-situation-type="mission"') && panels.sector.innerHTML.includes(targetQuest.title), 'mission target card renders when active delivery target is selected');
+  game.player.upgrades.scanner = 4;
+  game.revealedSectors = [1];
+  plotDeliveryRoute(targetQuest.id);
+  assert(game.ui.warpDestination === targetQuest.targetSector && game.ui.lastSectorActionResult?.message.includes('Next hop'), 'mission route setting shows immediate route result with next hop');
 
   // Firebase readiness, launch gate, admin role, and local-save safety checks.
   assert(source.includes('const REQUIRE_FIREBASE_LOGIN = true'), 'app.js should define login-first requirement');
