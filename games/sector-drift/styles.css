@@ -1603,3 +1603,55 @@ button.button-admin {
     gap: 0.2rem;
   }
 }
+
+/* Sector action feedback */
+.action-result {
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 4px solid var(--accent);
+  border-radius: 12px;
+  margin: 0.65rem 0;
+  padding: 0.65rem 0.75rem;
+}
+
+.action-result-positive { border-left-color: var(--good); }
+.action-result-negative { border-left-color: var(--danger); }
+.action-result-neutral { border-left-color: var(--accent); }
+
+.action-result-heading {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.action-result p {
+  margin: 0.25rem 0;
+}
+
+.action-pulse {
+  animation: actionPulse 420ms ease-out;
+}
+
+@keyframes actionPulse {
+  0% { transform: scale(1); filter: brightness(1); }
+  35% { transform: scale(0.98); filter: brightness(1.2); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+.map-node {
+  cursor: pointer;
+}
+
+.map-node .map-visible-node,
+.map-node .role-marker,
+.map-node .role-symbol,
+.map-node .danger-marker,
+.map-node .protected-marker {
+  pointer-events: none;
+}
+
+.map-hit-target {
+  pointer-events: all;
+}
