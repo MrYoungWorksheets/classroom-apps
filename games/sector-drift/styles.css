@@ -1238,3 +1238,99 @@ button.button-admin {
 .route-help {
   margin-top: 0.65rem;
 }
+
+/* Sector Drift navigation feedback and docking ledger */
+.main-viewer {
+  border-color: rgba(43, 212, 217, 0.28);
+  box-shadow: 0 0 0 1px rgba(43, 212, 217, 0.08), 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.arrival-report {
+  background: rgba(43, 212, 217, 0.08);
+  border: 1px solid rgba(43, 212, 217, 0.24);
+  border-radius: 10px;
+  margin: 0.65rem 0;
+  padding: 0.65rem;
+}
+
+.arrival-report h4 {
+  margin: 0 0 0.35rem;
+  color: var(--accent);
+}
+
+.arrival-report p,
+.trade-cost-intel,
+.action-hint,
+.mission-target-intel p {
+  margin: 0.35rem 0 0;
+}
+
+.action-hint {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.map-node.node-selected .map-visible-node {
+  stroke: #ffffff;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.7));
+}
+
+.map-node.node-travel-ready .map-visible-node {
+  fill: rgba(255, 209, 102, 0.28);
+  stroke: var(--accent);
+  stroke-width: 2.2;
+  filter: drop-shadow(0 0 8px rgba(255, 209, 102, 0.85));
+}
+
+.map-node.node-not-adjacent .map-visible-node {
+  stroke: rgba(168, 196, 204, 0.9);
+  stroke-dasharray: 2 1;
+}
+
+.map-node.node-danger-known .map-visible-node {
+  stroke: rgba(255, 107, 107, 0.9);
+}
+
+.map-node.node-protected .map-visible-node {
+  filter: drop-shadow(0 0 5px rgba(142, 246, 178, 0.45));
+}
+
+.map-node.node-unknown .map-visible-node {
+  opacity: 0.78;
+}
+
+.protected-marker {
+  fill: var(--good);
+  font-size: 4px;
+  font-weight: 900;
+}
+
+.mission-target-intel {
+  border-left: 3px solid var(--accent);
+  margin: 0.6rem 0;
+  padding: 0.45rem 0.65rem;
+  background: rgba(255, 209, 102, 0.08);
+  border-radius: 8px;
+}
+
+.mission-target-badge {
+  margin-right: 0.4rem;
+}
+
+.docking-ledger {
+  border-color: rgba(255, 255, 255, 0.14);
+  margin-bottom: 0.8rem;
+}
+
+.docking-ledger.ledger-positive {
+  border-color: rgba(142, 246, 178, 0.35);
+}
+
+.docking-ledger.ledger-negative {
+  border-color: rgba(255, 107, 107, 0.35);
+}
+
+.docking-ledger.ledger-positive h3 { color: var(--good); }
+.docking-ledger.ledger-negative h3 { color: var(--danger); }
+.docking-ledger.ledger-neutral h3 { color: var(--muted); }
