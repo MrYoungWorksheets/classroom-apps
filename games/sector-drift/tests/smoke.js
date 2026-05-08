@@ -315,10 +315,48 @@ vm.runInContext(`
   renderActiveScreen();
   game.player.currentSector = 1;
   openScreen('starbase');
-  assert(panels.docked.innerHTML.includes('Docked at Sector 1') && panels.docked.innerHTML.includes('Station Activities'), 'starbase mode should render station identity and future activity placeholder');
+  assert(panels.docked.innerHTML.includes('Docked at Sector 1') && panels.docked.innerHTML.includes('Station Activities'), 'starbase mode should render station identity and activities');
+  assert(panels.docked.innerHTML.includes('Cargo Sorting Job') && panels.docked.innerHTML.includes('Repair Bay Assist') && panels.docked.innerHTML.includes('Rumor Board'), 'starbase activities and rumor board should render');
   assert(panels.docked.innerHTML.includes('Exit / Return to Ship'), 'starbase mode should render the consistent return button');
   assert(!panels.docked.innerHTML.includes('sector-map'), 'starbase mode should not render the cockpit map');
   assert(!panels.docked.innerHTML.includes('Shipyard Ships'), 'starbase mode should keep ship catalog out of port services');
+
+  // Sector 1 mission terminal, delivery contracts, route helper, and station activities.
+  game = defaultGameState();
+  game.player.currentSector = 1;
+  openScreen('specialMissions');
+  assert(panels.docked.innerHTML.includes('Station Contract Terminal') && panels.docked.innerHTML.includes('Math Contracts'), 'Sector 1 mission terminal renders contract sections');
+  assert(panels.docked.innerHTML.includes('Delivery / Fetch Contracts') && panels.docked.innerHTML.includes('Bounty Board'), 'mission terminal renders delivery and bounty sections');
+  assert(panels.docked.innerHTML.includes('Training Jobs') && panels.docked.innerHTML.includes('Active Contracts'), 'mission terminal renders training and active sections');
+  const delivery = deliveryQuestById('deliver-food-24');
+  assert(delivery.targetSector !== game.player.currentSector, 'delivery contracts cannot target current sector by default');
+  startDeliveryQuest(delivery.id);
+  assert(delivery.status === 'active' && delivery.acceptedAtSector === 1, 'delivery contract can be accepted from Sector 1');
+  const activeCount = game.deliveryQuests.filter((quest) => quest.status === 'active' && quest.targetSector === delivery.targetSector).length;
+  startDeliveryQuest(delivery.id);
+  assert(game.deliveryQuests.filter((quest) => quest.status === 'active' && quest.targetSector === delivery.targetSector).length === activeCount, 'duplicate active delivery contracts are not created');
+  assert(!canCompleteDeliveryQuest(delivery), 'delivery cannot complete before reaching target sector');
+  assert(renderRouteHelp(delivery).includes('Route Status'), 'route helper renders without crashing');
+  game.player.currentSector = delivery.targetSector;
+  game.player.cargo.Food = delivery.requiredAmount;
+  const creditsBeforeDelivery = game.player.credits;
+  completeDeliveryQuest(delivery.id);
+  assert(delivery.status === 'complete', 'delivery completes at target sector');
+  assert(game.player.cargo.Food === 0, 'delivery deducts required resource');
+  assert(game.player.credits > creditsBeforeDelivery, 'delivery grants reward');
+
+  game = defaultGameState();
+  game.player.currentSector = 1;
+  const cargoCreditsBefore = game.player.credits;
+  runStationActivity('cargoSorting', '9');
+  assert(game.player.credits === cargoCreditsBefore + 35, 'Cargo Sorting Job grants small reward');
+  const repairCreditsBefore = game.player.credits;
+  runStationActivity('repairAssist', '12');
+  assert(game.player.credits === repairCreditsBefore + 20 && game.stationActivities.repairDiscount >= 20, 'Repair Bay Assist grants small reward and discount');
+  const rumorCreditsBefore = game.player.credits;
+  readRumorBoard();
+  assert(game.stationActivities.lastRumor && game.player.credits === rumorCreditsBefore - 5, 'Rumor Board renders rumor text and charges small fee');
+
   game.player.currentSector = Object.values(sectorMap).find((sector) => sector.hasShipyard).number;
   openScreen('shipyard');
   assert(panels.docked.innerHTML.includes('Shipyard') && panels.docked.innerHTML.includes('Trade-in'), 'shipyard docked screen should show trade-in cards');
@@ -332,7 +370,7 @@ vm.runInContext(`
   const lockedShipCard = renderShipCard(SHIPS.blackfinRaider);
   assert(lockedShipCard.includes('Locked') && lockedShipCard.includes('stat-delta'), 'locked ships should still render comparison deltas');
   openScreen('specialMissions');
-  assert(panels.docked.innerHTML.includes('Special Missions Terminal') && panels.docked.innerHTML.includes('Math Mission') && panels.docked.innerHTML.includes('Delivery / Fetch Missions'), 'special missions mode should include math and delivery foundations');
+  assert(panels.docked.innerHTML.includes('Special Missions Terminal') && panels.docked.innerHTML.includes('Math Contracts') && panels.docked.innerHTML.includes('Delivery / Fetch Contracts'), 'special missions mode should include math and delivery foundations');
   assert(panels.docked.innerHTML.includes('Dev Code Handling') && !panels.docked.innerHTML.includes('sector-map'), 'missions mode should keep terminal activity focused away from cockpit map');
   game.player.currentSector = 14;
   openScreen('planets');

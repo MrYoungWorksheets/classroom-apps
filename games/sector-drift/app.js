@@ -731,6 +731,7 @@ function defaultGameState() {
     selectedMissionTier: 2,
     ui: { mapZoom: DEFAULT_MAP_ZOOM, activeScreen: "cockpit", warpDestination: null },
     deliveryQuests: createDeliveryQuests(),
+    stationActivities: defaultStationActivities(),
     lastProductionAt: 0,
   };
 }
@@ -738,43 +739,104 @@ function defaultGameState() {
 
 function createDeliveryQuests() {
   return [
-    { id: "deliver-food-24", title: "Deliver 20 Food to Sector 24", description: "A lane outpost requested classroom-safe food supplies near Sector 24.", targetSector: 24, requiredResource: "Food", requiredAmount: 20, rewardCredits: 420, rewardFuel: 8, rewardTurns: 8, reputationReward: 1, status: "available" },
-    { id: "deliver-tech-port", title: "Deliver 15 Tech to the Sector 31 port", description: "A tech port needs replacement classroom lab parts delivered through known lanes.", targetSector: 31, requiredResource: "Tech", requiredAmount: 15, rewardCredits: 650, rewardFuel: 10, rewardTurns: 10, reputationReward: 2, status: "available" },
+    { id: "deliver-food-24", title: "Deliver 20 Food to Sector 24", description: "A lane outpost requested classroom-safe food supplies near Sector 24.", targetSector: 24, originSector: 1, requiredResource: "Food", requiredAmount: 20, reward: { credits: 520, fuel: 8, turns: 8, reputation: 1 }, status: "available", acceptedAtSector: null },
+    { id: "deliver-tech-31", title: "Deliver 15 Tech to the Sector 31 port", description: "A deep lane depot needs replacement classroom lab parts delivered from the Sector 1 hub.", targetSector: 31, originSector: 1, requiredResource: "Tech", requiredAmount: 15, reward: { credits: 760, fuel: 10, turns: 10, reputation: 2 }, status: "available", acceptedAtSector: null },
+    { id: "deliver-fuel-45", title: "Deliver 20 Fuel to Frontier Starbase 45", description: "A frontier station filed a long-range refuel request. Bring reserve fuel and plan the route before launching.", targetSector: 45, originSector: 1, requiredResource: "Fuel", requiredAmount: 20, reward: { credits: 980, fuel: 16, turns: 14, reputation: 3 }, status: "available", acceptedAtSector: null },
+    { id: "fetch-danger-18", title: "Survey Sector 18 and Return to Sector 1", description: "Visit a dangerous lane marker, then return to the safe Sector 1 mission hub with your report.", targetSector: 18, returnSector: 1, originSector: 1, requiredResource: "Survey Report", requiredAmount: 1, reward: { credits: 430, fuel: 6, turns: 6, reputation: 1 }, status: "available", acceptedAtSector: null, visitedTarget: false },
   ];
+}
+
+function normalizeDeliveryQuest(quest) {
+  const reward = quest.reward || { credits: quest.rewardCredits || 0, fuel: quest.rewardFuel || 0, turns: quest.rewardTurns || 0, reputation: quest.reputationReward || 0 };
+  return { ...quest, reward, status: ["available", "active", "claimable", "complete"].includes(quest.status) ? quest.status : "available" };
 }
 
 function migrateDeliveryQuests(savedQuests) {
   const defaults = createDeliveryQuests();
-  if (!Array.isArray(savedQuests)) return defaults;
-  return defaults.map((quest) => ({ ...quest, ...(savedQuests.find((saved) => saved && saved.id === quest.id) || {}) }));
+  if (!Array.isArray(savedQuests)) return defaults.map(normalizeDeliveryQuest);
+  return defaults.map((quest) => normalizeDeliveryQuest({ ...quest, ...(savedQuests.find((saved) => saved && saved.id === quest.id) || {}) }));
+}
+
+function missionBadge(label) { return `<span class="contract-badge">${label}</span>`; }
+function deliveryQuestById(id) { return (game.deliveryQuests || []).find((quest) => quest.id === id); }
+function isResourceDeliveryQuest(quest) { return quest && (RESOURCES.includes(quest.requiredResource) || quest.requiredResource === "Fuel"); }
+function deliveryReward(quest) { return quest.reward || { credits: quest.rewardCredits || 0, fuel: quest.rewardFuel || 0, turns: quest.rewardTurns || 0, reputation: quest.reputationReward || 0 }; }
+
+function deliveryRouteIntel(quest) {
+  const target = Number(quest.targetSector);
+  const known = game.visitedSectors.includes(target) || game.revealedSectors.includes(target);
+  const route = findRouteToSector(game.player.currentSector, target);
+  const routeStatus = route ? "route known" : known ? "partially known" : "route unknown";
+  const next = route && route.length > 1 ? `Next suggested sector: ${route[1]}` : "Next suggested sector: scan or travel adjacent lanes first.";
+  return { known, route, routeStatus, next };
+}
+
+function renderRouteHelp(quest) {
+  const intel = deliveryRouteIntel(quest);
+  const target = Number(quest.targetSector);
+  return `<div class="route-help">${stat("Target Sector", target)}${stat("Target Intel", intel.known ? "known/revealed" : "unknown")}${stat("Route Status", intel.routeStatus)}<p class="help-text">${intel.next}</p><button type="button" data-plot-delivery="${quest.id}" ${intel.route ? "" : "disabled"}>Plot Route to Target</button></div>`;
 }
 
 function renderDeliveryQuestBoard() {
-  return `<h2>Delivery / Fetch Missions</h2><p class="help-text">Future-ready physical delivery jobs. Reach the target sector with the requested cargo to complete.</p><div class="mission-grid">${(game.deliveryQuests || []).map((quest) => { const active = quest.status === "active"; const complete = canCompleteDeliveryQuest(quest); return `<div class="mission-card ${complete ? "complete" : ""}"><h3>${quest.title}</h3><p>${quest.description}</p>${stat("Target", `Sector ${quest.targetSector}`)}${stat("Delivery", `${quest.requiredAmount} ${quest.requiredResource}`)}${stat("Reward", `${quest.rewardCredits} credits, ${quest.rewardFuel} fuel, ${quest.rewardTurns} turns`)}<div class="button-row"><button data-start-delivery="${quest.id}" ${quest.status === "available" ? "" : "disabled"}>Accept</button><button data-complete-delivery="${quest.id}" ${active && complete ? "" : "disabled"}>Complete Delivery</button></div><p class="help-text">Status: ${quest.status}</p></div>`; }).join("")}</div>`;
+  const quests = (game.deliveryQuests || []).map(normalizeDeliveryQuest);
+  return `<h2>Delivery / Fetch Contracts</h2><p class="help-text">Sector 1 dispatch requires real travel: contracts cannot target your current sector and complete only at the destination.</p><div class="mission-grid">${quests.map((quest) => {
+    const active = quest.status === "active" || quest.status === "claimable";
+    const complete = canCompleteDeliveryQuest(quest);
+    const atTarget = game.player.currentSector === quest.targetSector;
+    const reward = deliveryReward(quest);
+    const disabledReason = quest.status !== "available" ? "Already accepted or complete" : game.player.currentSector !== 1 ? "Accept from Sector 1" : atTarget ? "Target is current sector" : "Ready from Sector 1";
+    return `<div class="mission-card contract-card ${complete ? "complete" : ""}"><div class="contract-badges">${missionBadge(quest.returnSector ? "Fetch" : "Delivery")}${complete ? missionBadge("Claimable") : ""}</div><h3>${quest.title}</h3><p>${quest.description}</p>${stat("Pickup Hub", `Sector ${quest.originSector || 1}`)}${stat("Delivery", `${quest.requiredAmount} ${quest.requiredResource}`)}${stat("Reward", formatReward(reward))}${active ? renderRouteHelp(quest) : ""}<div class="button-row"><button data-start-delivery="${quest.id}" ${quest.status === "available" && game.player.currentSector === 1 && !atTarget ? "" : "disabled"}>Accept Contract</button><button data-complete-delivery="${quest.id}" ${complete ? "" : "disabled"}>Complete / Claim</button></div><p class="help-text">Status: ${quest.status}. ${disabledReason}</p></div>`;
+  }).join("")}</div>`;
 }
 
-function deliveryQuestById(id) { return (game.deliveryQuests || []).find((quest) => quest.id === id); }
-function canCompleteDeliveryQuest(quest) { return quest && quest.status === "active" && game.player.currentSector === quest.targetSector && (game.player.cargo[quest.requiredResource] || 0) >= quest.requiredAmount; }
+function canCompleteDeliveryQuest(quest) {
+  if (!quest || !["active", "claimable"].includes(quest.status)) return false;
+  if (quest.returnSector) return Boolean(quest.visitedTarget) && game.player.currentSector === quest.returnSector;
+  if (game.player.currentSector !== quest.targetSector) return false;
+  if (quest.requiredResource === "Fuel") return game.player.fuel >= quest.requiredAmount;
+  if (isResourceDeliveryQuest(quest)) return (game.player.cargo[quest.requiredResource] || 0) >= quest.requiredAmount;
+  return true;
+}
+
 function startDeliveryQuest(id) {
   const quest = deliveryQuestById(id);
   if (!quest || quest.status !== "available") return addAndRender("That delivery quest is already active or complete.");
+  if (game.player.currentSector !== 1) return addAndRender("Delivery and fetch contracts must be accepted from the Sector 1 mission hub.");
+  if (game.player.currentSector === quest.targetSector) return addAndRender("Delivery targets must be away from your current sector.");
+  if ((game.deliveryQuests || []).some((other) => other.id !== quest.id && other.status === "active" && other.targetSector === quest.targetSector)) return addAndRender("You already have an active contract for that target sector.");
   quest.status = "active";
-  addLog(`Accepted delivery quest: ${quest.title}.`);
+  quest.acceptedAtSector = game.player.currentSector;
+  addLog(`Accepted ${quest.returnSector ? "fetch" : "delivery"} contract: ${quest.title}. Target Sector ${quest.targetSector}.`);
   saveGame();
   render();
 }
+
 function completeDeliveryQuest(id) {
   const quest = deliveryQuestById(id);
   if (!canCompleteDeliveryQuest(quest)) return addAndRender("Delivery requirements are not met yet.");
-  game.player.cargo[quest.requiredResource] -= quest.requiredAmount;
-  game.player.credits += quest.rewardCredits;
-  game.player.fuel = Math.min(game.player.maxFuel, game.player.fuel + quest.rewardFuel);
-  game.player.turns = Math.min(game.player.maxTurns, game.player.turns + quest.rewardTurns);
-  addReputation(quest.reputationReward || 0);
+  if (quest.requiredResource === "Fuel") game.player.fuel -= quest.requiredAmount;
+  else if (isResourceDeliveryQuest(quest)) game.player.cargo[quest.requiredResource] -= quest.requiredAmount;
+  applyReward(deliveryReward(quest));
   quest.status = "complete";
-  addLog(`Completed delivery quest: ${quest.title}.`);
+  addLog(`Completed delivery/fetch contract: ${quest.title}. Reward: ${formatReward(deliveryReward(quest))}.`);
   saveGame();
   render();
+}
+
+function updateDeliveryQuestProgress() {
+  (game.deliveryQuests || []).forEach((quest) => {
+    if (quest.status !== "active" || !quest.returnSector || quest.visitedTarget) return;
+    if (game.player.currentSector === quest.targetSector) {
+      quest.visitedTarget = true;
+      addLog(`${quest.title}: target sector surveyed. Return to Sector ${quest.returnSector} to claim.`);
+    }
+  });
+}
+
+function plotDeliveryRoute(id) {
+  const quest = deliveryQuestById(id);
+  if (!quest) return addAndRender("Delivery contract not found.");
+  return setWarpDestination(quest.targetSector);
 }
 
 function incrementTierMissionStat(tier) {
@@ -933,6 +995,7 @@ function migrateGameState(saved = {}) {
   merged.ui.mapZoom = clampMapZoom(merged.ui.mapZoom);
   merged.ui.warpDestination = sectorMap[Number(merged.ui.warpDestination)] ? Number(merged.ui.warpDestination) : null;
   merged.deliveryQuests = migrateDeliveryQuests(saved.deliveryQuests);
+  merged.stationActivities = migrateStationActivities(saved.stationActivities);
   updateScannerReveals(merged);
   return merged;
 }
@@ -1404,17 +1467,94 @@ function stationDisplayName(sector) {
   return names[sector.number] || `${sector.portType || "Starbase"} ${sector.number}`;
 }
 
-function renderStationActivitiesPlaceholder() {
-  const activities = ["Quick credit jobs", "Rumor board", "Repair discount challenge", "Local cargo contracts", "Navigation tips", "Mini-games"];
-  return `<section class="mini-card station-activities"><p class="eyebrow">Future activity area</p><h3>Station Activities</h3><p class="help-text">Reserved for upcoming playtest ideas. These are placeholders only and do not start mini-games yet.</p><ul>${activities.map((activity) => `<li>${activity}</li>`).join("")}</ul></section>`;
+function defaultStationActivities() {
+  return { date: todayKey(), cargoSortingUses: 0, repairAssistUses: 0, repairDiscount: 0, lastRumor: "" };
+}
+
+function migrateStationActivities(saved = {}) {
+  const base = defaultStationActivities();
+  const merged = { ...base, ...(saved && typeof saved === "object" ? saved : {}) };
+  if (merged.date !== todayKey()) return base;
+  merged.cargoSortingUses = Math.max(0, Math.floor(Number(merged.cargoSortingUses) || 0));
+  merged.repairAssistUses = Math.max(0, Math.floor(Number(merged.repairAssistUses) || 0));
+  merged.repairDiscount = Math.max(0, Math.floor(Number(merged.repairDiscount) || 0));
+  merged.lastRumor = typeof merged.lastRumor === "string" ? merged.lastRumor : "";
+  return merged;
+}
+
+function stationActivitiesState() {
+  game.stationActivities = migrateStationActivities(game.stationActivities);
+  return game.stationActivities;
+}
+
+function stationActivityAnswer(id) {
+  return id === "cargoSorting" ? "9" : id === "repairAssist" ? "12" : "";
+}
+
+function runStationActivity(id, answer = "") {
+  const state = stationActivitiesState();
+  const cleaned = normalize(answer);
+  if (id === "cargoSorting") {
+    if (state.cargoSortingUses >= 3) return addAndRender("Cargo Sorting Job is on cooldown for today.");
+    if (cleaned !== stationActivityAnswer(id)) return addAndRender("Cargo Sorting check needs the correct crate total before payout.");
+    state.cargoSortingUses += 1;
+    game.player.credits += 35;
+    addLog("Cargo Sorting Job complete. Earned 35 credits for careful station work.");
+  } else if (id === "repairAssist") {
+    if (state.repairAssistUses >= 2) return addAndRender("Repair Bay Assist is on cooldown for today.");
+    if (cleaned !== stationActivityAnswer(id)) return addAndRender("Repair Bay Assist needs the correct calibration answer.");
+    state.repairAssistUses += 1;
+    state.repairDiscount = Math.min(60, (state.repairDiscount || 0) + 20);
+    game.player.credits += 20;
+    addLog("Repair Bay Assist complete. Earned 20 credits and a 20 credit repair discount at this starbase.");
+  } else {
+    return addAndRender("Station activity unavailable.");
+  }
+  saveGame();
+  render();
+}
+
+function stationRumors(sector) {
+  const scanner = game.player.upgrades.scanner || 1;
+  const dangerSectors = Object.values(sectorMap).filter((item) => item.dangerLevel >= (scanner >= 4 ? 2 : 3)).map((item) => item.number);
+  const planetHint = Object.values(sectorMap).find((item) => item.type === "planet" && (scanner >= 3 || item.number > sector.number));
+  return [
+    "A distant port is paying well for Tech; compare prices before filling the hold.",
+    `Pirate traffic has increased near Sector ${dangerSectors[0] || 18}. Travel repaired and fueled.`,
+    "A dead-end route may hide a stronghold, but patrols recommend better shields first.",
+    `A planet near Sector ${planetHint?.number || 14} has unusual production potential.`,
+    "Alliance patrols are active near protected space around the classroom core.",
+    scanner >= 4 ? "High-grade scanners can identify route roles before you commit to a long lane." : "Upgrade scanners for sharper rumors and safer route planning.",
+  ];
+}
+
+function readRumorBoard() {
+  const sector = sectorMap[game.player.currentSector];
+  if (!sector || sector.type !== "port") return addAndRender("Rumor Board is only available while docked at a starbase.");
+  const cost = 5;
+  if (game.player.credits < cost) return addAndRender("Rumor Board access costs 5 credits.");
+  game.player.credits -= cost;
+  const rumors = stationRumors(sector);
+  const index = (game.player.currentSector + game.player.upgrades.scanner + game.visitedSectors.length + game.player.credits) % rumors.length;
+  stationActivitiesState().lastRumor = rumors[index];
+  addLog(`Rumor Board: ${rumors[index]}`);
+  saveGame();
+  render();
+}
+
+function renderStationActivities(sector) {
+  const state = stationActivitiesState();
+  const cargoLeft = Math.max(0, 3 - state.cargoSortingUses);
+  const repairLeft = Math.max(0, 2 - state.repairAssistUses);
+  return `<section class="mini-card station-activities"><p class="eyebrow">Service Counter</p><h3>Station Activities</h3><p class="help-text">Small, safe starbase jobs with daily limits. They pay tiny rewards and do not add gambling, multiplayer, or PvP.</p><div class="station-job-grid"><article class="station-job"><div class="contract-badges">${missionBadge("Station Job")}</div><h4>Cargo Sorting Job</h4><p>Manifest check: 4 Food crates + 5 Tech crates = ? crates.</p><label for="cargoSortingAnswer">Cargo answer</label><input id="cargoSortingAnswer" type="text" inputmode="numeric" placeholder="Total crates"><button type="button" data-station-activity="cargoSorting" ${cargoLeft ? "" : "disabled"}>Submit Cargo Sort</button><p class="help-text">Reward: 35 credits. Uses left today: ${cargoLeft}.</p></article><article class="station-job"><div class="contract-badges">${missionBadge("Station Job")}</div><h4>Repair Bay Assist</h4><p>Calibration check: 3 armor plates × 4 bolts = ? bolts.</p><label for="repairAssistAnswer">Repair answer</label><input id="repairAssistAnswer" type="text" inputmode="numeric" placeholder="Total bolts"><button type="button" data-station-activity="repairAssist" ${repairLeft ? "" : "disabled"}>Submit Repair Assist</button><p class="help-text">Reward: 20 credits and +20 repair discount. Uses left today: ${repairLeft}. Current discount: ${state.repairDiscount || 0} credits.</p></article></div><div class="rumor-board"><div class="contract-badges">${missionBadge("Rumor")}</div><h4>Rumor Board</h4><p class="help-text">Spend 5 credits for navigation, pirate, planet, or trade hints. Scanner level improves quality without revealing the whole route.</p><button type="button" data-action="readRumor">Read Rumor (5 credits)</button><p class="rumor-text">${state.lastRumor || "No rumor purchased yet."}</p></div></section>`;
 }
 
 function renderStarbaseScreen(sector) {
-  return `<section class="location-intro starbase-intro mini-card"><p class="eyebrow">Docked at Sector ${sector.number}</p><h3>${stationDisplayName(sector)}</h3><div class="intel-grid">${stat("Station Type", sector.portType)}${stat("Services", `Trading · Fuel · Repairs${sector.hasShipyard ? " · Shipyard next door" : ""}`)}${stat("Current Sector", sector.number)}</div><p class="help-text">${sector.flavor}</p></section><div class="screen-grid starbase-services"><section class="mini-card"><h3>Port Services</h3><p><span class="badge">${sector.portType}</span></p><p class="help-text"><strong>Local market notes:</strong> ${sector.marketNote}</p><p class="help-text"><strong>Trade tip:</strong> ${sector.tradeTip}</p><div class="trade-grid">${RESOURCES.map((resource) => {
+  return `<section class="location-intro starbase-intro mini-card"><p class="eyebrow">Docked at Sector ${sector.number}</p><h3>${stationDisplayName(sector)}</h3><div class="intel-grid">${stat("Station Type", sector.portType)}${stat("Services", `Trading · Fuel · Repairs · Activities · Rumors${sector.hasShipyard ? " · Shipyard next door" : ""}`)}${stat("Current Sector", sector.number)}</div><p class="help-text">${sector.flavor}</p></section><div class="screen-grid starbase-services"><section class="mini-card service-counter"><h3>Port Services</h3><p><span class="badge">${sector.portType}</span></p><p class="help-text"><strong>Local market notes:</strong> ${sector.marketNote}</p><p class="help-text"><strong>Trade tip:</strong> ${sector.tradeTip}</p><div class="trade-grid">${RESOURCES.map((resource) => {
     const price = sector.portPrices[resource];
     const buyDisabled = cargoSpaceLeft() <= 0 ? "disabled" : "";
     return `<div class="mini-card"><h3>${resource}</h3><p>Buy ${price.buy} credits · Sell ${price.sell} credits</p><div class="resource-actions"><button data-action="buy" data-resource="${resource}" data-amount="1" ${buyDisabled}>Buy 1</button><button data-action="buy" data-resource="${resource}" data-amount="5" ${buyDisabled}>Buy 5</button><button data-action="sell" data-resource="${resource}" data-amount="1">Sell 1</button><button data-action="sell" data-resource="${resource}" data-amount="5">Sell 5</button></div></div>`;
-  }).join("")}</div>${renderRefuelPanel()}${renderRepairPanel(sector)}</section><section class="mini-card item-shop-placeholder"><h3>Item Shop: Coming Soon</h3><p><strong>Scanning Probe</strong></p><p class="help-text">Scanning Probes will allow long-range sector scans in a future update. They will be expensive, limited, and will not reveal the entire map cheaply.</p></section>${renderStationActivitiesPlaceholder()}</div>`;
+  }).join("")}</div>${renderRefuelPanel()}${renderRepairPanel(sector)}</section>${renderStationActivities(sector)}<section class="mini-card item-shop-placeholder"><h3>Item Shop: Coming Soon</h3><p><strong>Scanning Probe</strong></p><p class="help-text">Scanning Probes will allow long-range sector scans in a future update. They will be expensive, limited, and will not reveal the entire map cheaply.</p></section></div>`;
 }
 
 function renderShipyardScreen() {
@@ -1494,7 +1634,32 @@ function renderShipCard(ship) {
 
 function renderSpecialMissionsScreen() {
   const tier = missionTierByNumber(normalizeMissionTier(game.selectedMissionTier || game.currentMission.tier || 2));
-  return `<section class="location-intro mini-card"><p class="eyebrow">Focused terminal</p><h3>Special Missions Terminal</h3><p class="help-text">Math missions, board contracts, delivery/fetch work, reward previews, and enabled dev codes stay here instead of cluttering the cockpit.</p><div class="intel-grid">${stat("Selected Difficulty", tier.tierName)}${stat("Reward Preview", `${tier.rewardMultiplier}x mission payout`)}${stat("Board Contracts", (game.activeMissions || []).length)}</div></section><div class="screen-grid"><section class="mini-card">${renderMathMissionContent()}</section><section class="mini-card">${renderMissionBoardContent()}${renderDeliveryQuestBoard()}</section><section class="mini-card">${renderTutorialContent()}<h3>Dev Code Handling</h3><p class="help-text">If classroom testing codes are enabled, enter them in the math mission answer field and submit from this terminal.</p></section></div>`;
+  const sector = sectorMap[game.player.currentSector];
+  const hubText = game.player.currentSector === 1 ? "Sector 1 hub online: all contract boards available." : "Remote terminal: review active work, but new delivery/fetch contracts launch from Sector 1.";
+  return `<section class="location-intro mission-terminal-intro mini-card"><p class="eyebrow">Station Contract Terminal</p><h3>Special Missions Terminal</h3><p class="help-text">${hubText} Math contracts, delivery work, bounty jobs, training jobs, and station jobs are grouped below.</p><div class="intel-grid">${stat("Current Station", sector.type === "port" ? stationDisplayName(sector) : `Sector ${sector.number} Relay`)}${stat("Selected Math Difficulty", tier.tierName)}${stat("Reward Preview", `${tier.rewardMultiplier}x math payout`)}${stat("Board Contracts", (game.activeMissions || []).length)}</div></section><div class="terminal-sections"><details class="terminal-section" open><summary>${missionBadge("Math")} Math Contracts</summary>${renderMathMissionContent()}</details><details class="terminal-section" open><summary>${missionBadge("Delivery")} Delivery / Fetch Contracts</summary>${renderDeliveryQuestBoard()}</details><details class="terminal-section" open><summary>${missionBadge("Bounty")} Bounty Board</summary>${renderBountyBoardContent()}</details><details class="terminal-section"><summary>${missionBadge("Training")} Training Jobs</summary>${renderTutorialContent()}<h3>Dev Code Handling</h3><p class="help-text">If classroom testing codes are enabled, enter them in the math mission answer field and submit from this terminal.</p></details><details class="terminal-section" open><summary>${missionBadge("Station Job")} Active Contracts</summary>${renderMissionBoardContent()}${renderActiveDeliveryContracts()}</details><details class="terminal-section" open><summary>${missionBadge("Claimable")} Completed / Claimable Contracts</summary>${renderClaimableContracts()}</details></div>`;
+}
+
+function renderBountyBoardContent() {
+  const bounties = Object.values(game.pirates || {}).filter((pirate) => !pirate.defeated).slice(0, 6);
+  if (!bounties.length) return `<p class="empty-note">No NPC bounty targets remain on the current board.</p>`;
+  return `<p class="help-text">Single-player NPC bounty jobs only. No multiplayer and no PvP targets.</p><div class="mission-grid">${bounties.map((pirate) => `<div class="mission-card contract-card"><div class="contract-badges">${missionBadge("Bounty")}</div><h3>${pirate.name}</h3>${stat("Sector", pirate.sector)}${stat("Threat", pirate.threatLevel)}${stat("Reward", `${pirate.bounty} credits, ${pirate.reputationReward} reputation`)}<p class="help-text">Use Combat / Pirate Intel when you reach the sector.</p></div>`).join("")}</div>`;
+}
+
+function renderActiveDeliveryContracts() {
+  const active = (game.deliveryQuests || []).filter((quest) => ["active", "claimable"].includes(quest.status));
+  if (!active.length) return `<p class="empty-note">No active delivery/fetch contracts.</p>`;
+  return `<h3>Active Delivery / Fetch Routes</h3><div class="mission-grid">${active.map((quest) => `<div class="mission-card contract-card"><div class="contract-badges">${missionBadge(quest.returnSector ? "Fetch" : "Delivery")}</div><h3>${quest.title}</h3>${renderRouteHelp(quest)}<p class="help-text">${quest.returnSector && quest.visitedTarget ? `Return to Sector ${quest.returnSector} to claim.` : `Travel to Sector ${quest.targetSector}.`}</p></div>`).join("")}</div>`;
+}
+
+function renderClaimableContracts() {
+  const boardClaimable = (game.activeMissions || []).filter((mission) => missionProgress(mission) >= missionTemplateById(mission.id).target);
+  const deliveryClaimable = (game.deliveryQuests || []).filter((quest) => canCompleteDeliveryQuest(quest));
+  const completedDeliveries = (game.deliveryQuests || []).filter((quest) => quest.status === "complete");
+  const boardHtml = boardClaimable.map((mission) => { const template = missionTemplateById(mission.id); return `<div class="mission-card complete"><div class="contract-badges">${missionBadge("Claimable")}</div><h3>${template.title}</h3><p>${template.objective}</p><p class="reward-text">Reward: ${formatReward(template.reward)}</p><button data-claim-mission="${mission.id}">Claim Reward</button></div>`; }).join("");
+  const deliveryHtml = deliveryClaimable.map((quest) => `<div class="mission-card complete"><div class="contract-badges">${missionBadge("Claimable")}</div><h3>${quest.title}</h3><p class="reward-text">Reward: ${formatReward(deliveryReward(quest))}</p><button data-complete-delivery="${quest.id}">Complete / Claim</button></div>`).join("");
+  const completedHtml = completedDeliveries.map((quest) => `<div class="mission-card"><div class="contract-badges">${missionBadge("Completed")}</div><h3>${quest.title}</h3><p class="help-text">Completed and paid.</p></div>`).join("");
+  const html = `${boardHtml}${deliveryHtml}${completedHtml}`;
+  return html ? `<div class="mission-grid">${html}</div>` : `<p class="empty-note">No claimable or completed contracts yet.</p>`;
 }
 
 function renderMathMissionContent() {
@@ -1824,6 +1989,12 @@ function wireDockedButtons(scope = document) {
   scope.querySelectorAll("[data-claim-mission]").forEach((button) => button.addEventListener("click", () => runGameAction(() => claimBoardMission(button.dataset.claimMission))));
   scope.querySelectorAll("[data-start-delivery]").forEach((button) => button.addEventListener("click", () => runGameAction(() => startDeliveryQuest(button.dataset.startDelivery))));
   scope.querySelectorAll("[data-complete-delivery]").forEach((button) => button.addEventListener("click", () => runGameAction(() => completeDeliveryQuest(button.dataset.completeDelivery))));
+  scope.querySelectorAll("[data-plot-delivery]").forEach((button) => button.addEventListener("click", () => runGameAction(() => plotDeliveryRoute(button.dataset.plotDelivery))));
+  scope.querySelectorAll("[data-station-activity]").forEach((button) => button.addEventListener("click", () => {
+    const inputId = button.dataset.stationActivity === "cargoSorting" ? "cargoSortingAnswer" : "repairAssistAnswer";
+    return runGameAction(() => runStationActivity(button.dataset.stationActivity, scope.querySelector(`#${inputId}`)?.value || ""));
+  }));
+  scope.querySelector("[data-action='readRumor']")?.addEventListener("click", () => runGameAction(readRumorBoard));
   scope.querySelector("[data-action='saveNow']")?.addEventListener("click", () => { saveGame(); addLog("Manual save complete."); render(); });
   scope.querySelector("[data-action='resetLocal']")?.addEventListener("click", () => { if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY); sectorMap = createSectorMap(); game = defaultGameState(); addLog("Prototype reset. Welcome back, Cadet."); saveGame(); render(); });
   scope.querySelector("[data-action='firebaseSignIn']")?.addEventListener("click", handleFirebaseSignIn);
@@ -1982,8 +2153,10 @@ function renderRefuelPanel() {
 }
 
 function renderRepairPanel(sector) {
-  const cost = repairCost(sector);
-  return `<h3>Repair Service</h3><div class="mini-card">${stat("Hull", `${game.player.hull}/${game.player.maxHull}`)}${stat("Full Repair", `${cost} credits`)}<button data-action="repair" ${cost <= 0 || game.player.credits < cost ? "disabled" : ""}>Repair Hull</button></div>`;
+  const baseCost = repairCost(sector);
+  const discount = Math.min(baseCost, stationActivitiesState().repairDiscount || 0);
+  const cost = Math.max(0, baseCost - discount);
+  return `<h3>Repair Service</h3><div class="mini-card">${stat("Hull", `${game.player.hull}/${game.player.maxHull}`)}${stat("Full Repair", `${cost} credits`)}${discount ? stat("Assist Discount", `${discount} credits`) : ""}<button data-action="repair" ${baseCost <= 0 || game.player.credits < cost ? "disabled" : ""}>Repair Hull</button></div>`;
 }
 
 function renderShipyardPanel() {
@@ -2240,6 +2413,7 @@ function travelToSector(number) {
   game.player.currentSector = number;
   selectedSectorNumber = number;
   markSectorVisited(number);
+  updateDeliveryQuestProgress();
   addLog(`Traveled to Sector ${number}.`);
   completeTutorialStep("travel");
   resolveSectorDanger(number);
@@ -2440,12 +2614,15 @@ function buyFuel(amount) {
 
 function repairHull() {
   const sector = sectorMap[game.player.currentSector];
-  const cost = repairCost(sector);
-  if (cost <= 0) return addAndRender("Hull is already fully repaired.");
+  const baseCost = repairCost(sector);
+  const discount = Math.min(baseCost, stationActivitiesState().repairDiscount || 0);
+  const cost = Math.max(0, baseCost - discount);
+  if (baseCost <= 0) return addAndRender("Hull is already fully repaired.");
   if (game.player.credits < cost) return addAndRender("Not enough credits for full repairs.");
   game.player.credits -= cost;
+  stationActivitiesState().repairDiscount = Math.max(0, (stationActivitiesState().repairDiscount || 0) - discount);
   game.player.hull = game.player.maxHull;
-  addLog(`Repair service restored hull for ${cost} credits.`);
+  addLog(`Repair service restored hull for ${cost} credits${discount ? ` after a ${discount} credit repair bay discount` : ""}.`);
   saveGame();
   render();
 }

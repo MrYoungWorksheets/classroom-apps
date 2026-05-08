@@ -1152,3 +1152,89 @@ button.button-admin {
   min-height: 3rem;
   font-size: 0.98rem;
 }
+
+/* Sector Drift mission terminal and starbase activity polish */
+.terminal-sections {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.terminal-section,
+.station-job,
+.rumor-board,
+.route-help {
+  border: 1px solid rgba(43, 212, 217, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 0.8rem;
+}
+
+.terminal-section summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.terminal-section[open] {
+  background: linear-gradient(180deg, rgba(43, 212, 217, 0.075), rgba(255, 255, 255, 0.035));
+}
+
+.contract-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.45rem;
+}
+
+.contract-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 209, 102, 0.42);
+  border-radius: 999px;
+  color: var(--accent);
+  background: rgba(255, 209, 102, 0.08);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 0.12rem 0.45rem;
+  text-transform: uppercase;
+}
+
+.contract-card {
+  border-color: rgba(255, 209, 102, 0.24);
+}
+
+.station-job-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.station-job h4,
+.rumor-board h4 {
+  color: var(--good);
+  margin: 0.25rem 0 0.4rem;
+}
+
+.station-job input {
+  width: 100%;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.rumor-text {
+  border-left: 3px solid var(--accent);
+  color: var(--text);
+  margin: 0.65rem 0 0;
+  padding-left: 0.65rem;
+}
+
+.service-counter,
+.station-activities,
+.mission-terminal-intro {
+  border-color: rgba(142, 246, 178, 0.28);
+}
+
+.route-help {
+  margin-top: 0.65rem;
+}
