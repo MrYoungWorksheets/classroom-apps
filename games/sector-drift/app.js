@@ -269,6 +269,11 @@ const SHIPS = {
   },
 };
 
+let sessionRecoveryMessages = [];
+let localSaveStatus = "Local save ready.";
+let localStorageAvailable = true;
+let lastLocalSaveError = "";
+
 let sectorMap = createSectorMap();
 let game = loadGame();
 let selectedSectorNumber = game.player.currentSector;
@@ -959,115 +964,266 @@ function defaultStats() {
   };
 }
 
+function recordRecovery(message) {
+  const text = String(message || "Save repaired so play can continue.");
+  if (!sessionRecoveryMessages.includes(text)) sessionRecoveryMessages.unshift(text);
+  sessionRecoveryMessages = sessionRecoveryMessages.slice(0, 6);
+  localSaveStatus = text;
+  try { console.warn(`Sector Drift recovery: ${text}`); } catch (error) { /* console may be unavailable in unusual test shells */ }
+}
+
+function safeObject(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+}
+
+function safeArray(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function clampNumber(value, min, max, fallback = min) {
+  const number = Number(value);
+  const safe = Number.isFinite(number) ? number : fallback;
+  return Math.max(min, Math.min(max, Math.floor(safe)));
+}
+
+function normalizeSectorNumber(value, fallback = 1) {
+  const raw = Number(value);
+  if (!Number.isFinite(raw) || raw < 1 || raw > MAX_SECTOR) return fallback;
+  const number = Math.floor(raw);
+  return sectorMap[number] ? number : fallback;
+}
+
+function normalizeResourceCargo(cargo = {}, capacity = 9999) {
+  const source = safeObject(cargo);
+  const normalized = { Ore: 0, Food: 0, Tech: 0, [SMUGGLED_RESOURCE]: 0 };
+  [...RESOURCES, SMUGGLED_RESOURCE].forEach((resource) => {
+    normalized[resource] = clampNumber(source[resource], 0, 9999, 0);
+  });
+  const limit = Math.max(0, Number.isFinite(Number(capacity)) ? Math.floor(Number(capacity)) : 9999);
+  if (limit > 0) {
+    let overflow = Object.values(normalized).reduce((total, amount) => total + amount, 0) - Math.max(limit, 9999);
+    [...RESOURCES, SMUGGLED_RESOURCE].reverse().forEach((resource) => {
+      if (overflow <= 0) return;
+      const removed = Math.min(normalized[resource], overflow);
+      normalized[resource] -= removed;
+      overflow -= removed;
+    });
+  }
+  return normalized;
+}
+
+function normalizeUpgradeLevels(upgrades = {}, ship = SHIPS.rustyComet) {
+  const source = safeObject(upgrades);
+  const caps = ship?.upgradeCaps || SHIPS.rustyComet.upgradeCaps;
+  return Object.fromEntries(["cargoHold", "engine", "scanner", "shield"].map((key) => {
+    const raw = Number(source[key]);
+    if (Number.isFinite(raw) && raw > (caps[key] || 1)) return [key, Math.min(99, Math.floor(raw))];
+    return [key, clampNumber(raw, 1, caps[key] || 1, 1)];
+  }));
+}
+
+function normalizeCargoCostBasis(basis, cargo) {
+  return migrateCargoCostBasis(safeObject(basis), cargo);
+}
+
+function backupCorruptLocalSave(rawSave) {
+  if (typeof localStorage === "undefined" || !rawSave) return;
+  try {
+    localStorage.setItem(`${STORAGE_KEY}_corruptBackup_${Date.now()}`, String(rawSave));
+  } catch (error) {
+    lastLocalSaveError = error?.message || "Could not create corrupt-save backup.";
+  }
+}
+
+function localSaveUnavailableMessage() {
+  return "Local browser save is unavailable. This session is continuing in memory, but progress may not persist after reload.";
+}
+
 function loadGame() {
-  if (typeof localStorage === "undefined") return defaultGameState();
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) return defaultGameState();
+  if (typeof localStorage === "undefined") {
+    localStorageAvailable = false;
+    localSaveStatus = "Local browser save is unavailable here; this session can still run in memory.";
+    return defaultGameState();
+  }
+  let saved = null;
+  try {
+    saved = localStorage.getItem(STORAGE_KEY);
+  } catch (error) {
+    localStorageAvailable = false;
+    lastLocalSaveError = error?.message || "localStorage could not be read.";
+    recordRecovery("Local browser save could not be read. A temporary in-memory pilot was started.");
+    return defaultGameState();
+  }
+  if (!saved) {
+    localSaveStatus = "No local save found. A fresh prototype save is active.";
+    return defaultGameState();
+  }
   try {
     return migrateGameState(JSON.parse(saved));
   } catch (error) {
-    return defaultGameState();
+    backupCorruptLocalSave(saved);
+    recordRecovery("Recovered from a corrupted local save. A fresh prototype save was started.");
+    const fresh = defaultGameState();
+    fresh.log.unshift("Save recovery: recovered from a corrupted local save and started fresh.");
+    return fresh;
   }
 }
 
 function migrateGameState(saved = {}) {
-  const fresh = defaultGameState();
-  const merged = { ...fresh, ...saved };
-  merged.player = { ...fresh.player, ...(saved.player || {}) };
-  merged.player.shipId = shipIdFromName(merged.player.shipId || merged.player.shipName);
-  const ship = SHIPS[merged.player.shipId] || SHIPS.rustyComet;
-  merged.player.shipId = ship.id;
-  merged.player.shipName = ship.name;
-  merged.player.cargo = { ...fresh.player.cargo, ...(saved.player?.cargo || {}) };
-  [...RESOURCES, SMUGGLED_RESOURCE].forEach((resource) => { merged.player.cargo[resource] = Math.max(0, Math.floor(Number(merged.player.cargo[resource]) || 0)); });
-  merged.player.cargoCostBasis = migrateCargoCostBasis(saved.player?.cargoCostBasis, merged.player.cargo);
-  merged.player.upgrades = { ...fresh.player.upgrades, ...(saved.player?.upgrades || {}) };
-  merged.player.reputation = Math.max(-100, Math.min(100, Math.floor(typeof merged.player.reputation === "number" ? merged.player.reputation : 0)));
-  merged.player.lawfulReputation = Math.max(0, Math.floor(typeof merged.player.lawfulReputation === "number" ? merged.player.lawfulReputation : Math.max(0, merged.player.reputation)));
-  merged.player.pirateReputation = Math.max(0, Math.floor(typeof merged.player.pirateReputation === "number" ? merged.player.pirateReputation : Math.max(0, -merged.player.reputation)));
-  merged.player.alignmentStatus = typeof merged.player.alignmentStatus === "string" ? merged.player.alignmentStatus : reputationTitle(merged.player.reputation);
-  merged.player.combatRank = typeof merged.player.combatRank === "string" ? merged.player.combatRank : "Civilian Pilot";
-  merged.player.fighters = Math.max(0, Math.floor(typeof merged.player.fighters === "number" ? merged.player.fighters : 0));
-  merged.player.combatWins = Math.max(0, Math.floor(typeof merged.player.combatWins === "number" ? merged.player.combatWins : 0));
-  merged.player.combatLosses = Math.max(0, Math.floor(typeof merged.player.combatLosses === "number" ? merged.player.combatLosses : 0));
-  merged.player.piratesDefeated = Math.max(0, Math.floor(typeof merged.player.piratesDefeated === "number" ? merged.player.piratesDefeated : 0));
-  merged.player.shipsCaptured = Math.max(0, Math.floor(typeof merged.player.shipsCaptured === "number" ? merged.player.shipsCaptured : 0));
-  merged.player.fightersLost = Math.max(0, Math.floor(typeof merged.player.fightersLost === "number" ? merged.player.fightersLost : 0));
-  merged.player.fightersDestroyed = Math.max(0, Math.floor(typeof merged.player.fightersDestroyed === "number" ? merged.player.fightersDestroyed : 0));
-  merged.player.fightersBought = Math.max(0, Math.floor(typeof merged.player.fightersBought === "number" ? merged.player.fightersBought : 0));
-  merged.player.fightersSold = Math.max(0, Math.floor(typeof merged.player.fightersSold === "number" ? merged.player.fightersSold : 0));
-  merged.player.bountiesEarned = Math.max(0, Math.floor(typeof merged.player.bountiesEarned === "number" ? merged.player.bountiesEarned : 0));
-  merged.player.strongholdsCleared = Math.max(0, Math.floor(typeof merged.player.strongholdsCleared === "number" ? merged.player.strongholdsCleared : 0));
-  merged.player.playerHullDamageTaken = Math.max(0, Math.floor(typeof merged.player.playerHullDamageTaken === "number" ? merged.player.playerHullDamageTaken : 0));
-  merged.player.pirateHullDamageDealt = Math.max(0, Math.floor(typeof merged.player.pirateHullDamageDealt === "number" ? merged.player.pirateHullDamageDealt : 0));
-  merged.player.ownedShips = Array.isArray(saved.player?.ownedShips) ? saved.player.ownedShips.map(shipIdFromName).filter((id) => SHIPS[id]) : [ship.id];
-  if (!merged.player.ownedShips.includes(ship.id)) merged.player.ownedShips.push(ship.id);
+  try {
+    const fresh = defaultGameState();
+    const repairs = [];
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) {
+      recordRecovery("Save could not be read safely. A fresh prototype save was started.");
+      fresh.log.unshift("Save recovery: started a fresh prototype save because the saved data was not usable.");
+      return fresh;
+    }
 
-  const exceedsCaps = Object.entries(merged.player.upgrades).some(([key, level]) => level > (ship.upgradeCaps[key] || level));
-  merged.player.legacyUpgradeOverride = Boolean(saved.player?.legacyUpgradeOverride || exceedsCaps);
-  merged.player.legacyUpgradeNoteShown = Boolean(saved.player?.legacyUpgradeNoteShown);
+    const savedPlayer = safeObject(saved.player);
+    const savedUi = safeObject(saved.ui);
+    const savedStats = safeObject(saved.stats);
+    if (!saved.player || savedPlayer !== saved.player) repairs.push("missing player data restored");
+    if (!saved.ui || savedUi !== saved.ui) repairs.push("missing screen data restored");
+    if (!saved.stats || savedStats !== saved.stats) repairs.push("missing stats restored");
 
-  merged.player.maxFuel = calculateFuelCapacity(ship, merged.player.upgrades);
-  merged.player.maxHull = ship.maxHull + Math.max(0, (merged.player.upgrades.shield || 1) - 1) * 4;
-  merged.player.maxTurns = calculateMaxTurnBank(merged.player.upgrades.engine);
-  merged.player.cargoCapacity = calculateCargoCapacity(ship, merged.player.upgrades);
-  merged.player.fighterCapacity = calculateFighterCapacity(ship, merged.player.upgrades);
-  merged.player.fuel = Math.max(0, Math.min(typeof merged.player.fuel === "number" ? merged.player.fuel : merged.player.maxFuel, merged.player.maxFuel));
-  merged.player.hull = Math.max(1, Math.min(typeof merged.player.hull === "number" ? merged.player.hull : merged.player.maxHull, merged.player.maxHull));
-  merged.player.turns = Math.max(0, Math.min(typeof merged.player.turns === "number" ? merged.player.turns : STARTING_TURNS, merged.player.maxTurns));
-  const fighterMigrationNote = merged.player.fighters > merged.player.fighterCapacity && saved.player?.fighterCapacity
-    ? `Migration note: preserved ${merged.player.fighters} fighters from a legacy over-cap save; current ship capacity is ${merged.player.fighterCapacity}.`
-    : "";
-  if (!merged.player.lastTurnRefreshDate) merged.player.lastTurnRefreshDate = todayKey();
-  if (!sectorMap[merged.player.currentSector]) merged.player.currentSector = 1;
+    const merged = { ...fresh, ...safeObject(saved) };
+    merged.player = { ...fresh.player, ...savedPlayer };
+    const originalSector = merged.player.currentSector;
+    merged.player.currentSector = normalizeSectorNumber(merged.player.currentSector, 1);
+    if (Number(originalSector) !== merged.player.currentSector) repairs.push(`invalid sector reset to Sector ${merged.player.currentSector}`);
 
-  merged.planets = Object.fromEntries(Object.entries(saved.planets || {}).map(([id, planet]) => {
-    const sectorNumber = Number(String(id).replace(/\D+/g, "")) || Number(String(planet.id || "").replace(/\D+/g, "")) || 1;
-    const sector = sectorMap[sectorNumber] || {};
-    return [id, normalizePlanetState({ ...(sector.planet || {}), ...planet }, sectorNumber, sector.routeRole, sector.dangerLevel)];
-  }));
-  merged.pirates = removeProtectedPirates(mergePirateEncounters(saved.pirates));
-  merged.activeMissions = Array.isArray(saved.activeMissions) && saved.activeMissions.length > 0 ? saved.activeMissions.map(rehydrateBoardMission).slice(0, 3) : fresh.activeMissions;
-  merged.completedMissions = Array.isArray(saved.completedMissions) ? saved.completedMissions : [];
-  while (merged.activeMissions.length < 3) {
-    const next = nextAvailableMission(merged.activeMissions, merged.completedMissions);
-    if (!next) break;
-    merged.activeMissions.push(createActiveMission(next.id));
+    merged.player.shipId = shipIdFromName(merged.player.shipId || merged.player.shipName);
+    const ship = SHIPS[merged.player.shipId] || SHIPS.rustyComet;
+    if (!SHIPS[merged.player.shipId]) repairs.push("invalid ship restored to the starter ship");
+    merged.player.shipId = ship.id;
+    merged.player.shipName = ship.name;
+    merged.player.upgrades = normalizeUpgradeLevels(savedPlayer.upgrades, ship);
+
+    const exceedsCaps = Object.entries(merged.player.upgrades).some(([key, level]) => level > (ship.upgradeCaps[key] || level));
+    merged.player.legacyUpgradeOverride = Boolean(savedPlayer.legacyUpgradeOverride || exceedsCaps);
+    merged.player.legacyUpgradeNoteShown = Boolean(savedPlayer.legacyUpgradeNoteShown);
+
+    merged.player.maxFuel = calculateFuelCapacity(ship, merged.player.upgrades);
+    merged.player.maxHull = ship.maxHull + Math.max(0, (merged.player.upgrades.shield || 1) - 1) * 4;
+    merged.player.maxTurns = calculateMaxTurnBank(merged.player.upgrades.engine);
+    merged.player.cargoCapacity = calculateCargoCapacity(ship, merged.player.upgrades);
+    merged.player.fighterCapacity = calculateFighterCapacity(ship, merged.player.upgrades);
+    merged.player.cargo = normalizeResourceCargo(savedPlayer.cargo || fresh.player.cargo, merged.player.cargoCapacity);
+    if (!savedPlayer.cargo || typeof savedPlayer.cargo !== "object") repairs.push("missing cargo data restored");
+    merged.player.cargoCostBasis = normalizeCargoCostBasis(savedPlayer.cargoCostBasis, merged.player.cargo);
+    if (!savedPlayer.cargoCostBasis || typeof savedPlayer.cargoCostBasis !== "object") repairs.push("missing cargo cost data restored");
+
+    merged.player.credits = clampNumber(merged.player.credits, 0, 999999999, fresh.player.credits);
+    merged.player.fuel = clampNumber(merged.player.fuel, 0, merged.player.maxFuel, merged.player.maxFuel);
+    merged.player.hull = clampNumber(merged.player.hull, 1, merged.player.maxHull, merged.player.maxHull);
+    merged.player.turns = clampNumber(merged.player.turns, 0, merged.player.maxTurns, STARTING_TURNS);
+    merged.player.reputation = clampNumber(merged.player.reputation, -100, 100, 0);
+    merged.player.lawfulReputation = clampNumber(merged.player.lawfulReputation, 0, 1000000, Math.max(0, merged.player.reputation));
+    merged.player.pirateReputation = clampNumber(merged.player.pirateReputation, 0, 1000000, Math.max(0, -merged.player.reputation));
+    merged.player.alignmentStatus = typeof merged.player.alignmentStatus === "string" ? merged.player.alignmentStatus : reputationTitle(merged.player.reputation);
+    merged.player.combatRank = typeof merged.player.combatRank === "string" ? merged.player.combatRank : "Civilian Pilot";
+    merged.player.fighters = clampNumber(merged.player.fighters, 0, Math.max(merged.player.fighterCapacity, clampNumber(savedPlayer.fighterCapacity, 0, 9999, merged.player.fighterCapacity)), 0);
+    ["combatWins", "combatLosses", "piratesDefeated", "shipsCaptured", "fightersLost", "fightersDestroyed", "fightersBought", "fightersSold", "bountiesEarned", "strongholdsCleared", "playerHullDamageTaken", "pirateHullDamageDealt"].forEach((key) => {
+      merged.player[key] = clampNumber(merged.player[key], 0, 999999999, 0);
+    });
+    merged.player.ownedShips = safeArray(savedPlayer.ownedShips, [ship.id]).map(shipIdFromName).filter((id) => SHIPS[id]);
+    if (!merged.player.ownedShips.includes(ship.id)) merged.player.ownedShips.push(ship.id);
+    if (!merged.player.ownedShips.length) merged.player.ownedShips = [ship.id];
+
+    const fighterMigrationNote = merged.player.fighters > merged.player.fighterCapacity && savedPlayer.fighterCapacity
+      ? `Migration note: preserved ${merged.player.fighters} fighters from a legacy over-cap save; current ship capacity is ${merged.player.fighterCapacity}.`
+      : "";
+    if (!merged.player.lastTurnRefreshDate || typeof merged.player.lastTurnRefreshDate !== "string") merged.player.lastTurnRefreshDate = todayKey();
+
+    const savedPlanets = safeObject(saved.planets);
+    merged.planets = Object.fromEntries(Object.entries(savedPlanets).map(([id, planet]) => {
+      const safePlanet = safeObject(planet);
+      const sectorNumber = normalizeSectorNumber(Number(String(id).replace(/\D+/g, "")) || Number(String(safePlanet.id || "").replace(/\D+/g, "")), 1);
+      const sector = sectorMap[sectorNumber] || {};
+      return [id, normalizePlanetState({ ...(sector.planet || {}), ...safePlanet }, sectorNumber, sector.routeRole, sector.dangerLevel)];
+    }));
+    merged.pirates = removeProtectedPirates(mergePirateEncounters(safeObject(saved.pirates)));
+    merged.activeMissions = safeArray(saved.activeMissions).length > 0 ? safeArray(saved.activeMissions).map(rehydrateBoardMission).slice(0, 3) : fresh.activeMissions;
+    merged.completedMissions = safeArray(saved.completedMissions);
+    while (merged.activeMissions.length < 3) {
+      const next = nextAvailableMission(merged.activeMissions, merged.completedMissions);
+      if (!next) break;
+      merged.activeMissions.push(createActiveMission(next.id));
+    }
+    merged.tutorial = { ...fresh.tutorial, ...safeObject(saved.tutorial) };
+    if (!Array.isArray(merged.tutorial.completedSteps)) merged.tutorial.completedSteps = [];
+    merged.achievements = safeArray(saved.achievements);
+    merged.stats = { ...fresh.stats, ...savedStats };
+    Object.keys(fresh.stats).forEach((key) => {
+      if (typeof fresh.stats[key] === "number") merged.stats[key] = clampNumber(merged.stats[key], 0, 999999999, fresh.stats[key]);
+    });
+    syncCombatStats(merged);
+    merged.visitedSectors = normalizeSectorList(safeArray(saved.visitedSectors, safeArray(savedStats.visitedSectors, fresh.visitedSectors)), merged.player.currentSector);
+    merged.revealedSectors = normalizeSectorList(safeArray(saved.revealedSectors, merged.visitedSectors), merged.player.currentSector);
+    merged.stats.visitedSectors = normalizeSectorList(safeArray(merged.stats.visitedSectors, merged.visitedSectors), merged.player.currentSector);
+    merged.log = safeArray(saved.log, fresh.log).map((entry) => String(entry)).slice(0, 12);
+    if (fighterMigrationNote) merged.log.unshift(fighterMigrationNote);
+    if (merged.player.legacyUpgradeOverride && !merged.player.legacyUpgradeNoteShown) {
+      merged.log.unshift("Legacy save detected: over-cap upgrades were preserved for this ship instead of being clamped.");
+      merged.player.legacyUpgradeNoteShown = true;
+    }
+    merged.selectedMissionTier = normalizeMissionTier(saved.selectedMissionTier || safeObject(saved.currentMission).tier || fresh.selectedMissionTier);
+    merged.currentMission = rehydrateMission(safeObject(saved.currentMission));
+    merged.missionFeedbackClass = typeof saved.missionFeedbackClass === "string" ? saved.missionFeedbackClass : "";
+    merged.ui = { ...fresh.ui, ...savedUi };
+    if (!["cockpit", "starbase", "shipyard", "specialMissions", "planets", "combat", "achievements", "reputation", "captainLog", "settings", "launch", "adminPanel"].includes(merged.ui.activeScreen)) repairs.push("invalid screen restored to the cockpit");
+    merged.ui.activeScreen = "cockpit";
+    merged.ui.mapZoom = clampMapZoom(merged.ui.mapZoom);
+    merged.ui.warpDestination = sectorMap[Number(merged.ui.warpDestination)] ? Number(merged.ui.warpDestination) : null;
+    merged.deliveryQuests = migrateDeliveryQuests(safeArray(saved.deliveryQuests));
+    merged.stationActivities = migrateStationActivities(safeObject(saved.stationActivities));
+    merged.arrivalReport = typeof saved.arrivalReport === "string" ? saved.arrivalReport : initialArrivalReport(merged.player.currentSector);
+    if (typeof saved.arrivalReport !== "string") repairs.push("arrival report refreshed");
+    merged.dockingLedger = migrateDockingLedger(safeObject(saved.dockingLedger), merged.player.credits);
+    if (!saved.dockingLedger || typeof saved.dockingLedger !== "object") repairs.push("docking ledger restored");
+    updateScannerReveals(merged);
+
+    if (repairs.length) {
+      const summary = `Save repaired: ${[...new Set(repairs)].slice(0, 3).join("; ")}.`;
+      recordRecovery(summary);
+      merged.log.push(summary);
+    }
+    localSaveStatus = localStorageAvailable ? "Local save loaded and checked." : localSaveStatus;
+    return merged;
+  } catch (error) {
+    recordRecovery("Save recovery started a fresh prototype save after unexpected saved data.");
+    const fresh = defaultGameState();
+    fresh.log.unshift("Save recovery: a fresh prototype save was started after unexpected saved data.");
+    return fresh;
   }
-  merged.tutorial = { ...fresh.tutorial, ...(saved.tutorial || {}) };
-  if (!Array.isArray(merged.tutorial.completedSteps)) merged.tutorial.completedSteps = [];
-  merged.achievements = Array.isArray(saved.achievements) ? saved.achievements : [];
-  merged.stats = { ...fresh.stats, ...(saved.stats || {}) };
-  syncCombatStats(merged);
-  merged.visitedSectors = normalizeSectorList(saved.visitedSectors || saved.stats?.visitedSectors || fresh.visitedSectors, merged.player.currentSector);
-  merged.revealedSectors = normalizeSectorList(saved.revealedSectors || merged.visitedSectors, merged.player.currentSector);
-  merged.stats.visitedSectors = normalizeSectorList(merged.stats.visitedSectors || merged.visitedSectors, merged.player.currentSector);
-  merged.log = Array.isArray(saved.log) ? saved.log.slice(0, 12) : fresh.log;
-  if (fighterMigrationNote) merged.log.unshift(fighterMigrationNote);
-  if (merged.player.legacyUpgradeOverride && !merged.player.legacyUpgradeNoteShown) {
-    merged.log.unshift("Legacy save detected: over-cap upgrades were preserved for this ship instead of being clamped.");
-    merged.player.legacyUpgradeNoteShown = true;
-  }
-  merged.selectedMissionTier = normalizeMissionTier(saved.selectedMissionTier || saved.currentMission?.tier || fresh.selectedMissionTier);
-  merged.currentMission = rehydrateMission(saved.currentMission);
-  merged.missionFeedbackClass = saved.missionFeedbackClass || "";
-  merged.ui = { ...fresh.ui, ...(saved.ui || {}) };
-  merged.ui.activeScreen = "cockpit";
-  merged.ui.mapZoom = clampMapZoom(merged.ui.mapZoom);
-  merged.ui.warpDestination = sectorMap[Number(merged.ui.warpDestination)] ? Number(merged.ui.warpDestination) : null;
-  merged.deliveryQuests = migrateDeliveryQuests(saved.deliveryQuests);
-  merged.stationActivities = migrateStationActivities(saved.stationActivities);
-  merged.arrivalReport = typeof saved.arrivalReport === "string" ? saved.arrivalReport : initialArrivalReport(merged.player.currentSector);
-  merged.dockingLedger = migrateDockingLedger(saved.dockingLedger, merged.player.credits);
-  updateScannerReveals(merged);
-  return merged;
 }
 
 function saveGame() {
-  if (typeof localStorage !== "undefined") {
+  if (typeof localStorage === "undefined") {
+    localStorageAvailable = false;
+    localSaveStatus = localSaveUnavailableMessage();
+    return false;
+  }
+  try {
     const saveCopy = { ...game, ui: { ...(game.ui || {}), activeScreen: "cockpit" } };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(saveCopy));
+    localStorageAvailable = true;
+    localSaveStatus = "Local save updated on this device.";
+    lastLocalSaveError = "";
+    return true;
+  } catch (error) {
+    localStorageAvailable = false;
+    lastLocalSaveError = error?.message || "localStorage could not be written.";
+    localSaveStatus = localSaveUnavailableMessage();
+    return false;
   }
+}
+
+function manualSaveNow() {
+  const saved = saveGame();
+  addLog(saved ? "Manual save complete." : localSaveUnavailableMessage());
+  render();
+  return saved;
 }
 
 function render() {
@@ -2002,33 +2158,43 @@ function firebaseClient() {
 }
 
 function refreshFirebaseUiState(allowSubscribe = true) {
-  const client = firebaseClient();
-  if (!client) {
-    cloudUiState.status = "not initialized";
+  try {
+    const client = firebaseClient();
+    if (!client) {
+      cloudUiState.status = "not initialized";
+      cloudUiState.user = null;
+      cloudUiState.role = "unknown";
+      cloudUiState.roleReason = "Firebase client script has not reported ready status.";
+      cloudUiState.message = "Cloud backup unavailable. Local prototype save is active.";
+      return;
+    }
+
+    const status = client.getFirebaseStatus?.() || { ok: false, status: "unavailable", error: "Cloud backup status could not be checked. Local save still works." };
+    const userResult = client.getCurrentFirebaseUser?.() || { ok: true, data: null };
+    const roleResult = client.getCurrentUserRole?.() || { ok: true, data: "unknown" };
+    cloudUiState.status = status?.status || (status?.ok ? "available" : "unavailable");
+    cloudUiState.user = status?.user || userResult?.data || null;
+    cloudUiState.role = status?.role || roleResult?.data || "unknown";
+    cloudUiState.roleReason = status?.roleReason || roleResult?.reason || roleResult?.error || (cloudUiState.user ? "Role loaded from users/{uid}." : "Sign in to load role.");
+    if (!status?.ok && status?.error) cloudUiState.message = status.error;
+
+    if (allowSubscribe && !firebaseUnsubscribe && typeof client.onFirebaseAuthChange === "function") {
+      firebaseUnsubscribe = client.onFirebaseAuthChange(({ user, role, status: authStatus } = {}) => {
+        cloudUiState.user = user || null;
+        cloudUiState.role = role || "unknown";
+        cloudUiState.status = authStatus?.status || cloudUiState.status || "available";
+        cloudUiState.roleReason = authStatus?.roleReason || (user ? "Role loaded from users/{uid}." : "Sign in to load role.");
+        updateLaunchGateFromAuth();
+        if (["settings", "launch", "adminPanel"].includes(activeScreenName())) render();
+      });
+    }
+  } catch (error) {
+    cloudUiState.status = "unavailable";
     cloudUiState.user = null;
     cloudUiState.role = "unknown";
-    cloudUiState.roleReason = "Firebase client script has not reported ready status.";
-    return;
-  }
-
-  const status = client.getFirebaseStatus?.();
-  const userResult = client.getCurrentFirebaseUser?.();
-  const roleResult = client.getCurrentUserRole?.();
-  cloudUiState.status = status?.status || (status?.ok ? "available" : "unavailable");
-  cloudUiState.user = status?.user || userResult?.data || null;
-  cloudUiState.role = status?.role || roleResult?.data || "unknown";
-  cloudUiState.roleReason = status?.roleReason || roleResult?.reason || roleResult?.error || (cloudUiState.user ? "Role loaded from users/{uid}." : "Sign in to load role.");
-  if (!status?.ok && status?.error) cloudUiState.message = status.error;
-
-  if (allowSubscribe && !firebaseUnsubscribe && typeof client.onFirebaseAuthChange === "function") {
-    firebaseUnsubscribe = client.onFirebaseAuthChange(({ user, role, status: authStatus } = {}) => {
-      cloudUiState.user = user || null;
-      cloudUiState.role = role || "unknown";
-      cloudUiState.status = authStatus?.status || cloudUiState.status || "available";
-      cloudUiState.roleReason = authStatus?.roleReason || (user ? "Role loaded from users/{uid}." : "Sign in to load role.");
-      updateLaunchGateFromAuth();
-      if (["settings", "launch", "adminPanel"].includes(activeScreenName())) render();
-    });
+    cloudUiState.roleReason = "Firebase status check failed safely.";
+    cloudUiState.message = "Cloud backup unavailable. Local prototype save is active.";
+    cloudUiState.lastCloudResult = error?.message || cloudUiState.message;
   }
 }
 
@@ -2233,7 +2399,9 @@ async function handleCloudBackupLoad() {
 }
 
 function renderSettingsScreen() {
-  return `<div class="screen-grid"><section class="mini-card"><h3>Local Save</h3><p class="help-text">Sector Drift saves automatically to localStorage on this device. Active docked screens are not restored on load; pilots return to the cockpit.</p><div class="button-row"><button type="button" data-action="saveNow">Save Now</button><button type="button" data-action="normalizeSave">Repair / Normalize Save</button><button type="button" class="danger-button" data-action="resetLocal">Clear Local Save / Reset Prototype</button></div></section>${renderCloudLoginPanel()}<section class="mini-card"><h3>Export / Import</h3><p class="help-text">Manual export/import uses this browser save only. Firebase backup/load does not add multiplayer.</p><div class="button-row"><button type="button" data-action="exportSaveJson">Export Save JSON</button><button type="button" data-action="importSaveJson">Import Save JSON</button></div></section></div>`;
+  const recoveryNotice = sessionRecoveryMessages.length ? `<p class="turn-warning">${sessionRecoveryMessages[0]}</p>` : `<p class="help-text">No save repair was needed this session.</p>`;
+  const storageNote = localStorageAvailable ? localSaveStatus : `${localSaveStatus}${lastLocalSaveError ? ` (${lastLocalSaveError})` : ""}`;
+  return `<div class="screen-grid"><section class="mini-card"><h3>Local Save</h3><p class="help-text">Sector Drift saves automatically to localStorage on this device. Active docked screens are not restored on load; pilots return to the cockpit.</p>${stat("Local save status", storageNote)}${stat("Local prototype mode", launchGate.mode === "localPrototype" ? "active" : "available from launch screen")}${recoveryNotice}<div class="button-row"><button type="button" data-action="saveNow">Save Now</button><button type="button" data-action="normalizeSave">Repair / Normalize Save</button><button type="button" class="danger-button" data-action="resetLocal">Clear Local Save / Reset Prototype</button></div></section>${renderCloudLoginPanel()}<section class="mini-card"><h3>Export / Import</h3><p class="help-text">Manual export/import uses this browser save only. Firebase backup/load does not add multiplayer.</p><div class="button-row"><button type="button" data-action="exportSaveJson">Export Save JSON</button><button type="button" data-action="importSaveJson">Import Save JSON</button></div></section></div>`;
 }
 
 function wireDockedButtons(scope = document) {
@@ -2249,8 +2417,8 @@ function wireDockedButtons(scope = document) {
     return runGameAction(() => runStationActivity(button.dataset.stationActivity, scope.querySelector(`#${inputId}`)?.value || ""));
   }));
   scope.querySelector("[data-action='readRumor']")?.addEventListener("click", () => runGameAction(readRumorBoard));
-  scope.querySelector("[data-action='saveNow']")?.addEventListener("click", () => { saveGame(); addLog("Manual save complete."); render(); });
-  scope.querySelector("[data-action='resetLocal']")?.addEventListener("click", () => { if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY); sectorMap = createSectorMap(); game = defaultGameState(); addLog("Prototype reset. Welcome back, Cadet."); saveGame(); render(); });
+  scope.querySelector("[data-action='saveNow']")?.addEventListener("click", manualSaveNow);
+  scope.querySelector("[data-action='resetLocal']")?.addEventListener("click", () => { try { if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY); } catch (error) { lastLocalSaveError = error?.message || "localStorage reset was blocked."; } sectorMap = createSectorMap(); game = defaultGameState(); addLog("Prototype reset. Welcome back, Cadet."); saveGame(); render(); });
   scope.querySelector("[data-action='firebaseSignIn']")?.addEventListener("click", handleFirebaseSignIn);
   scope.querySelector("[data-action='firebaseSignOut']")?.addEventListener("click", handleFirebaseSignOut);
   scope.querySelector("[data-action='cloudBackupSave']")?.addEventListener("click", handleCloudBackupSave);
@@ -2313,7 +2481,7 @@ function softResetCurrentBrowserSave() {
 
 function fullResetCurrentBrowserSave() {
   if (typeof window !== "undefined" && !confirm("Full reset this browser save? localStorage will be cleared and a fresh save created.")) return;
-  if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY);
+  try { if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY); } catch (error) { lastLocalSaveError = error?.message || "localStorage reset was blocked."; }
   sectorMap = createSectorMap();
   game = defaultGameState();
   game.ui.activeScreen = isTeacher() ? "adminPanel" : "cockpit";

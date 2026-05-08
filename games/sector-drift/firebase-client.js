@@ -119,6 +119,7 @@ async function signInWithGoogle() {
     const ready = requireFirebase();
     if (!ready.ok) return ready;
     const result = await signInWithPopup(auth, provider);
+    if (!result?.user) return failure("Google sign-in did not return an account. Local save still works.");
     currentUser = result.user;
     const profile = await ensureUserProfile(result.user);
     return profile.ok ? success({ user: safeUser(result.user), role: currentRole, roleReason: currentRoleReason }) : profile;
@@ -168,7 +169,8 @@ async function saveCloudBackup(saveData, version = saveData?.version || "localSt
     if (!ready.ok) return ready;
     if (!currentUser) return failure("Sign in first to save a cloud backup.");
     if (!saveData || typeof saveData !== "object" || Array.isArray(saveData)) return failure("Cloud backup needs a valid local save object.");
-    await ensureUserProfile(currentUser);
+    const profile = await ensureUserProfile(currentUser);
+    if (!profile.ok) return failure(profile.error || "Role lookup failed. Local save still works.");
     await setDoc(doc(db, "players", currentUser.uid), {
       uid: currentUser.uid,
       saveData,
@@ -189,6 +191,7 @@ async function loadCloudBackup() {
     const snapshot = await getDoc(doc(db, "players", currentUser.uid));
     if (!snapshot.exists()) return failure("No cloud backup was found for this account yet.");
     const data = snapshot.data() || {};
+    if (!data || typeof data !== "object") return failure("The cloud backup record could not be read safely. Local save was not changed.");
     if (!data.saveData || typeof data.saveData !== "object" || Array.isArray(data.saveData)) {
       return failure("The cloud backup is missing valid save data.");
     }
