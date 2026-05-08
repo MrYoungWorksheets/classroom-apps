@@ -108,6 +108,7 @@ vm.runInContext(`
       if (selector === '[data-map-sector]') return this._mapNodes;
       if (selector === '[data-screen]') return this._screenButtons;
       if (selector === "[data-action='travel']") return this._travelButtons;
+      if (selector === "[data-action='plotSelectedRoute']") return this._actionButtons.filter((button) => button.dataset.action === 'plotSelectedRoute');
       const actionMatch = selector.match(/^\[data-action=['"]?([^'"\]]+)['"]?\]$/);
       if (actionMatch) return this._actionButtons.filter((button) => button.dataset.action === actionMatch[1]);
       return [];
@@ -655,6 +656,25 @@ vm.runInContext(`
   handleMapNodeSelect(3);
   assert(game.player.currentSector === nonAdjacentSector, 'double-clicking a non-adjacent node does not travel');
   assert(renderNavigationIntel().includes('Route known') || renderNavigationIntel().includes('Route unknown'), 'non-adjacent selection renders route status');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  game.revealedSectors = [1, 2, 3];
+  selectedSectorNumber = 3;
+  renderSectorPanel();
+  let plotButtons = panels.sector.querySelectorAll("[data-action='plotSelectedRoute']");
+  assert(plotButtons.length === 2, 'non-adjacent routed sector renders both situation-card and Main Viewer plot buttons');
+  let logCountBeforePlot = game.log.length;
+  plotButtons[0].dispatchEvent({ type: 'click' });
+  assert(game.ui.warpDestination === 3, 'situation-card plot button sets warp destination');
+  assert(game.log.length === logCountBeforePlot + 1, 'situation-card plot button has one listener side effect');
+  game.ui.warpDestination = null;
+  renderSectorPanel();
+  plotButtons = panels.sector.querySelectorAll("[data-action='plotSelectedRoute']");
+  logCountBeforePlot = game.log.length;
+  plotButtons[plotButtons.length - 1].dispatchEvent({ type: 'click' });
+  assert(game.ui.warpDestination === 3, 'existing Main Viewer plot button sets warp destination');
+  assert(game.log.length === logCountBeforePlot + 1, 'existing Main Viewer plot button has one listener side effect');
   game.player.fuel = 0;
   handleMapNodeSelect(2);
   handleMapNodeSelect(2);

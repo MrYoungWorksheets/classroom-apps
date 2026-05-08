@@ -1415,7 +1415,7 @@ function renderSectorPanel() {
   panels.sector.querySelectorAll("[data-action='travel']").forEach((button) => button.addEventListener("click", () => travelToSector(Number(button.dataset.sector))));
   wireSituationCardButtons(panels.sector);
   wireWarpControls(panels.sector);
-  panels.sector.querySelector("[data-action='plotSelectedRoute']")?.addEventListener("click", () => runGameAction(() => plotSelectedRoute(panels.sector.querySelector("[data-action='plotSelectedRoute']")?.dataset.sector)));
+  wirePlotSelectedRouteButtons(panels.sector);
   panels.sector.querySelector("[data-map-zoom='out']")?.addEventListener("click", () => zoomMap(-MAP_ZOOM_STEP));
   panels.sector.querySelector("[data-map-zoom='in']")?.addEventListener("click", () => zoomMap(MAP_ZOOM_STEP));
   panels.sector.querySelector("[data-map-zoom='reset']")?.addEventListener("click", resetMapView);
@@ -1754,6 +1754,11 @@ function focusRouteFromSituation(sectorNumber = selectedSectorNumber) {
   game.ui.mapHint = number === game.player.currentSector ? "Use the lane map below to scan nearby sectors or choose your next jump." : `Sector ${number} stays selected. Use the highlighted map node for travel or route planning.`;
   saveGame();
   renderSectorPanel();
+}
+
+function wirePlotSelectedRouteButtons(scope = document) {
+  if (!scope) return;
+  scope.querySelectorAll("[data-action='plotSelectedRoute']").forEach((button) => button.addEventListener("click", () => runGameAction(() => plotSelectedRoute(Number(button.dataset.sector)))));
 }
 
 function wireSituationCardButtons(scope = panels.sector) {
@@ -2909,7 +2914,7 @@ function runGameAction(callback) {
 function wireLocationButtons(scope = panels.location) {
   if (!scope) return;
   scope.querySelectorAll("[data-action='buy']").forEach((button) => button.addEventListener("click", () => runGameAction(() => buyResource(button.dataset.resource, Number(button.dataset.amount)))));
-  scope.querySelector("[data-action='plotSelectedRoute']")?.addEventListener("click", () => runGameAction(() => plotSelectedRoute(scope.querySelector("[data-action='plotSelectedRoute']")?.dataset.sector)));
+  wirePlotSelectedRouteButtons(scope);
   scope.querySelectorAll("[data-action='sell']").forEach((button) => button.addEventListener("click", () => runGameAction(() => sellResource(button.dataset.resource, Number(button.dataset.amount)))));
   scope.querySelector("[data-action='claim']")?.addEventListener("click", () => runGameAction(claimPlanet));
   scope.querySelectorAll("[data-action='deposit']").forEach((button) => button.addEventListener("click", () => runGameAction(() => depositToPlanet(button.dataset.resource))));
