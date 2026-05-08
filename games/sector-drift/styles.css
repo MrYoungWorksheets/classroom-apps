@@ -557,3 +557,156 @@ details.compact-section summary {
 .fighter-transfer {
   margin-top: 0.75rem;
 }
+
+/* Docked cockpit rework */
+.cockpit-shell {
+  max-width: 1540px;
+  margin: 0 auto;
+}
+
+.cockpit-dashboard {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+.cockpit-left,
+.cockpit-actions {
+  position: sticky;
+  top: 0.75rem;
+}
+
+.cockpit-map {
+  min-height: 70vh;
+  border-color: rgba(255, 209, 102, 0.46);
+}
+
+.cockpit-map .minimap {
+  min-height: clamp(320px, 46vh, 620px);
+}
+
+.cockpit-map .sector-map {
+  height: clamp(320px, 46vh, 620px);
+}
+
+.action-menu {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.action-menu button {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: start;
+  min-height: 3.25rem;
+  text-align: left;
+  width: 100%;
+}
+
+.action-menu button span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.cockpit-summary {
+  margin-top: 1rem;
+}
+
+.docked-screen {
+  margin-top: 1rem;
+}
+
+.docked-header {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+}
+
+.docked-header h2 {
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
+  margin-bottom: 0.25rem;
+}
+
+.exit-button {
+  border-color: rgba(255, 209, 102, 0.7);
+  background: linear-gradient(180deg, #463818, #251d0c);
+  flex: 0 0 auto;
+}
+
+.docked-content {
+  display: grid;
+  gap: 1rem;
+}
+
+.screen-grid {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+.ship-card-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+}
+
+.ship-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
+  border: 1px solid rgba(255, 209, 102, 0.22);
+  border-radius: 14px;
+  padding: 0.9rem;
+}
+
+.warp-panel,
+.item-shop-placeholder {
+  border: 1px solid rgba(255, 209, 102, 0.28);
+  border-radius: 14px;
+  padding: 0.85rem;
+  margin-top: 0.85rem;
+  background: rgba(255, 209, 102, 0.06);
+}
+
+.alliance-badge {
+  background: linear-gradient(135deg, #8ef6b2, #8df3ff);
+  margin-left: 0.35rem;
+}
+
+@media (min-width: 980px) {
+  .cockpit-dashboard {
+    grid-template-columns: minmax(230px, 0.8fr) minmax(480px, 1.9fr) minmax(230px, 0.85fr);
+  }
+
+  .screen-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .screen-grid > section:first-child:nth-last-child(3),
+  .screen-grid > section:first-child:nth-last-child(3) ~ section {
+    grid-column: auto;
+  }
+}
+
+@media (min-width: 1280px) {
+  .cockpit-dashboard {
+    grid-template-columns: 300px minmax(560px, 1fr) 300px;
+  }
+}
+
+@media (max-width: 820px) {
+  .cockpit-left,
+  .cockpit-actions {
+    position: static;
+  }
+
+  .docked-header {
+    flex-direction: column;
+  }
+
+  .exit-button {
+    width: 100%;
+  }
+}
