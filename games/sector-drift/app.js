@@ -968,6 +968,17 @@ const SCREEN_TITLES = {
 
 function screenNames() { return Object.keys(SCREEN_TITLES); }
 
+const COCKPIT_SCREEN = "cockpit";
+const LOCATION_MODE_SCREENS = ["starbase", "shipyard", "specialMissions", "planets", "combat", "achievements", "reputation", "captainLog", "settings", "adminPanel"];
+
+function isDockedMode(screen = activeScreenName()) {
+  return LOCATION_MODE_SCREENS.includes(screen);
+}
+
+function returnToShipLabel() {
+  return "Exit / Return to Ship";
+}
+
 function openScreen(screenName) {
   game.ui = game.ui || {};
   if (screenName === "adminPanel" && !isTeacher()) {
@@ -981,7 +992,11 @@ function openScreen(screenName) {
   render();
 }
 
-function closeScreen() { openScreen("cockpit"); }
+function closeScreen() {
+  game.ui = game.ui || {};
+  game.ui.activeScreen = COCKPIT_SCREEN;
+  render();
+}
 
 function activeScreenName() {
   game.ui = game.ui || {};
@@ -1001,12 +1016,13 @@ function renderActiveScreen() {
     }
     return;
   }
-  renderShipPanel();
-  renderSectorPanel();
-  renderActionPanel();
-  if (panels.docked) panels.docked.hidden = screen === "cockpit";
-  if (cockpit) cockpit.hidden = screen !== "cockpit";
-  if (screen === "cockpit") {
+  const dockedMode = isDockedMode(screen);
+  if (cockpit) cockpit.hidden = dockedMode;
+  if (panels.docked) panels.docked.hidden = !dockedMode;
+  if (screen === COCKPIT_SCREEN) {
+    renderShipPanel();
+    renderSectorPanel();
+    renderActionPanel();
     renderCockpit();
     return;
   }
@@ -1020,9 +1036,9 @@ function renderCockpit() {
 function renderDockedScreen(title, subtitle, contentHtml) {
   if (!panels.docked) return;
   const screen = activeScreenName();
-  const locationLabel = screen === "launch" ? "Launch Bay" : screen === "adminPanel" ? "Teacher Command Console" : "Docked Station Terminal";
+  const locationLabel = screen === "launch" ? "Launch Bay" : screen === "adminPanel" ? "Teacher Command Console" : screen === "combat" ? "Tactical Display" : "Docked Location Mode";
   panels.docked.className = `panel docked-screen docked-${screen}`;
-  panels.docked.innerHTML = `<div class="docked-header"><div><p class="eyebrow">${locationLabel}</p><h2>${title}</h2><p class="help-text">${subtitle}</p></div>${screen === "launch" ? "" : `<button type="button" class="exit-button button-exit" data-action="closeScreen">Return to Ship</button>`}</div><div class="docked-content">${contentHtml}</div>`;
+  panels.docked.innerHTML = `<div class="docked-header"><div><p class="eyebrow">${locationLabel}</p><h2>${title}</h2><p class="help-text">${subtitle}</p></div>${screen === "launch" ? "" : `<button type="button" class="exit-button button-exit" data-action="closeScreen">${returnToShipLabel()}</button>`}</div><div class="docked-content">${contentHtml}</div>`;
   panels.docked.querySelector("[data-action='closeScreen']")?.addEventListener("click", closeScreen);
   wireDockedButtons(panels.docked);
 }
@@ -1052,18 +1068,18 @@ function renderActionPanel() {
   const planetHere = sector.type === "planet";
   const pirateHere = Boolean(currentPirateEncounter());
   const actions = [
-    { screen: "starbase", label: "Starbase", enabled: sector.type === "port", reason: sector.type === "port" ? sector.portType : "No port in this sector" },
-    { screen: "shipyard", label: "Shipyard", enabled: Boolean(sector.hasShipyard), reason: sector.hasShipyard ? "Ship upgrades and hull sales" : "No shipyard here" },
-    { screen: "specialMissions", label: "Special Missions", enabled: true, reason: "Math, board, tutorial, delivery" },
-    { screen: "planets", label: "Planets", enabled: planetHere || ownedPlanetCount > 0, reason: planetHere ? "Planet in current sector" : ownedPlanetCount ? `${ownedPlanetCount} owned planet${ownedPlanetCount === 1 ? "" : "s"}` : "No local or owned planets" },
-    { screen: "combat", label: "Combat / Pirate Intel", enabled: pirateHere || Object.values(game.pirates || {}).some((pirate) => !pirate.defeated), reason: pirateHere ? "Pirates in this sector" : "Known NPC bounty ledger" },
+    { screen: "starbase", label: "Dock at Starbase", enabled: sector.type === "port", reason: sector.type === "port" ? `${sector.portType} available` : "No port in this sector" },
+    { screen: "shipyard", label: "Enter Shipyard", enabled: Boolean(sector.hasShipyard), reason: sector.hasShipyard ? "Shipyard available" : "No shipyard here" },
+    { screen: "specialMissions", label: "Open Mission Terminal", enabled: true, reason: "Mission terminal available" },
+    { screen: "planets", label: "Manage Planet", enabled: planetHere || ownedPlanetCount > 0, reason: planetHere ? "Planet in sector" : ownedPlanetCount ? `${ownedPlanetCount} owned planet${ownedPlanetCount === 1 ? "" : "s"}` : "No local or owned planets" },
+    { screen: "combat", label: "Engage Pirate", enabled: pirateHere || Object.values(game.pirates || {}).some((pirate) => !pirate.defeated), reason: pirateHere ? "Pirate detected" : "Known NPC bounty ledger" },
     { screen: "achievements", label: "Achievements", enabled: true, reason: `${game.achievements.length} unlocked` },
     { screen: "reputation", label: "Reputation", enabled: true, reason: `${reputationTitle(game.player.reputation)} · ${combatRankTitle()}` },
     { screen: "captainLog", label: "Captain's Log", enabled: true, reason: "Recent events" },
     { screen: "settings", label: "Settings / Save", enabled: true, reason: "Cloud login and local save controls" },
   ];
   if (isTeacher()) actions.push({ screen: "adminPanel", label: "Admin Panel", enabled: true, reason: "Teacher-only classroom tools" });
-  panels.action.innerHTML = `<h2 id="actionHeading">Cockpit Actions</h2><p class="help-text">${gateOpen ? "Choose one docked console. Flight controls stay focused on the map." : authGateMessage()}</p><div class="action-menu">${actions.map((action) => `<button type="button" class="${action.screen === "adminPanel" ? "button-admin" : action.enabled ? "button-secondary" : ""}" data-screen="${action.screen}" ${action.enabled && (gateOpen || action.screen === "settings") ? "" : "disabled"}><strong>${action.label}</strong><span>${gateOpen || action.screen === "settings" ? action.reason : "Launch required"}</span></button>`).join("")}</div>${gateOpen ? renderEmergencyWarpControl() : ""}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 5).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
+  panels.action.innerHTML = `<h2 id="actionHeading">Cockpit Actions</h2><p class="help-text">${gateOpen ? "Compact summaries only: choose a location, then the cockpit gets out of the way." : authGateMessage()}</p><div class="cockpit-availability"><p>${sector.type === "port" ? "Starbase available" : "No starbase here"}</p><p>${sector.hasShipyard ? "Shipyard available" : "No shipyard here"}</p><p>${pirateHere ? "Pirate detected" : "No pirate in sector"}</p><p>${planetHere ? "Planet in sector" : ownedPlanetCount ? "Owned planets available" : "No planet in sector"}</p><p>Mission terminal available</p></div><div class="action-menu">${actions.map((action) => `<button type="button" class="${action.screen === "adminPanel" ? "button-admin" : action.enabled ? "button-secondary" : ""}" data-screen="${action.screen}" ${action.enabled && (gateOpen || action.screen === "settings") ? "" : "disabled"}><strong>${action.label}</strong><span>${gateOpen || action.screen === "settings" ? action.reason : "Launch required"}</span></button>`).join("")}</div>${gateOpen ? renderEmergencyWarpControl() : ""}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 5).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
   panels.action.querySelectorAll("[data-screen]").forEach((button) => button.addEventListener("click", () => openScreen(button.dataset.screen)));
   panels.action.querySelector("[data-action='emergencyWarp']")?.addEventListener("click", emergencyWarp);
 }
@@ -1383,12 +1399,26 @@ function emergencyWarp() {
 }
 
 
+function stationDisplayName(sector) {
+  const names = { 1: "Core Classroom Starbase", 3: "Crossroad Exchange", 5: "Brightline Station", 7: "Waypoint Seven", 8: "Rimward Trade Hub", 10: "Long Arc Port", 31: "Deep Lane Depot", 45: "Frontier Starbase" };
+  return names[sector.number] || `${sector.portType || "Starbase"} ${sector.number}`;
+}
+
+function renderStationActivitiesPlaceholder() {
+  const activities = ["Quick credit jobs", "Rumor board", "Repair discount challenge", "Local cargo contracts", "Navigation tips", "Mini-games"];
+  return `<section class="mini-card station-activities"><p class="eyebrow">Future activity area</p><h3>Station Activities</h3><p class="help-text">Reserved for upcoming playtest ideas. These are placeholders only and do not start mini-games yet.</p><ul>${activities.map((activity) => `<li>${activity}</li>`).join("")}</ul></section>`;
+}
+
 function renderStarbaseScreen(sector) {
-  return `<div class="screen-grid"><section>${renderPort(sector).replace(renderShipyardPanel(), "")}</section><section class="mini-card item-shop-placeholder"><h3>Item Shop: Coming Soon</h3><p><strong>Scanning Probe</strong></p><p class="help-text">Scanning Probes will allow long-range sector scans in a future update. They will be expensive, limited, and will not reveal the entire map cheaply.</p></section></div>`;
+  return `<section class="location-intro starbase-intro mini-card"><p class="eyebrow">Docked at Sector ${sector.number}</p><h3>${stationDisplayName(sector)}</h3><div class="intel-grid">${stat("Station Type", sector.portType)}${stat("Services", `Trading · Fuel · Repairs${sector.hasShipyard ? " · Shipyard next door" : ""}`)}${stat("Current Sector", sector.number)}</div><p class="help-text">${sector.flavor}</p></section><div class="screen-grid starbase-services"><section class="mini-card"><h3>Port Services</h3><p><span class="badge">${sector.portType}</span></p><p class="help-text"><strong>Local market notes:</strong> ${sector.marketNote}</p><p class="help-text"><strong>Trade tip:</strong> ${sector.tradeTip}</p><div class="trade-grid">${RESOURCES.map((resource) => {
+    const price = sector.portPrices[resource];
+    const buyDisabled = cargoSpaceLeft() <= 0 ? "disabled" : "";
+    return `<div class="mini-card"><h3>${resource}</h3><p>Buy ${price.buy} credits · Sell ${price.sell} credits</p><div class="resource-actions"><button data-action="buy" data-resource="${resource}" data-amount="1" ${buyDisabled}>Buy 1</button><button data-action="buy" data-resource="${resource}" data-amount="5" ${buyDisabled}>Buy 5</button><button data-action="sell" data-resource="${resource}" data-amount="1">Sell 1</button><button data-action="sell" data-resource="${resource}" data-amount="5">Sell 5</button></div></div>`;
+  }).join("")}</div>${renderRefuelPanel()}${renderRepairPanel(sector)}</section><section class="mini-card item-shop-placeholder"><h3>Item Shop: Coming Soon</h3><p><strong>Scanning Probe</strong></p><p class="help-text">Scanning Probes will allow long-range sector scans in a future update. They will be expensive, limited, and will not reveal the entire map cheaply.</p></section>${renderStationActivitiesPlaceholder()}</div>`;
 }
 
 function renderShipyardScreen() {
-  return `<section class="shipyard-brief mini-card"><p class="eyebrow">Industrial Hull Catalog</p><h3>Compare before you trade</h3><p class="help-text">Every card is measured against your active ship, including locked hulls, cargo fit, fighter bay limits, upgrade caps, and trade-in pricing.</p></section>${renderFighterPurchasePanel()}<div class="ship-card-grid">${Object.values(SHIPS).map(renderShipCard).join("")}</div>`;
+  return `<section class="shipyard-brief mini-card"><p class="eyebrow">Industrial Hull Catalog</p><h3>Compare before you trade</h3><p class="help-text">Ship purchases only happen in this Shipyard mode. Every card is measured against your active ship, including locked hulls, cargo fit warnings, fighter bay warnings, upgrade caps, and trade-in pricing.</p></section>${renderFighterPurchasePanel()}<div class="ship-card-grid">${Object.values(SHIPS).map(renderShipCard).join("")}</div>`;
 }
 
 function shipTradeInValue(ship = currentShip()) {
@@ -1463,7 +1493,8 @@ function renderShipCard(ship) {
 }
 
 function renderSpecialMissionsScreen() {
-  return `<div class="screen-grid"><section class="mini-card">${renderMathMissionContent()}</section><section class="mini-card">${renderMissionBoardContent()}${renderDeliveryQuestBoard()}</section><section class="mini-card">${renderTutorialContent()}</section></div>`;
+  const tier = missionTierByNumber(normalizeMissionTier(game.selectedMissionTier || game.currentMission.tier || 2));
+  return `<section class="location-intro mini-card"><p class="eyebrow">Focused terminal</p><h3>Special Missions Terminal</h3><p class="help-text">Math missions, board contracts, delivery/fetch work, reward previews, and enabled dev codes stay here instead of cluttering the cockpit.</p><div class="intel-grid">${stat("Selected Difficulty", tier.tierName)}${stat("Reward Preview", `${tier.rewardMultiplier}x mission payout`)}${stat("Board Contracts", (game.activeMissions || []).length)}</div></section><div class="screen-grid"><section class="mini-card">${renderMathMissionContent()}</section><section class="mini-card">${renderMissionBoardContent()}${renderDeliveryQuestBoard()}</section><section class="mini-card">${renderTutorialContent()}<h3>Dev Code Handling</h3><p class="help-text">If classroom testing codes are enabled, enter them in the math mission answer field and submit from this terminal.</p></section></div>`;
 }
 
 function renderMathMissionContent() {
@@ -1486,15 +1517,21 @@ function renderTutorialContent() {
 
 function renderPlanetsScreen() {
   const sector = sectorMap[game.player.currentSector];
-  const local = sector.type === "planet" ? renderPlanet(sector) : `<p class="empty-note">No planet is present in this sector.</p>`;
+  const local = sector.type === "planet" ? renderPlanet(sector) : `<section class="planet-panel mini-card"><h3>No local planet</h3><p class="empty-note">No planet is present in Sector ${sector.number}. Owned planets remain listed below.</p></section>`;
   const owned = Object.values(game.planets || {}).filter((planet) => planet.owner === game.player.pilotName);
-  return `${local}<h3>Owned Planet Summary</h3><div class="planet-grid">${owned.map((planet) => stat(`${planet.name} (Sector ${planet.sectorNumber})`, `${planet.type} · Defense ${getPlanetDefenseRating(planet)}`)).join("") || `<p class="empty-note">No owned planets yet.</p>`}</div>`;
+  const ownedCards = owned.map((planet) => {
+    const profile = getPlanetTypeProfile(planet.type);
+    return `<div class="mini-card owned-planet-card"><h3>${planet.name}</h3>${stat("Sector", planet.sectorNumber)}${stat("Planet Type", planet.type)}${stat("Production Preview", formatProduction(getPlanetProduction(planet)))}${stat("Defense Rating", getPlanetDefenseRating(planet))}<p class="help-text"><strong>Future tech potential:</strong> ${(planet.tech?.available || profile.tech).join(", ")}</p></div>`;
+  }).join("");
+  return `<section class="location-intro mini-card"><p class="eyebrow">Colony command</p><h3>Planet Management</h3><p class="help-text">Manage the current planet, owned colonies, production previews, upgrade tracks, fighter transfer, defense ratings, and future tech potential from one focused location.</p></section>${local}<h3>Owned Planet Summary</h3><div class="planet-grid">${ownedCards || `<p class="empty-note">No owned planets yet.</p>`}</div>`;
 }
 
 function renderCombatScreen() {
-  const current = renderPirateEncounterPanel() || `<p class="empty-note">No active pirate encounter in this sector.</p>`;
-  const known = Object.values(game.pirates || {}).filter((pirate) => !pirate.defeated).map((pirate) => `<div class="mini-card"><h3>${pirate.name}</h3>${stat("Sector", pirate.sector)}${stat("Threat", pirate.threatLevel)}${stat("Bounty", pirate.bounty)}${stat("Protected Space", isProtectedSpace(pirate.sector) ? "Blocked" : "No")}</div>`).join("");
-  return `${current}<h3>Known NPC Pirate Ledger</h3><div class="trade-grid">${known || `<p class="empty-note">No active pirate signatures.</p>`}</div>`;
+  const pirate = currentPirateEncounter();
+  const risk = pirate ? estimateCombatRisk(pirate) : null;
+  const current = renderPirateEncounterPanel() || `<section class="pirate-panel mini-card"><h3>No active pirate encounter</h3><p class="empty-note">No active pirate encounter is unresolved in Sector ${game.player.currentSector}. You may safely use Exit / Return to Ship.</p></section>`;
+  const known = Object.values(game.pirates || {}).filter((knownPirate) => !knownPirate.defeated).map((knownPirate) => `<div class="mini-card"><h3>${knownPirate.name}</h3>${stat("Sector", knownPirate.sector)}${stat("Threat", knownPirate.threatLevel)}${stat("Bounty", knownPirate.bounty)}${stat("Protected Space", isProtectedSpace(knownPirate.sector) ? "Blocked" : "No")}</div>`).join("");
+  return `<section class="location-intro combat-intro mini-card"><p class="eyebrow">Focused tactical display</p><h3>${pirate ? `${pirate.name} Contact` : "Pirate Intel"}</h3><p class="help-text">Fight, cautious attack, retreat, payoff/avoidance, and boarding controls stay in this combat screen. ${pirate ? "The encounter remains unresolved until you choose an action." : "No active threat blocks returning to the cockpit."}</p><div class="intel-grid">${stat("Current Sector", game.player.currentSector)}${stat("Combat State", pirate ? "Unresolved encounter" : "Safe to return")} ${pirate ? stat("Risk Estimate", risk.label) : ""}</div></section>${current}<h3>Known NPC Pirate Ledger</h3><div class="trade-grid">${known || `<p class="empty-note">No active pirate signatures.</p>`}</div>`;
 }
 
 function renderAchievementsContent() {
@@ -2040,7 +2077,7 @@ function renderPlanet(sector) {
   const capStats = PLANET_UPGRADE_TRACKS.map((track) => stat(planetUpgradeLabel(track), `${planet.upgrades[track]}/${planet.upgradeCaps[track]}`)).join("");
   const techList = (planet.tech.available || profile.tech).map((tech) => `<li>${tech}</li>`).join("");
   if (!planet.owner) {
-    return `<section class="planet-panel"><h3>${planet.name}</h3><p><span class="planet-type-badge">${planet.type}</span></p><p class="help-text">${planet.typeDescription}</p><div class="production-preview"><strong>Production Strengths:</strong> ${profile.profile.strengths}<br><strong>Current preview:</strong> ${formatProduction(preview)}</div><details class="compact-section"><summary>Scanner upgrade cap preview</summary><div class="planet-grid">${capStats}</div></details><button data-action="claim">Claim Planet</button></section>`;
+    return `<section class="planet-panel"><h3>${planet.name}</h3><p><span class="planet-type-badge">${planet.type}</span></p><p class="help-text">${planet.typeDescription}</p><div class="production-preview"><strong>Production Strengths:</strong> ${profile.profile.strengths}<br><strong>Current preview:</strong> ${formatProduction(preview)}</div><details class="compact-section"><summary>Scanner upgrade cap preview</summary><div class="planet-grid">${capStats}</div></details><details class="compact-section future-tech"><summary>Future Tech Potential</summary><p class="help-text">Descriptive scaffolding only; functional tech trees arrive in a later update.</p><ul>${techList}</ul></details><button data-action="claim">Claim Planet</button></section>`;
   }
   return `<section class="planet-panel"><h3>${planet.name}</h3><p><span class="planet-type-badge">${planet.type}</span> <span class="defense-badge">Defense Rating: ${getPlanetDefenseRating(planet)}</span></p><p class="help-text">${planet.typeDescription}</p>
   <div class="planet-grid">${stat("Owner", planet.owner)}${stat("Stored Ore", planet.stored.Ore)}${stat("Stored Food", planet.stored.Food)}${stat("Stored Tech", planet.stored.Tech)}${stat("Stored Fighters", planet.stored.Fighters)}</div>
