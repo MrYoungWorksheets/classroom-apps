@@ -125,7 +125,7 @@ h3 { font-size: 1.08rem; margin: 0; }
 .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .field-grid-full { grid-column: 1 / -1; }
 label { display: block; font-weight: 700; margin-bottom: 6px; }
-input[type="text"], select, textarea { width: 100%; border: 1px solid var(--input-border); border-radius: 8px; padding: 11px 12px; background: var(--input-bg); color: var(--text); min-height: 48px; }
+input[type="text"], input[type="number"], select, textarea { width: 100%; border: 1px solid var(--input-border); border-radius: 8px; padding: 11px 12px; background: var(--input-bg); color: var(--text); min-height: 48px; }
 textarea { min-height: 100px; resize: vertical; }
 input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px solid var(--accent-strong); outline-offset: 2px; }
 
@@ -156,6 +156,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .answer-format { display: block; font-weight: 700; background: var(--pill-bg); border: 1px solid var(--card-border); color: var(--accent-strong); border-radius: 7px; padding: 10px 12px; }
 .answer-area { display: grid; gap: 10px; }
 .graph-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.graph-answer-groups { display: grid; gap: 12px; }
+.graph-feature-group { border: 1px solid var(--card-border); border-radius: 8px; padding: 12px; background: var(--panel-strong); }
+.graph-feature-group legend { padding: 0 6px; font-weight: 800; color: var(--accent-strong); }
+.graph-checkbox-field { display: flex; align-items: center; min-height: 48px; }
+.checkbox-control { display: flex; align-items: center; gap: 8px; margin-bottom: 0; }
+.checkbox-control input { width: 20px; height: 20px; flex: 0 0 auto; }
 .feedback { margin-top: 2px; padding: 12px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--panel-strong); }
 .feedback.correct { background: var(--correct-bg); border-color: var(--success); color: var(--success); }
 .feedback.hint { background: var(--hint-bg); border-color: var(--warning); color: var(--warning); }

@@ -25,7 +25,7 @@ Stage 2 upgrades the study-map shell into a working review experience. Students 
 Completed Stage 2 behavior:
 
 - Practical answer validation for numeric, expression, graph-feature, and system-solution problems.
-- Graphing problems use feature-based checks with dropdowns for domain/range and short inputs for asymptotes, key points, shifts, reflections, openings, and intercept notes.
+- Graphing problems use feature-based checks with dropdowns for domain/range and short inputs for asymptotes/key points. Transformed graph problems now use structured dropdown and checkbox controls for shifts, reflections, parent functions, and opening direction instead of text-entry transformation descriptions.
 - Incorrect feedback points students toward the missed skill without referencing an answer key.
 - The final summary diagnoses weak skill tags, names the top weak areas, and recommends exact problem IDs to retry.
 - Worked solutions render the short answer, ordered steps, and common mistake in a Chromebook-friendly format.

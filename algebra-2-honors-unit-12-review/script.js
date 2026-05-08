@@ -10,13 +10,18 @@ const INTERVAL_CHOICES = [
   {value:'(-infinity, infinity)', label:'(-∞, ∞)'},
   {value:'[0, infinity)', label:'[0, ∞)'},
   {value:'(0, infinity)', label:'(0, ∞)'},
-  {value:'(-infinity, 0) union (0, infinity)', label:'(-∞, 0) U (0, ∞)'},
   {value:'(3, infinity)', label:'(3, ∞)'},
   {value:'[-1, infinity)', label:'[-1, ∞)'},
   {value:'(-infinity, 4]', label:'(-∞, 4]'},
   {value:'(-infinity, 1]', label:'(-∞, 1]'},
-  {value:'(-infinity, -4) union (-4, infinity)', label:'(-∞, -4) U (-4, ∞)'}
+  {value:'(-infinity, -4) union (-4, infinity)', label:'(-∞, -4) U (-4, ∞)'},
+  {value:'(-infinity, 0) union (0, infinity)', label:'(-∞, 0) U (0, ∞)'}
 ];
+
+const PARENT_FUNCTION_CHOICES = ['linear','absolute value','quadratic','cubic','square root','cube root','reciprocal/rational','reciprocal squared','exponential','logarithmic'];
+const HORIZONTAL_SHIFT_CHOICES = ['none','left','right'];
+const VERTICAL_SHIFT_CHOICES = ['none','up','down'];
+const OPENING_DIRECTION_CHOICES = ['up','down'];
 
 const GRAPH_CHECKS = {
   'g-1a': {domain:'(-infinity, infinity)', range:'(-infinity, infinity)'},
@@ -29,12 +34,12 @@ const GRAPH_CHECKS = {
   'g-1h': {domain:'(-infinity, 0) union (0, infinity)', range:'(0, infinity)', verticalAsymptote:'x = 0', horizontalAsymptote:'y = 0'},
   'g-1i': {domain:'(-infinity, infinity)', range:'(0, infinity)', horizontalAsymptote:'y = 0'},
   'g-1j': {domain:'(0, infinity)', range:'(-infinity, infinity)', verticalAsymptote:'x = 0'},
-  'g-2a': {domain:'(-infinity, infinity)', range:'[-1, infinity)', keyPoint:{points:[[-2,-1]], label:'vertex'}, notes:{any:['up','opens up'], points:[[-3,0],[-1,0],[0,3]]}},
-  'g-2b': {domain:'(-infinity, infinity)', range:'(-infinity, 4]', keyPoint:{points:[[2,4]], label:'vertex'}, notes:{any:['down','opens down'], points:[[-2,0],[6,0],[0,2]]}},
-  'g-2c': {domain:'(3, infinity)', range:'(-infinity, infinity)', verticalAsymptote:'x = 3', keyPoint:{points:[[4,0]], label:'x-intercept'}, notes:{any:['right 3','right3']}},
-  'g-2d': {domain:'(-infinity, -4) union (-4, infinity)', range:'(-infinity, 0) union (0, infinity)', verticalAsymptote:'x = -4', horizontalAsymptote:'y = 0', notes:{any:['left 4','left4']}},
-  'g-2e': {domain:'[0, infinity)', range:'(-infinity, 1]', keyPoint:{points:[[0,1]], label:'starting point'}, notes:{all:['reflect','up 1']}},
-  'g-2f': {domain:'(-infinity, infinity)', range:'(-infinity, infinity)', keyPoint:{points:[[-1,0]], label:'center/inflection point'}, notes:{any:['left 1','left1']}}
+  'g-2a': {parentFunction:'quadratic', domain:'(-infinity, infinity)', range:'[-1, infinity)', openingDirection:'up', vertex:{points:[[-2,-1]], label:'vertex'}, notes:{points:[[-3,0],[-1,0],[0,3]]}},
+  'g-2b': {parentFunction:'absolute value', horizontalShiftDirection:'right', horizontalShiftAmount:2, verticalShiftDirection:'up', verticalShiftAmount:4, reflectedOverXAxis:true, reflectedOverYAxis:false, openingDirection:'down', domain:'(-infinity, infinity)', range:'(-infinity, 4]', vertex:{points:[[2,4]], label:'vertex'}, notes:{points:[[-2,0],[6,0],[0,2]]}},
+  'g-2c': {parentFunction:'logarithmic', horizontalShiftDirection:'right', horizontalShiftAmount:3, verticalShiftDirection:'none', verticalShiftAmount:0, reflectedOverXAxis:false, reflectedOverYAxis:false, domain:'(3, infinity)', range:'(-infinity, infinity)', verticalAsymptote:'x = 3'},
+  'g-2d': {parentFunction:'reciprocal/rational', horizontalShiftDirection:'left', horizontalShiftAmount:4, verticalShiftDirection:'none', verticalShiftAmount:0, reflectedOverXAxis:false, reflectedOverYAxis:false, domain:'(-infinity, -4) union (-4, infinity)', range:'(-infinity, 0) union (0, infinity)', verticalAsymptote:'x = -4', horizontalAsymptote:'y = 0'},
+  'g-2e': {parentFunction:'square root', horizontalShiftDirection:'none', horizontalShiftAmount:0, verticalShiftDirection:'up', verticalShiftAmount:1, reflectedOverXAxis:true, reflectedOverYAxis:false, domain:'[0, infinity)', range:'(-infinity, 1]', startingPoint:{points:[[0,1]], label:'starting point'}},
+  'g-2f': {parentFunction:'cubic', horizontalShiftDirection:'left', horizontalShiftAmount:1, verticalShiftDirection:'none', verticalShiftAmount:0, reflectedOverXAxis:false, reflectedOverYAxis:false, domain:'(-infinity, infinity)', range:'(-infinity, infinity)', centerPoint:{points:[[-1,0]], label:'center/inflection point'}}
 };
 
 let state = {
@@ -558,29 +563,102 @@ function graphFieldsFor(problem){
     return Boolean(check[key]);
   });
 }
-function renderIntervalSelect(problem, key, value){
-  const options = INTERVAL_CHOICES.map(choice => `<option value="${escapeHtml(choice.value)}" ${choice.value === value ? 'selected' : ''}>${escapeHtml(choice.label)}</option>`).join('');
+function structuredGraphFieldsFor(problem){
+  const check = GRAPH_CHECKS[problem.graphFeatureId] || {};
+  const fields = [];
+  if(check.parentFunction) fields.push('parentFunction');
+  if(Object.prototype.hasOwnProperty.call(check, 'horizontalShiftDirection')) fields.push('horizontalShiftDirection', 'horizontalShiftAmount');
+  if(Object.prototype.hasOwnProperty.call(check, 'verticalShiftDirection')) fields.push('verticalShiftDirection', 'verticalShiftAmount');
+  if(Object.prototype.hasOwnProperty.call(check, 'reflectedOverXAxis')) fields.push('reflectedOverXAxis');
+  if(Object.prototype.hasOwnProperty.call(check, 'reflectedOverYAxis')) fields.push('reflectedOverYAxis');
+  if(check.openingDirection) fields.push('openingDirection');
+  if(check.vertex) fields.push('vertex');
+  if(check.startingPoint) fields.push('startingPoint');
+  if(check.centerPoint) fields.push('centerPoint');
+  if(check.verticalAsymptote) fields.push('verticalAsymptote');
+  if(check.horizontalAsymptote) fields.push('horizontalAsymptote');
+  if(check.domain) fields.push('domain');
+  if(check.range) fields.push('range');
+  if(check.notes) fields.push('graphNotes');
+  return fields;
+}
+function usesStructuredGraphFields(problem){
+  return Boolean((GRAPH_CHECKS[problem.graphFeatureId] || {}).parentFunction);
+}
+function renderChoiceSelect(problem, key, choices, value, placeholder = 'Choose...'){
+  const options = [{value:'', label:placeholder}, ...choices.map(choice => ({value:choice, label:choice}))]
+    .map(choice => `<option value="${escapeHtml(choice.value)}" ${choice.value === value ? 'selected' : ''}>${escapeHtml(choice.label)}</option>`).join('');
   return `<select id="${problem.id}-${key}" data-answer-key="${key}">${options}</select>`;
+}
+function renderIntervalSelect(problem, key, value){
+  const seen = new Set();
+  const options = INTERVAL_CHOICES.filter(choice => {
+    if(seen.has(choice.value)) return false;
+    seen.add(choice.value);
+    return true;
+  }).map(choice => `<option value="${escapeHtml(choice.value)}" ${choice.value === value ? 'selected' : ''}>${escapeHtml(choice.label)}</option>`).join('');
+  return `<select id="${problem.id}-${key}" data-answer-key="${key}">${options}</select>`;
+}
+function renderCheckbox(problem, key, checked){
+  return `<label class="checkbox-control" for="${problem.id}-${key}"><input type="checkbox" id="${problem.id}-${key}" data-answer-key="${key}" ${checked ? 'checked' : ''}> ${labelFor(key, problem.graphFeatureId)}</label>`;
+}
+function renderGraphControl(problem, key, answer){
+  const value = answer[key] || '';
+  if(['domain','range'].includes(key)) return renderIntervalSelect(problem, key, value);
+  if(key === 'parentFunction') return renderChoiceSelect(problem, key, PARENT_FUNCTION_CHOICES, value);
+  if(key === 'horizontalShiftDirection') return renderChoiceSelect(problem, key, HORIZONTAL_SHIFT_CHOICES, value);
+  if(key === 'verticalShiftDirection') return renderChoiceSelect(problem, key, VERTICAL_SHIFT_CHOICES, value);
+  if(key === 'openingDirection') return renderChoiceSelect(problem, key, OPENING_DIRECTION_CHOICES, value);
+  if(['horizontalShiftAmount','verticalShiftAmount'].includes(key)) return `<input type="number" id="${problem.id}-${key}" data-answer-key="${key}" value="${escapeHtml(value)}" inputmode="numeric" step="1" min="0" placeholder="optional if none">`;
+  return `<input type="text" id="${problem.id}-${key}" data-answer-key="${key}" value="${escapeHtml(value)}" placeholder="${placeholderFor(problem.graphFeatureId, key)}">`;
+}
+function renderGraphField(problem, key, answer){
+  if(['reflectedOverXAxis','reflectedOverYAxis'].includes(key)) return `<div class="graph-checkbox-field">${renderCheckbox(problem, key, Boolean(answer[key]))}</div>`;
+  return `<div><label for="${problem.id}-${key}">${labelFor(key, problem.graphFeatureId)}</label>${renderGraphControl(problem, key, answer)}</div>`;
+}
+function renderStructuredGraphFields(problem, answer){
+  const fields = structuredGraphFieldsFor(problem);
+  const transformationKeys = ['parentFunction','horizontalShiftDirection','horizontalShiftAmount','verticalShiftDirection','verticalShiftAmount','reflectedOverXAxis','reflectedOverYAxis','openingDirection'];
+  const featureKeys = fields.filter(key => !transformationKeys.includes(key));
+  const transformFields = fields.filter(key => transformationKeys.includes(key));
+  const transformSection = transformFields.length ? `<fieldset class="graph-feature-group"><legend>Transformation Features</legend><div class="graph-fields">${transformFields.map(key => renderGraphField(problem, key, answer)).join('')}</div></fieldset>` : '';
+  const featureSection = featureKeys.length ? `<fieldset class="graph-feature-group"><legend>Key Features</legend><div class="graph-fields">${featureKeys.map(key => renderGraphField(problem, key, answer)).join('')}</div></fieldset>` : '';
+  return `${transformSection}${featureSection}`;
 }
 function renderAnswerArea(problem){
   const answer = state.answers[problem.id] || {};
   if(problem.answerType === 'graphFeatures'){
-    return `<div class="graph-fields">${graphFieldsFor(problem).map(key => {
-      const control = ['domain','range'].includes(key)
-        ? renderIntervalSelect(problem, key, answer[key] || '')
-        : `<input type="text" id="${problem.id}-${key}" data-answer-key="${key}" value="${escapeHtml(answer[key] || '')}" placeholder="${placeholderFor(problem.graphFeatureId, key)}">`;
-      return `<div><label for="${problem.id}-${key}">${labelFor(key, problem.graphFeatureId)}</label>${control}</div>`;
-    }).join('')}</div>`;
+    if(usesStructuredGraphFields(problem)) return `<div class="graph-answer-groups">${renderStructuredGraphFields(problem, answer)}</div>`;
+    return `<div class="graph-fields">${graphFieldsFor(problem).map(key => renderGraphField(problem, key, answer)).join('')}</div>`;
   }
   return `<label for="${problem.id}-answer">Student answer</label><input type="text" id="${problem.id}-answer" data-answer-key="answer" value="${escapeHtml(answer.answer || '')}" placeholder="Type your answer here">`;
 }
 function labelFor(key, graphId){
   const check = GRAPH_CHECKS[graphId] || {};
-  return ({domain:'Domain', range:'Range', verticalAsymptote:'Vertical asymptote', horizontalAsymptote:'Horizontal asymptote', keyPoint:check.keyPoint?.label || 'Key point', graphNotes:'Shape / shift / intercept notes'})[key] || key;
+  return ({
+    domain:'Domain',
+    range:'Range',
+    parentFunction:'Parent function',
+    horizontalShiftDirection:'Horizontal shift',
+    horizontalShiftAmount:'Horizontal shift amount',
+    verticalShiftDirection:'Vertical shift',
+    verticalShiftAmount:'Vertical shift amount',
+    reflectedOverXAxis:'Reflected over x-axis',
+    reflectedOverYAxis:'Reflected over y-axis',
+    openingDirection:'Opening direction',
+    verticalAsymptote:'Vertical asymptote',
+    horizontalAsymptote:'Horizontal asymptote',
+    vertex:'Vertex',
+    startingPoint:'Starting point',
+    centerPoint:'Center/inflection point',
+    keyPoint:check.keyPoint?.label || 'Key point',
+    graphNotes:check.parentFunction ? 'Intercept notes' : 'Shape / shift / intercept notes'
+  })[key] || key;
 }
 function placeholderFor(graphId, key){
   const data = GRAPH_BY_ID[graphId] || {};
-  if(key === 'graphNotes') return 'Example: opens up; shift right 3; intercepts...';
+  if(key === 'graphNotes') return (GRAPH_CHECKS[graphId] || {}).parentFunction ? 'Example: x-intercepts (-3, 0), (-1, 0); y-intercept (0, 3)' : 'Example: opens up; shift right 3; intercepts...';
+  if(['vertex','startingPoint','centerPoint'].includes(key)) return data[key] || '(0, 0)';
   if(key === 'keyPoint') return data.keyPoint || '(0, 0)';
   return data[key] || 'none if not needed';
 }
@@ -629,7 +707,9 @@ function attachProblemEvents(){
 function saveAnswer(id, card){state.answers[id] = readAnswerFromCard(card);}
 function readAnswerFromCard(card){
   const values = {};
-  card.querySelectorAll('[data-answer-key]').forEach(input => values[input.dataset.answerKey] = input.value);
+  card.querySelectorAll('[data-answer-key]').forEach(input => {
+    values[input.dataset.answerKey] = input.type === 'checkbox' ? input.checked : input.value;
+  });
   return values;
 }
 function readAnswer(id){return state.answers[id] || {};}
@@ -734,15 +814,43 @@ function graphNotesMatch(value, rule){
   if(rule.points && !rule.points.every(point => pointInText(value, point))) return false;
   return true;
 }
+function shiftAmountMatches(value, expected, direction){
+  if(direction === 'none') return true;
+  return numericAnswer(value, expected, 0.00001);
+}
+function checkboxMatches(value, expected){
+  return Boolean(value) === Boolean(expected);
+}
+function validatePointFeature(values, check, key){
+  const feature = check[key];
+  if(!feature) return null;
+  if(feature.points.every(point => pointInText(values[key], point))) return null;
+  const label = key === 'vertex' ? 'vertex' : feature.label;
+  return {correct:false, feedback:`Check the ${label}: use an ordered point like (${feature.points[0].join(', ')}).`};
+}
 function validateGraph(values, graphFeatureId){
   const check = GRAPH_CHECKS[graphFeatureId];
   if(!check) return {correct:false, feedback:'This graph checker is missing setup. Tell your teacher which problem did not load.'};
+  if(check.parentFunction && values.parentFunction !== check.parentFunction) return {correct:false, feedback:'Check the parent function.'};
+  if(Object.prototype.hasOwnProperty.call(check, 'horizontalShiftDirection') && values.horizontalShiftDirection !== check.horizontalShiftDirection) return {correct:false, feedback:'Check the horizontal shift.'};
+  if(Object.prototype.hasOwnProperty.call(check, 'horizontalShiftAmount') && !shiftAmountMatches(values.horizontalShiftAmount, check.horizontalShiftAmount, check.horizontalShiftDirection)) return {correct:false, feedback:'Check the horizontal shift.'};
+  if(Object.prototype.hasOwnProperty.call(check, 'verticalShiftDirection') && values.verticalShiftDirection !== check.verticalShiftDirection) return {correct:false, feedback:'Check the vertical shift.'};
+  if(Object.prototype.hasOwnProperty.call(check, 'verticalShiftAmount') && !shiftAmountMatches(values.verticalShiftAmount, check.verticalShiftAmount, check.verticalShiftDirection)) return {correct:false, feedback:'Check the vertical shift.'};
+  if(Object.prototype.hasOwnProperty.call(check, 'reflectedOverXAxis') && !checkboxMatches(values.reflectedOverXAxis, check.reflectedOverXAxis)) return {correct:false, feedback:'Check whether the graph reflects over the x-axis.'};
+  if(Object.prototype.hasOwnProperty.call(check, 'reflectedOverYAxis') && !checkboxMatches(values.reflectedOverYAxis, check.reflectedOverYAxis)) return {correct:false, feedback:'Check whether the graph reflects over the y-axis.'};
+  if(check.openingDirection && values.openingDirection !== check.openingDirection) return {correct:false, feedback:'Check the opening direction.'};
+  const vertexResult = validatePointFeature(values, check, 'vertex');
+  if(vertexResult) return vertexResult;
+  const startingPointResult = validatePointFeature(values, check, 'startingPoint');
+  if(startingPointResult) return startingPointResult;
+  const centerPointResult = validatePointFeature(values, check, 'centerPoint');
+  if(centerPointResult) return centerPointResult;
   if(check.domain && !equivalentInterval(values.domain, check.domain)) return {correct:false, feedback:'Check the domain first: which x-values are allowed?'};
   if(check.range && !equivalentInterval(values.range, check.range)) return {correct:false, feedback:'Check the range: identify the lowest/highest y-values and whether endpoints are included.'};
-  if(check.verticalAsymptote && !lineMatches(values.verticalAsymptote, check.verticalAsymptote)) return {correct:false, feedback:'Check the vertical asymptote first. It controls the graph’s boundary.'};
-  if(check.horizontalAsymptote && !lineMatches(values.horizontalAsymptote, check.horizontalAsymptote)) return {correct:false, feedback:'Check the horizontal asymptote: what y-value does the graph approach?'};
+  if(check.verticalAsymptote && !lineMatches(values.verticalAsymptote, check.verticalAsymptote)) return {correct:false, feedback:'Check the asymptote.'};
+  if(check.horizontalAsymptote && !lineMatches(values.horizontalAsymptote, check.horizontalAsymptote)) return {correct:false, feedback:'Check the asymptote.'};
   if(check.keyPoint && !check.keyPoint.points.every(point => pointInText(values.keyPoint, point))) return {correct:false, feedback:`Check the ${check.keyPoint.label}: use an ordered point like (${check.keyPoint.points[0].join(', ')}).`};
-  if(check.notes && !graphNotesMatch(values.graphNotes, check.notes)) return {correct:false, feedback:'Check the shape, shift, or intercept notes. Include the requested direction and key intercepts when asked.'};
+  if(check.notes && !graphNotesMatch(values.graphNotes, check.notes)) return {correct:false, feedback:'Check the intercept notes.'};
   return {correct:true, feedback:'Correct. Review the worked solution below.'};
 }
 function skillFeedback(problem, values){
