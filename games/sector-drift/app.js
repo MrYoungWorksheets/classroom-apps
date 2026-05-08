@@ -1394,23 +1394,24 @@ function renderShipPanel() {
 function renderSectorPanel() {
   const sector = sectorMap[game.player.currentSector];
   const cannotTravel = game.player.fuel <= 0 || game.player.turns <= 0;
-  const danger = canSeeDanger(sector.number) && sector.dangerLevel > 0 ? `${HAZARD_TYPES[sector.hazardType].icon} Danger ${sector.dangerLevel}: ${HAZARD_TYPES[sector.hazardType].label}` : "Danger unknown until scanned or visited";
+  const danger = canSeeDanger(sector.number) && sector.dangerLevel > 0 ? `${HAZARD_TYPES[sector.hazardType].icon} Danger ${sector.dangerLevel}: ${HAZARD_TYPES[sector.hazardType].label}` : "Danger unknown";
   panels.sector.innerHTML = `
-    <h2 id="sectorHeading">Current Sector</h2>
-    <span class="badge">Sector ${sector.number}: ${titleCase(sector.type)}</span> ${isProtectedSpace(sector.number) ? `<span class="badge alliance-badge">Alliance Protected Space</span>` : ""}
-    <p class="flavor">${sector.flavor}</p>
-    <p><strong>Visible objects:</strong> ${knownFeatures(sector).join(", ")}</p>
-    <p class="strategic-note">${sector.strategicNote}</p>
-    <p class="help-text"><strong>Scanner:</strong> ${scannerHelpText()} ${danger}. Use map nodes to travel or inspect systems. Zoom in if nodes are hard to click.</p>
-    ${renderMinimap()}
+    <h2 id="sectorHeading">Tactical Cockpit</h2>
+    ${renderCurrentSituation(sector, danger)}
     ${renderNavigationIntel()}
+    <section class="viewer-map" aria-label="Interactive sector map">
+      <div class="viewer-map-heading"><h3>Lane Map</h3><p class="help-text">Tap a node once to scan. Tap an adjacent selected node again to travel.</p></div>
+      ${renderMinimap()}
+    </section>
     ${renderWarpControls()}
-    <h3>Adjacent Sectors</h3>
-    <p class="help-text">Manual travel controls. Map nodes are the primary two-step scan and travel control.</p>
-    <div class="travel-grid">
-      ${sector.adjacent.map((number) => `<button type="button" ${cannotTravel ? "disabled" : ""} data-action="travel" data-sector="${number}">${scannerTravelLabel(number)}</button>`).join("")}
-    </div>
-    ${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty. Complete math missions for fuel or trade when you reach a port.</p>` : `<p class="help-text">Travel costs 1 turn and 1 fuel. A sector event may occur after arrival.</p>`}`;
+    <details class="manual-travel fallback-controls compact-section">
+      <summary>Manual travel controls</summary>
+      <p class="help-text">Fallback buttons for adjacent sectors. The map above is the primary navigation control.</p>
+      <div class="travel-grid compact-travel-grid">
+        ${sector.adjacent.map((number) => `<button type="button" ${cannotTravel ? "disabled" : ""} data-action="travel" data-sector="${number}">${scannerTravelLabel(number)}</button>`).join("")}
+      </div>
+      ${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty. Complete math missions for fuel or trade when you reach a port.</p>` : `<p class="help-text">Travel costs 1 turn and 1 fuel. Sector events may occur after arrival.</p>`}
+    </details>`;
   panels.sector.querySelectorAll("[data-action='travel']").forEach((button) => button.addEventListener("click", () => travelToSector(Number(button.dataset.sector))));
   wireWarpControls(panels.sector);
   panels.sector.querySelector("[data-action='plotSelectedRoute']")?.addEventListener("click", () => runGameAction(() => plotSelectedRoute(panels.sector.querySelector("[data-action='plotSelectedRoute']")?.dataset.sector)));
@@ -1598,10 +1599,31 @@ function performWarpStep() {
   render();
 }
 
+function renderCurrentSituation(sector, danger) {
+  const featureText = knownFeatures(sector).join(", ");
+  return `<section class="current-situation priority-card" aria-label="Arrival report and current situation">
+    ${renderArrivalReport()}
+    <div class="current-situation-grid">
+      ${stat("Current Sector", `Sector ${sector.number}: ${titleCase(sector.type)}`)}${stat("Visible Objects", featureText)}${stat("Scanner", scannerHelpText())}${stat("Threat Readout", danger)}
+    </div>
+    <p class="flavor compact-flavor">${sector.flavor}</p>
+    <p class="recommendation">${navigationRecommendation(sector.number)}</p>
+  </section>`;
+}
+
 function renderWarpControls() {
   const target = Number(game.ui?.warpDestination) || "";
   const route = target ? findRouteToSector(game.player.currentSector, target) : null;
-  return `<section class="warp-panel"><h3>Warp / Autopilot</h3><p class="help-text">Safe route travel uses known lane connections only. Each step still costs normal fuel and turns and does not bypass danger.</p><label for="warpDestination">Set Warp Destination</label><input id="warpDestination" type="number" min="1" max="${MAX_SECTOR}" value="${target}" placeholder="Sector number"><div class="button-row"><button type="button" data-action="plotWarp">Plot Route</button><button type="button" data-action="warpStep" ${target ? "" : "disabled"}>Engage Autopilot / Warp Step</button><button type="button" data-action="clearWarp" ${target ? "" : "disabled"}>Clear Destination</button></div><p class="help-text">${target ? (route ? `Route: ${route.join(" → ")}` : "No known route plotted.") : "No active destination."}</p></section>`;
+  const routeText = target ? (route ? `Sector ${target}, ${route.length - 1} jump${route.length === 2 ? "" : "s"}` : `Sector ${target}, route unavailable`) : "No active destination";
+  const routeDetail = target ? (route ? `Route: ${route.join(" → ")}` : "No known route plotted.") : "Plot a destination only when you need route automation.";
+  return `<details class="warp-panel collapsible-system compact-section" ${target ? "open" : ""}>
+    <summary><span>Warp / Autopilot</span><strong>${routeText}</strong></summary>
+    <p class="help-text">Known-lane route travel only. Each step costs normal fuel and turns; danger is not bypassed.</p>
+    <label for="warpDestination">Set Warp Destination</label>
+    <input id="warpDestination" type="number" min="1" max="${MAX_SECTOR}" value="${target}" placeholder="Sector number">
+    <div class="button-row compact-button-row"><button type="button" data-action="plotWarp">Plot Route</button><button type="button" data-action="warpStep" ${target ? "" : "disabled"}>Engage Autopilot / Warp Step</button><button type="button" data-action="clearWarp" ${target ? "" : "disabled"}>Clear Destination</button></div>
+    <p class="help-text">${routeDetail}</p>
+  </details>`;
 }
 
 function wireWarpControls(scope = document) {
@@ -1628,10 +1650,10 @@ function renderNavigationIntel() {
   const suggested = suggestedSectorAction(selected, { current, adjacent, route, missionIntel });
   const actionButton = !current && !adjacent && route ? `<button type="button" data-action="plotSelectedRoute" data-sector="${selected.number}">Set Warp Destination</button>` : !current && !adjacent ? `<button type="button" data-action="plotSelectedRoute" data-sector="${selected.number}" disabled>Plot Route</button>` : "";
   const hint = game.ui?.mapHint ? `<p class="action-hint">${game.ui.mapHint}</p>` : "";
-  return `<aside class="nav-intel main-viewer" aria-live="polite"><p class="eyebrow">Main Viewer</p><h3>Selected Sector Intel</h3>${renderArrivalReport()}<div class="intel-grid">
+  return `<aside class="nav-intel main-viewer priority-card" aria-live="polite"><p class="eyebrow">Main Viewer</p><div class="viewer-title-row"><h3>Selected Sector Intel</h3>${actionButton}</div><div class="intel-grid">
     ${stat("Sector", selected.number)}${stat("Status", status)}${stat("System Type", visible ? titleCase(selected.type) : "Unknown")}${stat("Route Role", canSeeRouteRole(selected.number) ? titleCase(selected.routeRole) : "Scan level 4")}
     ${stat("Danger", danger)}${stat("Patrol Zone", protectedSpaceLabel(selected.number))}${stat("Route / Travel", routeStatus)}${stat("Suggested Action", suggested)}
-  </div><p><strong>Known features:</strong> ${features}</p>${missionIntel ? renderMissionTargetIntel(missionIntel) : ""}<p class="strategic-note">${canSeeRouteRole(selected.number) ? selected.strategicNote : "Upgrade scanners to reveal route roles such as tunnels, dead ends, and crossroads."}</p><p class="recommendation">${navigationRecommendation(selected.number)}</p>${hint}${actionButton}</aside>`;
+  </div><p class="known-features"><strong>Known features:</strong> ${features}</p>${missionIntel ? renderMissionTargetIntel(missionIntel) : ""}<p class="strategic-note">${canSeeRouteRole(selected.number) ? selected.strategicNote : "Upgrade scanners to reveal route roles."}</p><p class="recommendation">${navigationRecommendation(selected.number)}</p>${hint}</aside>`;
 }
 
 function renderArrivalReport() {
