@@ -59,6 +59,7 @@ vm.runInContext(`
     panel._mapNodes = [];
     panel._travelButtons = [];
     panel._actionButtons = [];
+    panel._screenButtons = [];
     panel._inputs = {};
     Object.defineProperty(panel, 'innerHTML', {
       get() { return this._innerHTML; },
@@ -67,6 +68,7 @@ vm.runInContext(`
         this._mapNodes = [];
         this._travelButtons = [];
         this._actionButtons = [];
+        this._screenButtons = [];
         this._inputs = {};
         const mapNodePattern = /<g\\b[^>]*data-map-sector="(\\d+)"[^>]*>([\\s\\S]*?)<\\/g>/g;
         let match;
@@ -87,7 +89,16 @@ vm.runInContext(`
         }
         const actionPattern = /<button\\b[^>]*data-action="([^"]+)"[^>]*>/g;
         while ((match = actionPattern.exec(this._innerHTML))) {
-          if (match[1] !== 'travel') this._actionButtons.push(makeEventTargetStub({ dataset: { action: match[1] }, parent: this }));
+          if (match[1] !== 'travel') {
+            const tag = match[0];
+            const mode = tag.match(/data-mode="([^"]+)"/);
+            const sector = tag.match(/data-sector="([^"]+)"/);
+            this._actionButtons.push(makeEventTargetStub({ dataset: { action: match[1], mode: mode ? mode[1] : '', sector: sector ? sector[1] : '' }, parent: this }));
+          }
+        }
+        const screenPattern = /<button\\b[^>]*data-screen="([^"]+)"[^>]*>/g;
+        while ((match = screenPattern.exec(this._innerHTML))) {
+          this._screenButtons.push(makeEventTargetStub({ dataset: { screen: match[1] }, parent: this }));
         }
         const warpInput = this._innerHTML.match(/<input\\b[^>]*id="warpDestination"[^>]*value="([^"]*)"[^>]*>/);
         if (warpInput) this._inputs.warpDestination = { value: warpInput[1] };
@@ -95,6 +106,7 @@ vm.runInContext(`
     });
     panel.querySelectorAll = function (selector) {
       if (selector === '[data-map-sector]') return this._mapNodes;
+      if (selector === '[data-screen]') return this._screenButtons;
       if (selector === "[data-action='travel']") return this._travelButtons;
       const actionMatch = selector.match(/^\[data-action=['"]?([^'"\]]+)['"]?\]$/);
       if (actionMatch) return this._actionButtons.filter((button) => button.dataset.action === actionMatch[1]);
@@ -555,12 +567,21 @@ vm.runInContext(`
 
   // Navigation feedback, map two-step travel, arrival reports, and docking ledger checks.
   game = defaultGameState();
+  selectedSectorNumber = 1;
   game.tutorial.completedSteps.push('travel');
   launchGate.mode = 'localPrototype';
   maybeTravelEvent = function () { return false; };
   resolveSectorDanger = function () { return false; };
   renderSectorPanel();
   assert(panels.sector.innerHTML.includes('Selected Sector Intel') && panels.sector.innerHTML.includes('Arrival Report'), 'selected sector intel and arrival report render in the main viewer');
+  assert(panels.sector.innerHTML.includes('data-situation-type="shipyard port"') && panels.sector.innerHTML.includes('Safe Port / Starbase'), 'situation card renders on Sector 1 port');
+  assert(panels.sector.innerHTML.includes('Dock at Starbase') && panels.sector.innerHTML.includes('Open Mission Terminal'), 'situation card exposes starbase and mission terminal buttons');
+  assert(panels.sector.innerHTML.includes('Enter Shipyard'), 'situation card shows shipyard button when shipyard exists');
+  const starbaseSituationButton = panels.sector.querySelectorAll('[data-screen]').find((button) => button.dataset.screen === 'starbase');
+  assert(starbaseSituationButton, 'starbase situation button is wired as a screen button');
+  starbaseSituationButton.dispatchEvent({ type: 'click' });
+  assert(game.ui.activeScreen === 'starbase' && panels.docked.innerHTML.includes('Starbase'), 'starbase situation button opens starbase screen');
+  closeScreen();
   const sector2Node = panels.sector.querySelectorAll('[data-map-sector]').find((node) => node.dataset.mapSector === '2');
   assert(sector2Node, 'rendered sector panel should expose Sector 2 as a clickable map node');
   assert(sector2Node.querySelector('.map-hit-target') && sector2Node.querySelector('.map-visible-node') && sector2Node.querySelector('text'), 'map node should expose hit target, visible circle, and text label children');
@@ -569,6 +590,7 @@ vm.runInContext(`
   sector2Node.dispatchEvent({ type: 'click' });
   assert(game.player.currentSector === 1 && selectedSectorNumber === 2, 'map node click selects/scans without travel');
   assert(panels.sector.innerHTML.includes('Tap again to travel to Sector 2'), 'adjacent selected node shows tap-again travel hint');
+  assert(panels.sector.innerHTML.includes('Scanned Sector 2') && panels.sector.innerHTML.includes('Tap Map Node to Travel'), 'selected adjacent sector still shows scan/travel situation hint');
   panels.sector.querySelectorAll('[data-map-sector]').find((node) => node.dataset.mapSector === '2').dispatchEvent({ type: 'click' });
   assert(game.player.currentSector === 2, 'second click on same adjacent node travels');
   assert(game.player.fuel === fuelBeforeMap - 1 && game.player.turns === turnsBeforeMap - 1, 'map travel costs fuel and turns');
@@ -669,10 +691,21 @@ vm.runInContext(`
 
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
+  game.player.currentSector = 13;
+  selectedSectorNumber = 13;
+  game.visitedSectors.push(13);
+  game.revealedSectors.push(13);
+  renderSectorPanel();
+  assert(panels.sector.innerHTML.includes('Pirate Encounter: Scrap Raider') && panels.sector.innerHTML.includes('Attempt Escape / Flee') && panels.sector.innerHTML.includes('Pay Off Pirates'), 'pirate card renders when active pirate exists');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
   const targetQuest = deliveryQuestById('deliver-food-24');
   startDeliveryQuest(targetQuest.id);
   selectedSectorNumber = targetQuest.targetSector;
   assert(renderNavigationIntel().includes('Mission Target') && renderNavigationIntel().includes(targetQuest.title), 'selected mission target shows mission indicator');
+  renderSectorPanel();
+  assert(panels.sector.innerHTML.includes('data-situation-type="mission"') && panels.sector.innerHTML.includes(targetQuest.title), 'mission target card renders when active delivery target is selected');
 
   // Firebase readiness, launch gate, admin role, and local-save safety checks.
   assert(source.includes('const REQUIRE_FIREBASE_LOGIN = true'), 'app.js should define login-first requirement');

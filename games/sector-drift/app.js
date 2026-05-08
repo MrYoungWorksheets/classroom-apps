@@ -1413,6 +1413,7 @@ function renderSectorPanel() {
       ${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty. Complete math missions for fuel or trade when you reach a port.</p>` : `<p class="help-text">Travel costs 1 turn and 1 fuel. Sector events may occur after arrival.</p>`}
     </details>`;
   panels.sector.querySelectorAll("[data-action='travel']").forEach((button) => button.addEventListener("click", () => travelToSector(Number(button.dataset.sector))));
+  wireSituationCardButtons(panels.sector);
   wireWarpControls(panels.sector);
   panels.sector.querySelector("[data-action='plotSelectedRoute']")?.addEventListener("click", () => runGameAction(() => plotSelectedRoute(panels.sector.querySelector("[data-action='plotSelectedRoute']")?.dataset.sector)));
   panels.sector.querySelector("[data-map-zoom='out']")?.addEventListener("click", () => zoomMap(-MAP_ZOOM_STEP));
@@ -1599,15 +1600,179 @@ function performWarpStep() {
   render();
 }
 
+
+function situationActionButton(label, options = {}) {
+  const { screen = "", action = "", mode = "", sector = "", disabled = false, primary = false, note = "" } = options;
+  const attrs = ["type=\"button\""];
+  if (screen) attrs.push(`data-screen="${screen}"`);
+  if (action) attrs.push(`data-action="${action}"`);
+  if (mode) attrs.push(`data-mode="${mode}"`);
+  if (sector) attrs.push(`data-sector="${sector}"`);
+  if (disabled) attrs.push("disabled");
+  return `<button class="${primary ? "situation-primary" : "button-secondary"}" ${attrs.join(" ")}><strong>${label}</strong>${note ? `<span>${note}</span>` : ""}</button>`;
+}
+
+function selectedSituationSector() {
+  return sectorMap[selectedSectorNumber] || sectorMap[game.player.currentSector];
+}
+
+function marketSummary(sector) {
+  if (!sector?.portPrices) return "No market data available.";
+  const bestBuy = RESOURCES.slice().sort((a, b) => sector.portPrices[a].buy - sector.portPrices[b].buy)[0];
+  const bestSell = RESOURCES.slice().sort((a, b) => sector.portPrices[b].sell - sector.portPrices[a].sell)[0];
+  return `Best buy: ${bestBuy} ${sector.portPrices[bestBuy].buy} cr. Best sell: ${bestSell} ${sector.portPrices[bestSell].sell} cr.`;
+}
+
+function planetSituationStatus(planet, sector) {
+  if (!planet) return "No planet record available.";
+  if (planet.owner === game.player.pilotName) return `Owned by you · production preview ${formatProduction(getPlanetProduction(planet))}.`;
+  if (isProtectedSpace(sector.number)) return "Unclaimed survey world inside Alliance protected space.";
+  if (sector.dangerLevel > 0) return "Unclaimed frontier world; secure the route before building.";
+  return "Unclaimed planet ready for a classroom-safe colony claim from Planet Management.";
+}
+
+function missionRequirementSummary(intel) {
+  if (!intel) return "No active delivery target here.";
+  if (intel.missing > 0) return `Missing ${intel.missing} ${intel.quest.requiredResource}.`;
+  if (intel.atCompletion) return "Ready to complete from the mission terminal.";
+  return intel.quest.returnSector ? `Visit Sector ${intel.quest.targetSector}, then return to Sector ${intel.quest.returnSector}.` : `Deliver ${intel.quest.requiredAmount} ${intel.quest.requiredResource} to Sector ${intel.quest.targetSector}.`;
+}
+
+function renderSituationCard() {
+  const current = sectorMap[game.player.currentSector];
+  const selected = selectedSituationSector();
+  const selectedCurrent = selected.number === current.number;
+  const selectedVisible = getVisibleSectorNumbers().includes(selected.number);
+  const selectedMissionIntel = missionTargetIntel(selected.number);
+  const currentMissionIntel = missionTargetIntel(current.number);
+  const pirate = currentPirateEncounter();
+  let card = { type: "current", title: `Current Sector ${current.number}`, summary: "Review the local readout, then choose a useful next action.", meta: [], actions: [] };
+
+  if (pirate) {
+    const risk = estimateCombatRisk(pirate);
+    card = {
+      type: "pirate",
+      title: `Pirate Encounter: ${pirate.name}`,
+      summary: "An active NPC pirate encounter is blocking safe autopilot decisions in this sector.",
+      meta: [stat("Threat", `${risk.label} · Level ${pirate.threatLevel}`), stat("Your Hull", `${game.player.hull}/${game.player.maxHull}`), stat("Your Fighters", `${game.player.fighters}/${game.player.fighterCapacity}`), stat("Patrol Zone", protectedSpaceLabel(current.number))],
+      actions: [
+        situationActionButton("Engage Pirate", { screen: "combat", primary: true, note: "Open combat screen" }),
+        situationActionButton("Attempt Escape / Flee", { action: "pirateCombat", mode: "retreat", note: "Use existing retreat" }),
+        situationActionButton("Pay Off Pirates", { disabled: true, note: "Coming later" }),
+      ],
+    };
+  } else if (selectedMissionIntel) {
+    card = {
+      type: "mission",
+      title: "Mission Target",
+      summary: `${selectedMissionIntel.quest.title} points to Sector ${selected.number}.`,
+      meta: [stat("Target Sector", selected.number), stat("Requirement", missionRequirementSummary(selectedMissionIntel)), stat("Selected Status", selectedCurrent ? "Current sector" : selectedVisible ? "Scanned sector" : "Not visible")],
+      actions: [situationActionButton("Open Mission Terminal", { screen: "specialMissions", primary: selectedMissionIntel.atCompletion, note: selectedMissionIntel.atCompletion ? "Claim route" : "Review route" })],
+    };
+  } else if (!selectedCurrent) {
+    const adjacent = current.adjacent.includes(selected.number);
+    const route = findRouteToSector(current.number, selected.number);
+    const canTravel = adjacent && game.player.fuel > 0 && game.player.turns > 0 && canUseGameActions();
+    card = {
+      type: "scanned",
+      title: `Scanned Sector ${selected.number}`,
+      summary: adjacent ? "This adjacent sector can be selected again on the map to travel." : route ? "This sector is on known lanes; plot warp to start routing." : "This sector is visible, but no complete route is known yet.",
+      meta: [stat("Scan Result", selectedVisible ? titleCase(selected.type) : "Unknown"), stat("Travel", adjacent ? (canTravel ? "Tap selected map node again" : travelBlockedReason()) : route ? `Route via Sector ${route[1]}` : "No known route"), stat("Patrol Zone", protectedSpaceLabel(selected.number))],
+      actions: [
+        adjacent ? situationActionButton("Tap Map Node to Travel", { action: "continueRoute", sector: selected.number, primary: canTravel, disabled: !canTravel, note: canTravel ? "Map confirms travel" : travelBlockedReason() }) : situationActionButton("Set Warp Destination", { action: "plotSelectedRoute", sector: selected.number, primary: Boolean(route), disabled: !route, note: route ? "Known route" : "Route unknown" }),
+        situationActionButton("Scan Nearby", { action: "continueRoute", sector: selected.number, note: "Keep map focused" }),
+      ],
+    };
+  } else if (current.type === "port") {
+    card = {
+      type: current.hasShipyard ? "shipyard port" : "port",
+      title: "Safe Port / Starbase",
+      summary: `${stationDisplayName(current)} is a safe place to trade, repair, and choose missions before launching again.`,
+      meta: [stat("Station Type", current.portType), stat("Patrol Zone", protectedSpaceLabel(current.number)), stat("Market", marketSummary(current)), stat("Shipyard", current.hasShipyard ? "Available" : "Not in this station"), stat("Mission Terminal", "Available")],
+      actions: [
+        situationActionButton("Dock at Starbase", { screen: "starbase", primary: true, note: "Trade and services" }),
+        situationActionButton("Open Mission Terminal", { screen: "specialMissions", note: "Math and delivery" }),
+        current.hasShipyard ? situationActionButton("Enter Shipyard", { screen: "shipyard", note: "Ships and fighters" }) : situationActionButton("Shipyard", { disabled: true, note: "Not here" }),
+        situationActionButton("Scan Nearby", { action: "continueRoute", sector: current.number, note: "Use lane map" }),
+      ],
+    };
+  } else if (current.type === "planet") {
+    const planet = getPlanetState(current);
+    card = {
+      type: "planet",
+      title: "Planet Detected",
+      summary: `${planet.name} is a ${planet.type} world with colony management available from the Planets screen.`,
+      meta: [stat("Planet", planet.name), stat("Type", planet.type), stat("Status", planetSituationStatus(planet, current)), stat("Patrol Zone", protectedSpaceLabel(current.number))],
+      actions: [
+        situationActionButton("Manage Planet", { screen: "planets", primary: planet.owner === game.player.pilotName, note: "Open planet screen" }),
+        situationActionButton("View / Scan Planet", { screen: "planets", note: "Survey details" }),
+        situationActionButton("Claim Planet", { disabled: planet.owner === game.player.pilotName || isProtectedSpace(current.number), note: planet.owner === game.player.pilotName ? "Already owned" : isProtectedSpace(current.number) ? "Protected space" : "Use Planets screen" }),
+        situationActionButton("Continue Route", { action: "continueRoute", sector: current.number, note: "Return to map" }),
+      ],
+    };
+  } else if (current.type === "asteroid") {
+    const disabled = game.player.fuel <= 0 || game.player.turns <= 0 || cargoSpaceLeft() <= 0;
+    card = {
+      type: "hazard asteroid",
+      title: current.dangerLevel > 0 ? "Asteroid / Hazard" : "Asteroid Field",
+      summary: "Mine ore here only if you have fuel, turns, cargo room, and enough hull for any local hazard.",
+      meta: [stat("Field", "Ore fragments"), stat("Danger", current.dangerLevel > 0 ? `${HAZARD_TYPES[current.hazardType].label} ${current.dangerLevel}` : "Low"), stat("Cargo Room", cargoSpaceLeft())],
+      actions: [situationActionButton("Mine Asteroids", { action: "mine", primary: !disabled, disabled, note: disabled ? "Need fuel, turns, room" : "Use existing mining" }), situationActionButton("Continue Route", { action: "continueRoute", sector: current.number, note: "Return to map" })],
+    };
+  } else if (current.type === "anomaly") {
+    card = {
+      type: "anomaly",
+      title: "Anomaly",
+      summary: "A strange signal is available for a careful one-turn scan.",
+      meta: [stat("Signal", "Unknown"), stat("Scanner", scannerHelpText()), stat("Patrol Zone", protectedSpaceLabel(current.number))],
+      actions: [situationActionButton("Scan Anomaly", { action: "scan", primary: game.player.turns > 0, disabled: game.player.turns <= 0, note: game.player.turns > 0 ? "Use existing scan" : "Out of turns" }), situationActionButton("Continue Route", { action: "continueRoute", sector: current.number, note: "Return to map" })],
+    };
+  } else if (isProtectedSpace(current.number)) {
+    card = {
+      type: "protected",
+      title: "Protected Alliance Space",
+      summary: "This quiet protected sector is best used for route planning and scanning nearby lanes.",
+      meta: [stat("Current Sector", current.number), stat("Status", "Protected patrol zone"), stat("Features", knownFeatures(current).join(", "))],
+      actions: [situationActionButton("Scan Nearby", { action: "continueRoute", sector: current.number, primary: true, note: "Use lane map" }), situationActionButton("Open Mission Terminal", { screen: "specialMissions", note: "Check assignments" })],
+    };
+  } else {
+    card = {
+      type: "empty",
+      title: "Empty Space",
+      summary: currentMissionIntel ? "A mission marker is nearby, but this sector itself is quiet." : "No station, planet, anomaly, or active pirate is demanding action here.",
+      meta: [stat("Current Sector", current.number), stat("Known Features", knownFeatures(current).join(", ")), stat("Patrol Zone", protectedSpaceLabel(current.number))],
+      actions: [situationActionButton("Continue Route", { action: "continueRoute", sector: current.number, primary: true, note: "Use lane map" }), situationActionButton("Open Mission Terminal", { screen: "specialMissions", note: "Find goals" })],
+    };
+  }
+
+  return `<section class="situation-card situation-${card.type.replace(/\s+/g, "-")}" data-situation-type="${card.type}" aria-label="Situation card"><div class="situation-card-header"><p class="eyebrow">Situation Card</p><h3>${card.title}</h3></div><p class="situation-summary">${card.summary}</p><div class="intel-grid situation-meta">${card.meta.join("")}</div>${card.actions.length ? `<div class="situation-actions">${card.actions.slice(0, 4).join("")}</div>` : `<p class="empty-note">No immediate action is required.</p>`}</section>`;
+}
+
+function focusRouteFromSituation(sectorNumber = selectedSectorNumber) {
+  game.ui = game.ui || {};
+  const number = Number(sectorNumber) || game.player.currentSector;
+  game.ui.mapHint = number === game.player.currentSector ? "Use the lane map below to scan nearby sectors or choose your next jump." : `Sector ${number} stays selected. Use the highlighted map node for travel or route planning.`;
+  saveGame();
+  renderSectorPanel();
+}
+
+function wireSituationCardButtons(scope = panels.sector) {
+  if (!scope) return;
+  scope.querySelectorAll("[data-screen]").forEach((button) => button.addEventListener("click", () => openScreen(button.dataset.screen)));
+  scope.querySelectorAll("[data-action='pirateCombat']").forEach((button) => button.addEventListener("click", () => runGameAction(() => resolvePirateCombat(button.dataset.mode))));
+  scope.querySelectorAll("[data-action='mine']").forEach((button) => button.addEventListener("click", () => runGameAction(mineAsteroids)));
+  scope.querySelectorAll("[data-action='scan']").forEach((button) => button.addEventListener("click", () => runGameAction(scanAnomaly)));
+  scope.querySelectorAll("[data-action='continueRoute']").forEach((button) => button.addEventListener("click", () => focusRouteFromSituation(button.dataset.sector)));
+}
+
 function renderCurrentSituation(sector, danger) {
   const featureText = knownFeatures(sector).join(", ");
   return `<section class="current-situation priority-card" aria-label="Arrival report and current situation">
     ${renderArrivalReport()}
-    <div class="current-situation-grid">
+    ${renderSituationCard()}
+    <div class="current-situation-grid compact-current-readout">
       ${stat("Current Sector", `Sector ${sector.number}: ${titleCase(sector.type)}`)}${stat("Visible Objects", featureText)}${stat("Scanner", scannerHelpText())}${stat("Threat Readout", danger)}
     </div>
-    <p class="flavor compact-flavor">${sector.flavor}</p>
-    <p class="recommendation">${navigationRecommendation(sector.number)}</p>
   </section>`;
 }
 
