@@ -46,6 +46,19 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /sectorDriftPresence/{uid} {
+      // Display-only classroom presence. Never treat this as authority for credits,
+      // cargo, combat, ownership, PvP, trading, stealing, or shared economy.
+      allow read: if signedIn();
+      allow create, update: if isSelf(uid)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'captainName', 'sectorNumber', 'shipName',
+          'status', 'updatedAt', 'lastSeenAt', 'prototypeVersion'
+        ]);
+      allow delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
