@@ -319,6 +319,13 @@ vm.runInContext(`
   game.player.currentSector = Object.values(sectorMap).find((sector) => sector.hasShipyard).number;
   openScreen('shipyard');
   assert(panels.docked.innerHTML.includes('Shipyard') && panels.docked.innerHTML.includes('Trade-in'), 'shipyard docked screen should show trade-in cards');
+  assert(panels.docked.innerHTML.includes('stat-delta-positive') && panels.docked.innerHTML.includes('stat-delta-neutral'), 'shipyard cards should render comparison delta classes');
+  const currentShipCard = renderShipCard(SHIPS.rustyComet);
+  assert(currentShipCard.includes('Current Ship') && currentShipCard.includes('(±0)'), 'current ship card should show current status and neutral comparisons');
+  const haulerCard = renderShipCard(SHIPS.atlasHauler);
+  assert(haulerCard.includes('Cargo') && haulerCard.includes('(+16)') && haulerCard.includes('stat-delta-positive'), 'larger cargo ship should show positive cargo delta');
+  const lockedShipCard = renderShipCard(SHIPS.blackfinRaider);
+  assert(lockedShipCard.includes('Locked') && lockedShipCard.includes('stat-delta'), 'locked ships should still render comparison deltas');
   openScreen('specialMissions');
   assert(panels.docked.innerHTML.includes('Math Mission') && panels.docked.innerHTML.includes('Delivery / Fetch Missions'), 'special missions should include math and delivery foundations');
 
@@ -333,8 +340,16 @@ vm.runInContext(`
   assert(game.player.credits === 10000 - freighterCost, 'ship purchase should charge net cost');
   game.player.credits = 10000;
   game.player.fighters = game.player.fighterCapacity;
+  const lowerFighterCard = renderShipCard(SHIPS.nebulaSkiff);
+  assert(lowerFighterCard.includes('Fighters') && lowerFighterCard.includes('(-25)') && lowerFighterCard.includes('stat-delta-negative'), 'lower fighter capacity ship should show negative fighter delta');
   buyShip('nebulaSkiff');
   assert(game.player.shipId === 'atlasHauler', 'ship purchase should block when fighters will not fit');
+
+  game = defaultGameState();
+  game.player.credits = 10000;
+  game.player.cargo.Ore = 25;
+  const cargoBlockedCard = renderShipCard(SHIPS.nebulaSkiff);
+  assert(cargoBlockedCard.includes('Cannot Fit Cargo') && cargoBlockedCard.includes('Current cargo will not fit'), 'shipyard card should explain cargo blocking');
 
   // Protected space, Alliance, smuggled inventory, and route travel foundations.
   game = defaultGameState();
