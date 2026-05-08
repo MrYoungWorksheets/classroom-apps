@@ -11,7 +11,7 @@ const localStorage = {
   removeItem: (key) => storage.delete(key),
   clear: () => storage.clear(),
 };
-const context = { console, Math, Date, JSON, setTimeout, clearTimeout, fs, localStorage, source, document: { addEventListener: () => {}, getElementById: () => elementStub } };
+const context = { console, Math, Date, JSON, setTimeout, clearTimeout, fs, storage, localStorage, source, document: { addEventListener: () => {}, getElementById: () => elementStub } };
 vm.createContext(context);
 vm.runInContext(source, context);
 vm.runInContext(`
@@ -593,7 +593,7 @@ vm.runInContext(`
   manualTravelButton.dispatchEvent({ type: 'click' });
   assert(game.player.currentSector === 2, 'manual adjacent-sector travel button still travels directly');
 
-  // Manual browser smoke-test note: Start at Sector 1. Click Sector 2 on the map once; the main viewer should show Sector 2 and "Tap again to travel." Click Sector 2 again; the ship should travel to Sector 2, Arrival Report should update, and fuel and turns should decrease.
+  // Manual teacher playtest checklist: 1. Open Sector Drift fresh. 2. Confirm cockpit loads. 3. Reset prototype save. 4. Travel by clicking map node twice. 5. Dock at Starbase. 6. Buy/sell cargo. 7. Check docking ledger. 8. Open Settings / Save. 9. Confirm local save status is visible. 10. Sign in if Firebase is available. 11. Try cloud backup if available. 12. Reload page and confirm progress remains.
 
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
@@ -704,6 +704,62 @@ vm.runInContext(`
   assert(migratedCloud.ok && game.player.credits === 4321 && game.player.shipId === 'rustyComet', 'cloud load should run migration before applying');
   const payload = getCurrentSavePayload();
   assert(payload.version === STORAGE_KEY && payload.ui.activeScreen === 'cockpit', 'cloud payload should preserve save data while avoiding docked-screen restore');
+  storage.clear();
+  sessionRecoveryMessages = [];
+  game = loadGame();
+  assert(game.player.currentSector === 1 && game.ui.activeScreen === 'cockpit', 'loading with no save starts playable cockpit state');
+
+  storage.set(STORAGE_KEY, JSON.stringify({ player: { credits: 1357, currentSector: 2, cargo: { Ore: 3 }, cargoCostBasis: { Ore: { quantity: 3, totalCost: 30, known: true } } }, ui: { activeScreen: 'starbase' } }));
+  const validLoaded = loadGame();
+  assert(validLoaded.player.credits === 1357 && validLoaded.player.currentSector === 2 && validLoaded.ui.activeScreen === 'cockpit', 'loading valid save migrates and returns to cockpit');
+
+  storage.clear();
+  storage.set(STORAGE_KEY, '{not valid json');
+  sessionRecoveryMessages = [];
+  const malformed = loadGame();
+  assert(malformed.player.currentSector === 1 && sessionRecoveryMessages.some((message) => message.includes('corrupted local save')), 'malformed JSON recovers to a fresh save');
+  assert(Array.from(storage.keys()).some((key) => key.startsWith(STORAGE_KEY + '_corruptBackup_')), 'malformed JSON is preserved under a corrupt backup key');
+
+  const missingPlayer = migrateGameState({ ui: { activeScreen: 'settings' }, stats: {} });
+  assert(missingPlayer.player.currentSector === 1 && missingPlayer.player.cargo.Ore === 0, 'missing player object is restored safely');
+
+  const invalidSector = migrateGameState({ player: { currentSector: 999, fuel: Infinity, hull: -20, turns: 'bad', credits: -5 } });
+  assert(invalidSector.player.currentSector === 1 && invalidSector.player.credits === 0 && invalidSector.player.hull >= 1, 'invalid sector and player numbers are clamped safely');
+
+  const missingCostBasis = migrateGameState({ player: { cargo: { Ore: 4 } }, dockingLedger: null });
+  assert(missingCostBasis.player.cargoCostBasis.Ore.quantity === 4 && missingCostBasis.player.cargoCostBasis.Ore.known === false, 'missing cargoCostBasis is rebuilt from cargo');
+  assert(missingCostBasis.dockingLedger.current === missingCostBasis.player.credits, 'missing dockingLedger is rebuilt from credits');
+
+  const invalidScreen = migrateGameState({ player: { currentSector: 2 }, ui: { activeScreen: 'badScreen', warpDestination: 999 } });
+  assert(invalidScreen.ui.activeScreen === 'cockpit' && invalidScreen.ui.warpDestination === null, 'invalid activeScreen and warp destination are reset');
+
+  game = migrateGameState({ player: { currentSector: 999, cargo: { Ore: -3, Food: 'lots' }, fighters: 999999, upgrades: { cargoHold: 'x', engine: -1, scanner: 1000, shield: null } }, deliveryQuests: { bad: true }, stationActivities: [], pirates: [] });
+  selectedSectorNumber = game.player.currentSector;
+  assert(game.player.currentSector === 1 && game.deliveryQuests.length >= 3 && Number.isFinite(game.stationActivities.cargoSortingUses), 'migration keeps malformed save playable');
+  let renderAfterMigrationOk = true;
+  try { render(); } catch (error) { renderAfterMigrationOk = false; }
+  assert(renderAfterMigrationOk, 'render does not throw after malformed-save migration');
+
+  const originalGetItem = localStorage.getItem;
+  const originalSetItem = localStorage.setItem;
+  localStorage.getItem = () => { throw new Error('blocked getItem'); };
+  const memoryOnly = loadGame();
+  assert(memoryOnly.player.currentSector === 1 && localStorageAvailable === false, 'localStorage getItem failure falls back to in-memory game');
+  localStorage.getItem = originalGetItem;
+  game = defaultGameState();
+  localStorage.setItem = () => { throw new Error('blocked setItem'); };
+  assert(saveGame() === false && localSaveStatus.includes('in memory'), 'localStorage setItem failure is handled without throwing');
+  localStorage.setItem = originalSetItem;
+  localStorageAvailable = true;
+
+  window = {};
+  cloudUiState.message = '';
+  let firebaseStatusOk = true;
+  try { refreshFirebaseUiState(); } catch (error) { firebaseStatusOk = false; }
+  assert(firebaseStatusOk, 'Firebase unavailable status does not crash app');
+  assert(cloudUiState.status === 'not initialized' && cloudUiState.message.includes('Local prototype save'), 'Firebase unavailable status explains local prototype fallback');
+  window = undefined;
+
   game.player.credits = 2468;
   saveGame();
   assert(loadGame().player.credits === 2468, 'localStorage save/load should still work');
