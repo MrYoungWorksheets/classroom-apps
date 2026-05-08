@@ -1,6 +1,6 @@
 # Sector Drift Firebase Setup
 
-These notes prepare optional Google login and cloud-save backup for classroom testing. LocalStorage remains the primary gameplay save, so the game should still be playable if Firebase is blocked or unavailable.
+These notes prepare Google login, classroom role recognition, and cloud-save backup for Sector Drift. LocalStorage remains the gameplay save format, but the app now starts with a launch/login gate so students enter the cockpit through a signed-in classroom flow or an explicitly labeled Local Prototype Mode fallback.
 
 ## 1. Firebase project
 
@@ -41,23 +41,126 @@ Analytics is not initialized by the game yet.
 3. Publish conservative security rules before using cloud saves with students.
 4. Start from `firestore.rules.example` and review the rules before expanding beyond backup/load.
 
-## 7. Teacher role setup
+## 7. How teacher role works
 
-Teacher roles are prepared but no Teacher Dashboard is active yet.
+On first Google sign-in, the browser client creates `users/{uid}` with `role = "student"`. Later sign-ins preserve the existing role, so the client does **not** promote anyone to teacher.
 
-1. Sign in once from the Sector Drift app.
-2. Find your UID in Firebase Authentication.
-3. In Firestore, open or create `users/{yourUid}`.
-4. Set `role` to `"teacher"`.
-5. Leave students as `"student"`.
+The app reads `users/{uid}.role` and reports one of these values in the launch screen, Settings / Save, and Admin Panel diagnostics:
 
-The app only displays the known role in this phase. Future teacher tools must also be protected by Firebase Authentication and Firestore Security Rules.
+- `student`
+- `teacher`
+- `unknown`
 
-## 8. Current limitations
+`unknown` means the role field was missing, blank, or could not be loaded. The UI should show a friendly reason such as missing role data or insufficient permissions.
+
+## 8. How to make yourself teacher
+
+1. Open Sector Drift and sign in once with Google.
+2. Go to Firebase Console.
+3. Open **Firestore Database**.
+4. Find `users/{uid}` for your account. If you are not sure which UID is yours, check Firebase Authentication or use the in-game Admin/Settings UID display after role setup.
+5. Set the document field `role` to exactly `"teacher"`.
+6. Refresh Sector Drift or use **Refresh Role / Auth Status** after signing in again.
+
+Leave student accounts as `"student"`. Do not add any client-side button that changes a user to teacher.
+
+## 9. Admin Panel status
+
+The **Admin Panel** button appears only for a signed-in user whose loaded role is `teacher`. Students, signed-out users, and normal Local Prototype Mode users do not see it.
+
+Functional teacher tools in this shell currently include current-browser/local-only actions plus existing cloud backup actions:
+
+- Save Current Browser State to Cloud
+- Load Cloud Save to Browser, with confirmation before replacing local browser save
+- Repair / Normalize Current Save
+- Export Save JSON
+- Import Save JSON
+- Soft Reset Current Browser Save
+- Full Reset Current Browser Save
+- View Current Account Record
+- Refresh Role / Auth Status
+- Show Firebase UID
+- Give Credits
+- Give Fuel
+- Give Turns
+- Repair Hull
+- Fill Fighters
+- Add Test Resources
+
+These tools affect the currently open browser save unless the button explicitly uses the signed-in account cloud backup.
+
+## 10. Placeholder-only Admin Panel tools
+
+The Admin Panel intentionally includes future classroom/multiplayer placeholders that are **not active yet**, including:
+
+- Student Roster
+- Reset Student Save
+- Restore Student Save
+- Freeze PvP
+- Enable / Disable Combat
+- Enable / Disable Smuggled Inventory Events
+- Enable / Disable Local Prototype Mode
+- Start New Season
+- End Current Season
+- Reveal Current Sector
+- Reveal All Sectors
+- Clear Current Pirate
+- Clear Warp Destination
+- Return to Sector 1
+- Add Smuggled Inventory
+- Remove Smuggled Inventory
+- Copy Diagnostics
+- Open Student / Teacher Help
+- List Future Classroom Features
+
+Do not wire these to multiplayer or student records until teacher controls, rules, recovery tools, and classroom policies are ready.
+
+## 11. Local Prototype Mode vs signed-in classroom mode
+
+Signed-in classroom mode:
+
+- Uses Google sign-in before entering the cockpit.
+- Loads the account role from Firestore.
+- Can save/load cloud backups at `players/{uid}`.
+- Shows Admin Panel only for `teacher` role accounts.
+
+Local Prototype Mode:
+
+- Is clearly labeled as a prototype/dev fallback.
+- Saves only in this browser's localStorage.
+- Is not tied to a school account.
+- Should be used for testing or when Firebase is unavailable.
+- Does not show the Admin Panel unless a signed-in teacher role is also loaded.
+
+Cloud saves are never loaded automatically on the launch screen. **Load Cloud Backup** always requires confirmation before replacing the local browser save.
+
+## 12. Troubleshooting
+
+### Signed in but role is unknown
+
+Check `users/{uid}.role`. It must be a non-empty string such as `"student"` or `"teacher"`. If the app reports a permission error, review Firestore rules for reads to the signed-in user's own `users/{uid}` document.
+
+### No `users/{uid}` document
+
+Ask the user to sign out and sign in again. First sign-in should create `users/{uid}` with `role = "student"`. If it still does not appear, check Firestore write rules and the Firebase config loaded by `firebase-config.js`.
+
+### No `players/{uid}` document
+
+This is normal until the user clicks **Save Cloud Backup**. The `players/{uid}` document stores optional backup data, not the main localStorage save.
+
+### Insufficient permissions
+
+Confirm that Authentication is enabled, the domain is authorized, and Firestore rules allow the signed-in user to read/write their own `users/{uid}` and `players/{uid}` documents. Teacher-only future tools will need stricter rules before they touch student records.
+
+### Teacher role not updating until refresh
+
+Use **Refresh Role / Auth Status**, sign out/in again, or reload the page. Browser auth state can briefly show the previous role while Firestore finishes loading.
+
+## 13. Current limitations
 
 - LocalStorage remains the primary gameplay save.
 - Firebase cloud save is backup/load only.
-- Login is optional and is not required to play.
+- Students should sign in before classroom play; Local Prototype Mode is a fallback/testing mode.
 - No multiplayer yet.
 - No PvP yet.
 - No shared sectors, shared planets, shared combat, or shared economy yet.

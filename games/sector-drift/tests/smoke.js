@@ -11,7 +11,7 @@ const localStorage = {
   removeItem: (key) => storage.delete(key),
   clear: () => storage.clear(),
 };
-const context = { console, Math, Date, JSON, setTimeout, clearTimeout, fs, localStorage, document: { addEventListener: () => {}, getElementById: () => elementStub } };
+const context = { console, Math, Date, JSON, setTimeout, clearTimeout, fs, localStorage, source, document: { addEventListener: () => {}, getElementById: () => elementStub } };
 vm.createContext(context);
 vm.runInContext(source, context);
 vm.runInContext(`
@@ -392,12 +392,59 @@ vm.runInContext(`
   assert(game.ui.mapZoom > oldZoom, 'map zoom should still update');
   assert(renderMinimap().includes('data-map-sector'), 'minimap should render clickable sector nodes');
 
-  // Firebase readiness and local-save safety checks.
+  // Firebase readiness, launch gate, admin role, and local-save safety checks.
+  assert(source.includes('const REQUIRE_FIREBASE_LOGIN = true'), 'app.js should define login-first requirement');
+  assert(source.includes('function renderLaunchScreen()'), 'launch/login screen renderer should exist');
+  assert(source.includes('function renderAdminPanelScreen()'), 'teacher Admin Panel renderer should exist');
+  const firebaseClientSource = fs.readFileSync('games/sector-drift/firebase-client.js', 'utf8');
+  assert(firebaseClientSource.includes('ensureUserProfile'), 'firebase-client should keep user profile helper');
+  assert(firebaseClientSource.includes('role: "student"'), 'firebase-client should create first sign-in users as students');
+  assert(firebaseClientSource.includes('roleReason'), 'firebase-client should expose friendly role lookup reasons');
+
+  game = defaultGameState();
+  window = {};
+  launchGate.mode = 'signedOut';
+  cloudUiState.status = 'not initialized';
+  cloudUiState.user = null;
+  cloudUiState.role = 'unknown';
+  game.ui.activeScreen = 'launch';
+  renderActiveScreen();
+  assert(panels.docked.innerHTML.includes('Sector Drift') && panels.docked.innerHTML.includes('Sign in with Google'), 'launch/login screen can render signed-out state');
+  openScreen('starbase');
+  assert(game.ui.activeScreen === 'launch', 'signed-out state blocks cockpit/gameplay screens when login is required');
+  enterLocalPrototypeMode();
+  assert(game.ui.activeScreen === 'cockpit', 'Local Prototype Mode can enter cockpit when enabled');
+
+  launchGate.mode = 'signedIn';
+  cloudUiState.status = 'available';
+  cloudUiState.user = { uid: 'student-1', email: 'student@example.com', displayName: 'Student One' };
+  cloudUiState.role = 'student';
+  game.ui.activeScreen = 'cockpit';
+  renderActionPanel();
+  assert(!panels.action.innerHTML.includes('Admin Panel'), 'student role does not show Admin Panel');
+  openScreen('adminPanel');
+  assert(game.ui.activeScreen !== 'adminPanel', 'non-teacher cannot open Admin Panel');
+
+  cloudUiState.user = { uid: 'teacher-1', email: 'teacher@example.com', displayName: 'Teacher One' };
+  cloudUiState.role = 'teacher';
+  window.SectorDriftFirebase = {
+    getFirebaseStatus: () => ({ ok: true, status: 'available', user: cloudUiState.user, role: 'teacher', roleReason: 'test teacher role' }),
+    getCurrentFirebaseUser: () => ({ ok: true, data: cloudUiState.user }),
+    getCurrentUserRole: () => ({ ok: true, data: 'teacher', reason: 'test teacher role' }),
+  };
+  launchGate.mode = 'signedIn';
+  game.ui.activeScreen = 'cockpit';
+  renderActionPanel();
+  assert(panels.action.innerHTML.includes('Admin Panel'), 'teacher role shows Admin Panel action');
+  openScreen('adminPanel');
+  assert(panels.docked.innerHTML.includes('Teacher access confirmed') && panels.docked.innerHTML.includes('Cloud Save / Recovery Tools'), 'teacher Admin Panel renders classroom shell');
+  window = undefined;
+
   game = defaultGameState();
   openScreen('settings');
   assert(panels.docked.innerHTML.includes('Cloud Login / Firebase Backup'), 'settings should render Firebase login/cloud backup section');
   assert(panels.docked.innerHTML.includes('Cloud backup unavailable') || panels.docked.innerHTML.includes('not initialized'), 'settings should be friendly when Firebase global is missing');
-  assert(!panels.docked.innerHTML.includes('Login required to play'), 'game should not require login to play');
+  assert(panels.docked.innerHTML.includes('Sign in first') || panels.docked.innerHTML.includes('Cloud backup unavailable'), 'settings cloud panel explains signed-out save/load state');
   const currentCredits = game.player.credits;
   const badLoad = applyLoadedSavePayload({ notPlayerData: true });
   assert(!badLoad.ok && game.player.credits === currentCredits, 'bad cloud save payload cannot wipe current local save');
