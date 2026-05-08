@@ -11,18 +11,20 @@ vm.runInContext(`
 (function () {
   function assert(condition, message) { if (!condition) throw new Error(message); }
   function clean(text) { return normalize(text).replace(/[^a-z0-9^=,./()+-]/g, ''); }
-  const panelStub = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+  function makePanelStub() { return { hidden: false, innerHTML: '', querySelector: () => null, querySelectorAll: () => [] }; }
   Object.assign(panels, {
-    ship: panelStub,
-    sector: panelStub,
-    location: panelStub,
-    math: panelStub,
-    mission: panelStub,
-    tutorial: panelStub,
-    upgrade: panelStub,
-    achievements: panelStub,
-    stats: panelStub,
-    log: panelStub,
+    ship: makePanelStub(),
+    sector: makePanelStub(),
+    action: makePanelStub(),
+    docked: makePanelStub(),
+    location: makePanelStub(),
+    math: makePanelStub(),
+    mission: makePanelStub(),
+    tutorial: makePanelStub(),
+    upgrade: makePanelStub(),
+    achievements: makePanelStub(),
+    stats: makePanelStub(),
+    log: makePanelStub(),
   });
   game = defaultGameState();
 
@@ -291,6 +293,77 @@ vm.runInContext(`
   game.player.fighters = 0;
   transferPlanetFighters('load', '10');
   assert(game.player.fighters === 1, 'cannot load more fighters than planet has');
+
+
+
+  // Docked cockpit screen system.
+  game = defaultGameState();
+  assert(game.ui.activeScreen === 'cockpit', 'default active screen should be cockpit');
+  openScreen('starbase');
+  assert(game.ui.activeScreen === 'starbase', 'openScreen should open starbase');
+  closeScreen();
+  assert(game.ui.activeScreen === 'cockpit', 'closeScreen should return to cockpit');
+  openScreen('not-a-screen');
+  assert(game.ui.activeScreen === 'cockpit', 'unknown screens should fall back safely');
+  renderActiveScreen();
+  game.player.currentSector = 1;
+  openScreen('starbase');
+  assert(panels.docked.innerHTML.includes('Starbase'), 'starbase docked screen should render at a port');
+  game.player.currentSector = Object.values(sectorMap).find((sector) => sector.hasShipyard).number;
+  openScreen('shipyard');
+  assert(panels.docked.innerHTML.includes('Shipyard') && panels.docked.innerHTML.includes('Trade-in'), 'shipyard docked screen should show trade-in cards');
+  openScreen('specialMissions');
+  assert(panels.docked.innerHTML.includes('Math Mission') && panels.docked.innerHTML.includes('Delivery / Fetch Missions'), 'special missions should include math and delivery foundations');
+
+  // Ship trade-in and fighter/cargo guards.
+  game = defaultGameState();
+  game.player.credits = 10000;
+  const freighterCost = netShipCost(SHIPS.atlasHauler);
+  assert(shipTradeInValue(currentShip()) === 0, 'starter ship should have zero trade-in value');
+  buyShip('atlasHauler');
+  assert(game.player.shipId === 'atlasHauler', 'ship purchase should switch active ship');
+  assert(game.player.ownedShips.length === 1 && game.player.ownedShips[0] === 'atlasHauler', 'ship purchase should not keep ghost ships');
+  assert(game.player.credits === 10000 - freighterCost, 'ship purchase should charge net cost');
+  game.player.credits = 10000;
+  game.player.fighters = game.player.fighterCapacity;
+  buyShip('nebulaSkiff');
+  assert(game.player.shipId === 'atlasHauler', 'ship purchase should block when fighters will not fit');
+
+  // Protected space, Alliance, smuggled inventory, and route travel foundations.
+  game = defaultGameState();
+  assert(isProtectedSpace(1), 'Sector 1 should be protected');
+  assert(sectorMap[1].adjacent.every((sector) => isProtectedSpace(sector)), 'sectors one lane step from 1 should be protected');
+  assert(sectorMap[1].adjacent.flatMap((sector) => sectorMap[sector].adjacent).every((sector) => isProtectedSpace(sector)), 'sectors two lane steps from 1 should be protected');
+  assert(!Object.keys(game.pirates).some((sector) => isProtectedSpace(Number(sector))), 'pirates should not spawn in protected space');
+  game.player.currentSector = 1;
+  renderSectorPanel();
+  assert(panels.sector.innerHTML.includes('Alliance Protected Space'), 'protected label should appear in sector intel');
+  resolveAllianceSearch(true);
+  assert(game.player.cargo.Smuggled === 0, 'Alliance search should handle no smuggled inventory');
+  game.player.cargo.Smuggled = 3;
+  resolveAllianceSearch(true);
+  assert(game.player.cargo.Smuggled >= 0 && game.player.cargo.Smuggled < 3, 'Alliance search should confiscate smuggled inventory safely');
+  assert(SMUGGLED_DESCRIPTION.includes('Unregistered cargo') && !SMUGGLED_DESCRIPTION.match(/drug|weapon/i), 'smuggled display should stay vague and classroom-safe');
+  const migratedSmuggled = migrateGameState({ player: { cargo: { Smuggled: 2 } } });
+  assert(migratedSmuggled.player.cargo.Smuggled === 2, 'migration should preserve smuggled inventory field');
+  game = defaultGameState();
+  game.revealedSectors = [1, 2, 3, 4];
+  const route = findRouteToSector(1, 4);
+  assert(route && route[0] === 1 && route[route.length - 1] === 4, 'route helper should find known lane route');
+  assert(findRouteToSector(1, 999) === null, 'route helper should reject invalid target');
+  game.player.fuel = 10;
+  game.player.turns = 10;
+  setWarpDestination(4);
+  maybeTravelEvent = function () { return false; };
+  resolveSectorDanger = function () { return false; };
+  const fuelBeforeWarp = game.player.fuel;
+  const turnsBeforeWarp = game.player.turns;
+  performWarpStep();
+  assert(game.player.currentSector !== 1 && game.player.fuel === fuelBeforeWarp - 1, 'warp step should move and consume normal fuel');
+  game.player.fuel = 0;
+  const sectorBeforeStop = game.player.currentSector;
+  performWarpStep();
+  assert(game.player.currentSector === sectorBeforeStop, 'warp step should stop when out of fuel');
 
   // Mission board combat progress and existing system guards.
   game = defaultGameState();

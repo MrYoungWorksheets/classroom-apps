@@ -16,6 +16,11 @@ const RETREAT_DAMAGE_RISK = 0.08;
 const MAX_FIGHTER_LOSS_RATE = 0.65;
 const ESCAPE_POD_CASH_PENALTY = 0;
 const PIRATE_MIN_SECTORS_FROM_START = 3;
+const SHIP_TRADE_IN_RATE = 0.45;
+const PROTECTED_SPACE_DEPTH = 2;
+const SMUGGLED_RESOURCE = "Smuggled";
+const SMUGGLED_DISPLAY_NAME = "Smuggled Inventory";
+const SMUGGLED_DESCRIPTION = "Unregistered cargo that local authorities would rather not find.";
 const RESOURCES = ["Ore", "Food", "Tech"];
 
 const PLANET_UPGRADE_TRACKS = ["production", "industry", "defense", "fighterBays", "research"];
@@ -272,6 +277,8 @@ if (typeof document !== "undefined") {
   document.addEventListener("DOMContentLoaded", () => {
     panels.ship = document.getElementById("shipPanel");
     panels.sector = document.getElementById("sectorPanel");
+    panels.action = document.getElementById("actionPanel");
+    panels.docked = document.getElementById("dockedPanel");
     panels.location = document.getElementById("locationPanel");
     panels.math = document.getElementById("mathPanel");
     panels.mission = document.getElementById("missionPanel");
@@ -606,7 +613,7 @@ function pirateBlueprints() {
 }
 
 function createPirateEncounters() {
-  return Object.fromEntries(Object.entries(pirateBlueprints()).map(([sectorNumber, blueprint]) => {
+  return Object.fromEntries(Object.entries(pirateBlueprints()).filter(([sectorNumber]) => !isProtectedSpace(Number(sectorNumber))).map(([sectorNumber, blueprint]) => {
     const hull = blueprint.hull;
     return [sectorNumber, {
       id: `pirate-${sectorNumber}`,
@@ -669,7 +676,7 @@ function defaultGameState() {
       currentSector: 1,
       hull: starter.maxHull,
       maxHull: starter.maxHull,
-      cargo: { Ore: 0, Food: 0, Tech: 0 },
+      cargo: { Ore: 0, Food: 0, Tech: 0, Smuggled: 0 },
       reputation: 0,
       lawfulReputation: 0,
       pirateReputation: 0,
@@ -710,9 +717,52 @@ function defaultGameState() {
     missionFeedback: "Solve the mission for credits, fuel, turns, or cargo.",
     missionFeedbackClass: "",
     selectedMissionTier: 2,
-    ui: { mapZoom: DEFAULT_MAP_ZOOM },
+    ui: { mapZoom: DEFAULT_MAP_ZOOM, activeScreen: "cockpit", warpDestination: null },
+    deliveryQuests: createDeliveryQuests(),
     lastProductionAt: 0,
   };
+}
+
+
+function createDeliveryQuests() {
+  return [
+    { id: "deliver-food-24", title: "Deliver 20 Food to Sector 24", description: "A lane outpost requested classroom-safe food supplies near Sector 24.", targetSector: 24, requiredResource: "Food", requiredAmount: 20, rewardCredits: 420, rewardFuel: 8, rewardTurns: 8, reputationReward: 1, status: "available" },
+    { id: "deliver-tech-port", title: "Deliver 15 Tech to the Sector 31 port", description: "A tech port needs replacement classroom lab parts delivered through known lanes.", targetSector: 31, requiredResource: "Tech", requiredAmount: 15, rewardCredits: 650, rewardFuel: 10, rewardTurns: 10, reputationReward: 2, status: "available" },
+  ];
+}
+
+function migrateDeliveryQuests(savedQuests) {
+  const defaults = createDeliveryQuests();
+  if (!Array.isArray(savedQuests)) return defaults;
+  return defaults.map((quest) => ({ ...quest, ...(savedQuests.find((saved) => saved && saved.id === quest.id) || {}) }));
+}
+
+function renderDeliveryQuestBoard() {
+  return `<h2>Delivery / Fetch Missions</h2><p class="help-text">Future-ready physical delivery jobs. Reach the target sector with the requested cargo to complete.</p><div class="mission-grid">${(game.deliveryQuests || []).map((quest) => { const active = quest.status === "active"; const complete = canCompleteDeliveryQuest(quest); return `<div class="mission-card ${complete ? "complete" : ""}"><h3>${quest.title}</h3><p>${quest.description}</p>${stat("Target", `Sector ${quest.targetSector}`)}${stat("Delivery", `${quest.requiredAmount} ${quest.requiredResource}`)}${stat("Reward", `${quest.rewardCredits} credits, ${quest.rewardFuel} fuel, ${quest.rewardTurns} turns`)}<div class="button-row"><button data-start-delivery="${quest.id}" ${quest.status === "available" ? "" : "disabled"}>Accept</button><button data-complete-delivery="${quest.id}" ${active && complete ? "" : "disabled"}>Complete Delivery</button></div><p class="help-text">Status: ${quest.status}</p></div>`; }).join("")}</div>`;
+}
+
+function deliveryQuestById(id) { return (game.deliveryQuests || []).find((quest) => quest.id === id); }
+function canCompleteDeliveryQuest(quest) { return quest && quest.status === "active" && game.player.currentSector === quest.targetSector && (game.player.cargo[quest.requiredResource] || 0) >= quest.requiredAmount; }
+function startDeliveryQuest(id) {
+  const quest = deliveryQuestById(id);
+  if (!quest || quest.status !== "available") return addAndRender("That delivery quest is already active or complete.");
+  quest.status = "active";
+  addLog(`Accepted delivery quest: ${quest.title}.`);
+  saveGame();
+  render();
+}
+function completeDeliveryQuest(id) {
+  const quest = deliveryQuestById(id);
+  if (!canCompleteDeliveryQuest(quest)) return addAndRender("Delivery requirements are not met yet.");
+  game.player.cargo[quest.requiredResource] -= quest.requiredAmount;
+  game.player.credits += quest.rewardCredits;
+  game.player.fuel = Math.min(game.player.maxFuel, game.player.fuel + quest.rewardFuel);
+  game.player.turns = Math.min(game.player.maxTurns, game.player.turns + quest.rewardTurns);
+  addReputation(quest.reputationReward || 0);
+  quest.status = "complete";
+  addLog(`Completed delivery quest: ${quest.title}.`);
+  saveGame();
+  render();
 }
 
 function incrementTierMissionStat(tier) {
@@ -795,6 +845,7 @@ function migrateGameState(saved = {}) {
   merged.player.shipId = ship.id;
   merged.player.shipName = ship.name;
   merged.player.cargo = { ...fresh.player.cargo, ...(saved.player?.cargo || {}) };
+  merged.player.cargo[SMUGGLED_RESOURCE] = Math.max(0, Math.floor(Number(merged.player.cargo[SMUGGLED_RESOURCE]) || 0));
   merged.player.upgrades = { ...fresh.player.upgrades, ...(saved.player?.upgrades || {}) };
   merged.player.reputation = Math.max(-100, Math.min(100, Math.floor(typeof merged.player.reputation === "number" ? merged.player.reputation : 0)));
   merged.player.lawfulReputation = Math.max(0, Math.floor(typeof merged.player.lawfulReputation === "number" ? merged.player.lawfulReputation : Math.max(0, merged.player.reputation)));
@@ -840,7 +891,7 @@ function migrateGameState(saved = {}) {
     const sector = sectorMap[sectorNumber] || {};
     return [id, normalizePlanetState({ ...(sector.planet || {}), ...planet }, sectorNumber, sector.routeRole, sector.dangerLevel)];
   }));
-  merged.pirates = mergePirateEncounters(saved.pirates);
+  merged.pirates = removeProtectedPirates(mergePirateEncounters(saved.pirates));
   merged.activeMissions = Array.isArray(saved.activeMissions) && saved.activeMissions.length > 0 ? saved.activeMissions.map(rehydrateBoardMission).slice(0, 3) : fresh.activeMissions;
   merged.completedMissions = Array.isArray(saved.completedMissions) ? saved.completedMissions : [];
   while (merged.activeMissions.length < 3) {
@@ -866,29 +917,118 @@ function migrateGameState(saved = {}) {
   merged.currentMission = rehydrateMission(saved.currentMission);
   merged.missionFeedbackClass = saved.missionFeedbackClass || "";
   merged.ui = { ...fresh.ui, ...(saved.ui || {}) };
+  merged.ui.activeScreen = "cockpit";
   merged.ui.mapZoom = clampMapZoom(merged.ui.mapZoom);
+  merged.ui.warpDestination = sectorMap[Number(merged.ui.warpDestination)] ? Number(merged.ui.warpDestination) : null;
+  merged.deliveryQuests = migrateDeliveryQuests(saved.deliveryQuests);
   updateScannerReveals(merged);
   return merged;
 }
 
 function saveGame() {
-  if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(game));
+  if (typeof localStorage !== "undefined") {
+    const saveCopy = { ...game, ui: { ...(game.ui || {}), activeScreen: "cockpit" } };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saveCopy));
+  }
 }
 
 function render() {
   const refreshed = refreshDailyTurns();
   const synced = syncProgressSystems();
   if (refreshed || synced) saveGame();
+  renderActiveScreen();
+}
+
+const SCREEN_TITLES = {
+  cockpit: ["Cockpit", "Primary space-lane view with ship stats, map, and action choices."],
+  starbase: ["Starbase", "Docked port services: market, fuel, repairs, and future item shop."],
+  shipyard: ["Shipyard", "Compare hulls, fighter bays, upgrade caps, and trade-in cost before launch."],
+  specialMissions: ["Special Missions", "Math missions, tutorial quests, board contracts, and delivery work."],
+  planets: ["Planets", "Claim, upgrade, store resources, and transfer planet fighters."],
+  combat: ["Combat / Pirate Intel", "NPC pirate encounters, bounty data, and safe combat controls."],
+  achievements: ["Achievements", "Unlocked milestones and progress notes."],
+  reputation: ["Reputation", "Alignment, combat rank, bounty record, and future reputation shop."],
+  captainLog: ["Captain's Log", "Newest entries first with full recent history."],
+  settings: ["Settings / Save", "Local save controls and prototype safety notes."],
+};
+
+function screenNames() { return Object.keys(SCREEN_TITLES); }
+
+function openScreen(screenName) {
+  game.ui = game.ui || {};
+  game.ui.activeScreen = screenNames().includes(screenName) ? screenName : "cockpit";
+  render();
+}
+
+function closeScreen() { openScreen("cockpit"); }
+
+function activeScreenName() {
+  game.ui = game.ui || {};
+  if (!screenNames().includes(game.ui.activeScreen)) game.ui.activeScreen = "cockpit";
+  return game.ui.activeScreen;
+}
+
+function renderActiveScreen() {
   renderShipPanel();
   renderSectorPanel();
-  renderLocationPanel();
-  renderMathMission();
-  renderMissionPanel();
-  renderTutorialPanel();
-  renderUpgradePanel();
-  renderAchievementsPanel();
-  renderStatsPanel();
-  renderLogPanel();
+  renderActionPanel();
+  const screen = activeScreenName();
+  const cockpit = document.getElementById("cockpitDashboard");
+  if (panels.docked) panels.docked.hidden = screen === "cockpit";
+  if (cockpit) cockpit.hidden = screen !== "cockpit";
+  if (screen === "cockpit") {
+    renderCockpit();
+    return;
+  }
+  renderDockedScreen(...SCREEN_TITLES[screen], renderScreenContent(screen));
+}
+
+function renderCockpit() {
+  if (panels.docked) panels.docked.innerHTML = "";
+}
+
+function renderDockedScreen(title, subtitle, contentHtml) {
+  if (!panels.docked) return;
+  panels.docked.innerHTML = `<div class="docked-header"><div><p class="eyebrow">Docked Action Screen</p><h2>${title}</h2><p class="help-text">${subtitle}</p></div><button type="button" class="exit-button" data-action="closeScreen">Exit / Return to Cockpit</button></div><div class="docked-content">${contentHtml}</div>`;
+  panels.docked.querySelector("[data-action='closeScreen']")?.addEventListener("click", closeScreen);
+  wireDockedButtons(panels.docked);
+}
+
+function renderScreenContent(screen) {
+  const sector = sectorMap[game.player.currentSector];
+  if (screen === "starbase") return sector.type === "port" ? renderStarbaseScreen(sector) : `<p class="empty-note">No port or starbase is available in Sector ${sector.number}.</p>`;
+  if (screen === "shipyard") return sector.hasShipyard ? renderShipyardScreen() : `<p class="empty-note">No shipyard is available in Sector ${sector.number}.</p>`;
+  if (screen === "specialMissions") return renderSpecialMissionsScreen();
+  if (screen === "planets") return renderPlanetsScreen();
+  if (screen === "combat") return renderCombatScreen();
+  if (screen === "achievements") return renderAchievementsContent();
+  if (screen === "reputation") return renderReputationScreen();
+  if (screen === "captainLog") return renderCaptainLogScreen();
+  if (screen === "settings") return renderSettingsScreen();
+  return "";
+}
+
+
+function renderActionPanel() {
+  if (!panels.action) return;
+  const sector = sectorMap[game.player.currentSector];
+  const ownedPlanetCount = Object.values(game.planets || {}).filter((planet) => planet.owner === game.player.pilotName).length;
+  const planetHere = sector.type === "planet";
+  const pirateHere = Boolean(currentPirateEncounter());
+  const actions = [
+    { screen: "starbase", label: "Starbase", enabled: sector.type === "port", reason: sector.type === "port" ? sector.portType : "No port in this sector" },
+    { screen: "shipyard", label: "Shipyard", enabled: Boolean(sector.hasShipyard), reason: sector.hasShipyard ? "Ship upgrades and hull sales" : "No shipyard here" },
+    { screen: "specialMissions", label: "Special Missions", enabled: true, reason: "Math, board, tutorial, delivery" },
+    { screen: "planets", label: "Planets", enabled: planetHere || ownedPlanetCount > 0, reason: planetHere ? "Planet in current sector" : ownedPlanetCount ? `${ownedPlanetCount} owned planet${ownedPlanetCount === 1 ? "" : "s"}` : "No local or owned planets" },
+    { screen: "combat", label: "Combat / Pirate Intel", enabled: pirateHere || Object.values(game.pirates || {}).some((pirate) => !pirate.defeated), reason: pirateHere ? "Pirates in this sector" : "Known NPC bounty ledger" },
+    { screen: "achievements", label: "Achievements", enabled: true, reason: `${game.achievements.length} unlocked` },
+    { screen: "reputation", label: "Reputation", enabled: true, reason: `${reputationTitle(game.player.reputation)} · ${combatRankTitle()}` },
+    { screen: "captainLog", label: "Captain's Log", enabled: true, reason: "Recent events" },
+    { screen: "settings", label: "Settings / Save", enabled: true, reason: "Local save controls" },
+  ];
+  panels.action.innerHTML = `<h2 id="actionHeading">Cockpit Actions</h2><p class="help-text">Dock into one screen at a time. Complex systems stay off the main map until selected.</p><div class="action-menu">${actions.map((action) => `<button type="button" data-screen="${action.screen}" ${action.enabled ? "" : "disabled"}><strong>${action.label}</strong><span>${action.reason}</span></button>`).join("")}</div>${renderEmergencyWarpControl()}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 5).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
+  panels.action.querySelectorAll("[data-screen]").forEach((button) => button.addEventListener("click", () => openScreen(button.dataset.screen)));
+  panels.action.querySelector("[data-action='emergencyWarp']")?.addEventListener("click", emergencyWarp);
 }
 
 function renderShipPanel() {
@@ -898,15 +1038,15 @@ function renderShipPanel() {
   panels.ship.innerHTML = `
     <h2 id="shipHeading">Ship Status</h2>
     <div class="stat-grid">
-      ${stat("Pilot", p.pilotName)}${stat("Rank", currentRank())}${stat("Reputation", `${p.reputation} · ${reputationTitle(p.reputation)}`)}${stat("Combat Rank", combatRankTitle())}${stat("Next Combat Rank", nextCombatRankProgress())}${stat("Ship", p.shipName)}${stat("Credits", p.credits)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Turns", `${p.turns}/${p.maxTurns} bank`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Sector", p.currentSector)}${stat("Cargo Space", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Base Power", ship.basePower)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Combat Record", `${p.combatWins || 0}W/${p.combatLosses || 0}L`)}${stat("Hazard Resist", ship.hazardResist + Math.max(0, p.upgrades.shield - 1))}
+      ${stat("Pilot", p.pilotName)}${stat("Rank", currentRank())}${stat("Reputation", `${p.reputation} · ${reputationTitle(p.reputation)}`)}${stat("Combat Rank", combatRankTitle())}${stat("Ship", p.shipName)}${stat("Credits", p.credits)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Turns", `${p.turns}/${p.maxTurns} bank`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Sector", p.currentSector)}${stat("Cargo Space", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Hazard Resist", ship.hazardResist + Math.max(0, p.upgrades.shield - 1))}${stat("Warp Destination", game.ui?.warpDestination ? `Sector ${game.ui.warpDestination}` : "None")}${stat("Alignment", p.alignmentStatus || reputationTitle(p.reputation))}
     </div>
     <p class="help-text">${ship.description}</p>
-    ${renderEmergencyWarpControl()}
+    ${p.cargo[SMUGGLED_RESOURCE] > 0 ? `<p class="help-text"><strong>${SMUGGLED_DISPLAY_NAME}:</strong> ${p.cargo[SMUGGLED_RESOURCE]} · ${SMUGGLED_DESCRIPTION}</p>` : ""}
     ${p.legacyUpgradeOverride ? `<p class="cooldown">Legacy upgrade override active: ${upgradeReductionSummary(p.upgrades, caps)}</p>` : ""}
     ${p.turns <= 0 ? `<p class="turn-warning">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : ""}
     ${cargoSpaceLeft() < 0 ? `<p class="turn-warning">Cargo is over capacity. Sell, deposit, or dump cargo before buying more.</p>` : ""}
     <h3>Cargo</h3>
-    <div class="cargo-grid">${RESOURCES.map((r) => `<div class="resource"><span class="label">${r}</span><span class="value">${p.cargo[r]}</span></div>`).join("")}</div>
+    <div class="cargo-grid">${RESOURCES.map((r) => `<div class="resource"><span class="label">${r}</span><span class="value">${p.cargo[r]}</span></div>`).join("")}${p.cargo[SMUGGLED_RESOURCE] > 0 ? `<div class="resource"><span class="label">${SMUGGLED_DISPLAY_NAME}</span><span class="value">${p.cargo[SMUGGLED_RESOURCE]}</span></div>` : ""}</div>
     <h3>Upgrades</h3>
     <div class="cargo-grid">
       ${stat("Cargo Hold", `Level ${p.upgrades.cargoHold}/${caps.cargoHold}`)}${stat("Engine", `Level ${p.upgrades.engine}/${caps.engine}`)}${stat("Scanner", `Level ${p.upgrades.scanner}/${caps.scanner}`)}${stat("Shield", `Level ${p.upgrades.shield}/${caps.shield}`)}
@@ -919,19 +1059,21 @@ function renderSectorPanel() {
   const danger = canSeeDanger(sector.number) && sector.dangerLevel > 0 ? `${HAZARD_TYPES[sector.hazardType].icon} Danger ${sector.dangerLevel}: ${HAZARD_TYPES[sector.hazardType].label}` : "Danger unknown until scanned or visited";
   panels.sector.innerHTML = `
     <h2 id="sectorHeading">Current Sector</h2>
-    <span class="badge">Sector ${sector.number}: ${titleCase(sector.type)}</span>
+    <span class="badge">Sector ${sector.number}: ${titleCase(sector.type)}</span> ${isProtectedSpace(sector.number) ? `<span class="badge alliance-badge">Alliance Protected Space</span>` : ""}
     <p class="flavor">${sector.flavor}</p>
     <p><strong>Visible objects:</strong> ${knownFeatures(sector).join(", ")}</p>
     <p class="strategic-note">${sector.strategicNote}</p>
     <p class="help-text"><strong>Scanner:</strong> ${scannerHelpText()} ${danger}. Use map nodes to travel or inspect systems. Zoom in if nodes are hard to click.</p>
     ${renderMinimap()}
     ${renderNavigationIntel()}
+    ${renderWarpControls()}
     <h3>Adjacent Sectors</h3>
     <div class="travel-grid">
       ${sector.adjacent.map((number) => `<button type="button" ${cannotTravel ? "disabled" : ""} data-action="travel" data-sector="${number}">${scannerTravelLabel(number)}</button>`).join("")}
     </div>
     ${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty. Complete math missions for fuel or trade when you reach a port.</p>` : `<p class="help-text">Travel costs 1 turn and 1 fuel. A sector event may occur after arrival.</p>`}`;
   panels.sector.querySelectorAll("[data-action='travel']").forEach((button) => button.addEventListener("click", () => travelToSector(Number(button.dataset.sector))));
+  wireWarpControls(panels.sector);
   panels.sector.querySelector("[data-map-zoom='out']")?.addEventListener("click", () => zoomMap(-MAP_ZOOM_STEP));
   panels.sector.querySelector("[data-map-zoom='in']")?.addEventListener("click", () => zoomMap(MAP_ZOOM_STEP));
   panels.sector.querySelector("[data-map-zoom='reset']")?.addEventListener("click", resetMapView);
@@ -1024,6 +1166,98 @@ function renderMapNode(sector) {
   return `<g class="${classes}" data-map-sector="${sector.number}" role="button" tabindex="0" aria-label="${tooltip}"><title>${tooltip}</title><circle class="map-hit-target" cx="${sector.coordinates.x}" cy="${sector.coordinates.y}" r="7.2"></circle><circle class="map-visible-node" cx="${sector.coordinates.x}" cy="${sector.coordinates.y}" r="${radius}"></circle><text x="${sector.coordinates.x}" y="${sector.coordinates.y + 1.35}">${sector.number}</text>${sector.routeRole === "deadEnd" ? `<circle class="role-marker" cx="${sector.coordinates.x + 4.5}" cy="${sector.coordinates.y - 4.5}" r="1.2"></circle>` : ""}${sector.routeRole === "crossroad" ? `<text class="role-symbol" x="${sector.coordinates.x + 5}" y="${sector.coordinates.y - 4}">✚</text>` : ""}${danger ? `<text class="danger-marker" x="${sector.coordinates.x + 4.7}" y="${sector.coordinates.y + 5.8}">!</text>` : ""}</g>`;
 }
 
+
+function isProtectedSpace(sectorNumber) {
+  return sectorDistance(1, Number(sectorNumber)) <= PROTECTED_SPACE_DEPTH;
+}
+
+function protectedSpaceLabel(sectorNumber) {
+  return isProtectedSpace(sectorNumber) ? "Alliance Protected Space" : "Frontier Space";
+}
+
+function removeProtectedPirates(pirates = {}) {
+  return Object.fromEntries(Object.entries(pirates).filter(([sectorNumber]) => !isProtectedSpace(Number(sectorNumber))));
+}
+
+function findRouteToSector(startSector, targetSector) {
+  const start = Number(startSector);
+  const target = Number(targetSector);
+  if (!sectorMap[start] || !sectorMap[target]) return null;
+  if (start === target) return [start];
+  const known = new Set([...(game.visitedSectors || []), ...(game.revealedSectors || [])].map(Number));
+  known.add(start);
+  const queue = [[start]];
+  const seen = new Set([start]);
+  while (queue.length) {
+    const path = queue.shift();
+    const last = path[path.length - 1];
+    for (const neighbor of sectorMap[last].adjacent) {
+      if (seen.has(neighbor) || !known.has(neighbor)) continue;
+      const nextPath = [...path, neighbor];
+      if (neighbor === target) return nextPath;
+      seen.add(neighbor);
+      queue.push(nextPath);
+    }
+  }
+  return null;
+}
+
+function setWarpDestination(sectorNumber) {
+  const target = Number(sectorNumber);
+  if (!sectorMap[target]) return addAndRender("Warp destination must be a valid sector number.");
+  const route = findRouteToSector(game.player.currentSector, target);
+  if (!route) return addAndRender(`No known lane route to Sector ${target}. Visit or scan connecting lanes first.`);
+  game.ui = game.ui || {};
+  game.ui.warpDestination = target;
+  addLog(`Autopilot plotted a known lane route to Sector ${target}.`);
+  saveGame();
+  render();
+}
+
+function clearWarpDestination() {
+  game.ui = game.ui || {};
+  game.ui.warpDestination = null;
+  addLog("Autopilot destination cleared.");
+  saveGame();
+  render();
+}
+
+function performWarpStep() {
+  const target = Number(game.ui?.warpDestination);
+  if (!sectorMap[target]) return addAndRender("Set a warp destination before engaging autopilot.");
+  if (game.player.currentSector === target) {
+    clearWarpDestination();
+    return addAndRender(`Already at Sector ${target}. Autopilot standing down.`);
+  }
+  if (game.player.turns <= 0) return addAndRender("Autopilot stopped: out of turns.");
+  if (game.player.fuel <= 0) return addAndRender("Autopilot stopped: out of fuel.");
+  if (currentPirateEncounter()) return addAndRender("Autopilot stopped: pirate encounter detected in this sector.");
+  const route = findRouteToSector(game.player.currentSector, target);
+  if (!route || route.length < 2) return addAndRender("Autopilot stopped: known route is blocked or incomplete.");
+  const next = route[1];
+  travelToSector(next);
+  if (game.player.currentSector === target) {
+    game.ui.warpDestination = null;
+    addLog(`Autopilot arrived at Sector ${target}.`);
+  } else if (currentPirateEncounter()) {
+    addLog("Autopilot paused for pirate contact. Review Combat / Pirate Intel.");
+  }
+  saveGame();
+  render();
+}
+
+function renderWarpControls() {
+  const target = Number(game.ui?.warpDestination) || "";
+  const route = target ? findRouteToSector(game.player.currentSector, target) : null;
+  return `<section class="warp-panel"><h3>Warp / Autopilot</h3><p class="help-text">Safe route travel uses known lane connections only. Each step still costs normal fuel and turns and does not bypass danger.</p><label for="warpDestination">Set Warp Destination</label><input id="warpDestination" type="number" min="1" max="${MAX_SECTOR}" value="${target}" placeholder="Sector number"><div class="button-row"><button type="button" data-action="plotWarp">Plot Route</button><button type="button" data-action="warpStep" ${target ? "" : "disabled"}>Engage Autopilot / Warp Step</button><button type="button" data-action="clearWarp" ${target ? "" : "disabled"}>Clear Destination</button></div><p class="help-text">${target ? (route ? `Route: ${route.join(" → ")}` : "No known route plotted.") : "No active destination."}</p></section>`;
+}
+
+function wireWarpControls(scope = document) {
+  scope.querySelector("[data-action='plotWarp']")?.addEventListener("click", () => setWarpDestination(scope.querySelector("#warpDestination")?.value));
+  scope.querySelector("[data-action='warpStep']")?.addEventListener("click", performWarpStep);
+  scope.querySelector("[data-action='clearWarp']")?.addEventListener("click", clearWarpDestination);
+}
+
 function renderNavigationIntel() {
   const selected = sectorMap[selectedSectorNumber] ? sectorMap[selectedSectorNumber] : sectorMap[game.player.currentSector];
   selectedSectorNumber = selected.number;
@@ -1038,7 +1272,7 @@ function renderNavigationIntel() {
   const features = scannerFeatureText(selected);
   return `<aside class="nav-intel" aria-live="polite"><h3>Navigation Intel</h3><div class="intel-grid">
     ${stat("Sector", selected.number)}${stat("Status", status)}${stat("System Type", visible ? titleCase(selected.type) : "Unknown")}${stat("Route Role", canSeeRouteRole(selected.number) ? titleCase(selected.routeRole) : "Scan level 4")}
-    ${stat("Danger", danger)}${stat("Travel", adjacent ? (canTravel ? "Available · 1 fuel / 1 turn" : travelBlockedReason()) : current ? "Already here" : "Not directly connected")}
+    ${stat("Danger", danger)}${stat("Patrol Zone", protectedSpaceLabel(selected.number))}${stat("Travel", adjacent ? (canTravel ? "Available · 1 fuel / 1 turn" : travelBlockedReason()) : current ? "Already here" : "Not directly connected")}
   </div><p><strong>Known features:</strong> ${features}</p><p class="strategic-note">${canSeeRouteRole(selected.number) ? selected.strategicNote : "Upgrade scanners to reveal route roles such as tunnels, dead ends, and crossroads."}</p><p class="recommendation">${navigationRecommendation(selected.number)}</p></aside>`;
 }
 
@@ -1106,6 +1340,102 @@ function emergencyWarp() {
   addLog("Emergency warp engaged. Returned to Sector 1 for 5 fuel.");
   saveGame();
   render();
+}
+
+
+function renderStarbaseScreen(sector) {
+  return `<div class="screen-grid"><section>${renderPort(sector).replace(renderShipyardPanel(), "")}</section><section class="mini-card item-shop-placeholder"><h3>Item Shop: Coming Soon</h3><p><strong>Scanning Probe</strong></p><p class="help-text">Scanning Probes will allow long-range sector scans in a future update. They will be expensive, limited, and will not reveal the entire map cheaply.</p></section></div>`;
+}
+
+function renderShipyardScreen() {
+  return `${renderFighterPurchasePanel()}<div class="ship-card-grid">${Object.values(SHIPS).map(renderShipCard).join("")}</div>`;
+}
+
+function shipTradeInValue(ship = currentShip()) {
+  if (!ship || ship.id === "rustyComet") return 0;
+  return Math.max(0, Math.floor((ship.price || 0) * SHIP_TRADE_IN_RATE));
+}
+
+function netShipCost(ship) {
+  return Math.max(0, (ship.price || 0) - shipTradeInValue(currentShip()));
+}
+
+function renderShipCard(ship) {
+  const active = currentShip().id === ship.id;
+  const lock = shipUnlockStatus(ship);
+  const capped = capUpgradesForShip(game.player.upgrades, ship);
+  const nextCargo = calculateCargoCapacity(ship, capped);
+  const nextFighters = calculateFighterCapacity(ship, capped);
+  const cargoBlocked = cargoUsed() > nextCargo;
+  const fighterBlocked = game.player.fighters > nextFighters;
+  const netCost = netShipCost(ship);
+  const unaffordable = game.player.credits < netCost;
+  const disabledReason = active ? "Current ship" : !lock.unlocked ? lock.reason : cargoBlocked ? "Current cargo will not fit" : fighterBlocked ? "Current fighters exceed the new bay" : unaffordable ? "Not enough credits after trade-in" : "Ready for purchase";
+  const blocked = active || !lock.unlocked || cargoBlocked || fighterBlocked || unaffordable;
+  return `<article class="ship-card ${lock.unlocked ? "" : "locked-ship"}"><h3>${ship.name}</h3><p>${ship.description}</p><div class="intel-grid">${stat("Role", ship.role || "Multi-role")}${stat("Price", ship.futureLocked ? "Future locked" : ship.price)}${stat("Trade-in", shipTradeInValue(currentShip()))}${stat("Net Cost", ship.futureLocked ? "Locked" : netCost)}${stat("Hull", ship.maxHull + Math.max(0, Math.min(game.player.upgrades.shield, ship.upgradeCaps.shield) - 1) * 4)}${stat("Fuel Capacity", calculateFuelCapacity(ship, capped))}${stat("Cargo Capacity", nextCargo)}${stat("Base Power", ship.basePower)}${stat("Fighter Capacity", nextFighters)}${stat("Hazard Resist", ship.hazardResist)}${stat("Upgrade Caps", Object.entries(ship.upgradeCaps).map(([key, value]) => `${titleCase(key)} ${value}`).join(", "))}${stat("Unlock", lock.unlocked ? "Unlocked" : lock.reason)}</div><button data-action="buyShip" data-ship="${ship.id}" ${blocked ? "disabled" : ""}>${active ? "Current Ship" : "Buy / Trade In"}</button><p class="help-text">${disabledReason}</p></article>`;
+}
+
+function renderSpecialMissionsScreen() {
+  return `<div class="screen-grid"><section class="mini-card">${renderMathMissionContent()}</section><section class="mini-card">${renderMissionBoardContent()}${renderDeliveryQuestBoard()}</section><section class="mini-card">${renderTutorialContent()}</section></div>`;
+}
+
+function renderMathMissionContent() {
+  const mission = game.currentMission;
+  const done = game.missionLocked;
+  const selectedTier = normalizeMissionTier(game.selectedMissionTier || mission.tier || 2);
+  const options = missionTiers().map((tier) => `<option value="${tier.tier}" ${tier.tier === selectedTier ? "selected" : ""}>${tier.tierName} ${tier.rewardMultiplier}x</option>`).join("");
+  return `<h2 id="mathHeading">Math Mission</h2><label class="mission-tier-picker" for="missionTier">Choose next mission difficulty</label><select id="missionTier">${options}</select><p class="help-text">Basic missions give smaller rewards; higher tiers give larger rewards.</p><p class="mission-meta">Difficulty: ${mission.tierName} · Reward: ${mission.rewardMultiplier}x · Skill: ${mission.skillTag}</p><p><strong>${mission.prompt}</strong></p><p class="help-text">Answer format: ${mission.format}</p><input id="missionAnswer" type="text" autocomplete="off" aria-label="Math mission answer"><div class="button-row"><button id="submitMission">Submit Answer</button><button id="stuckMission" ${done ? "disabled" : ""}>I'm Stuck</button>${done ? `<button id="nextMission">Next Mission</button>` : ""}</div><p class="feedback ${game.missionFeedbackClass || ""}">${game.missionFeedback}</p>`;
+}
+
+function renderMissionBoardContent() {
+  return `<h2 id="missionHeading">Mission Board</h2><p class="help-text">Claim completed objectives to receive rewards and open a new contract.</p><div class="mission-grid">${game.activeMissions.map((mission) => { const template = missionTemplateById(mission.id); const progress = missionProgress(mission); const complete = progress >= template.target; return `<div class="mission-card ${complete ? "complete" : ""}"><h3>${template.title}</h3><p>${template.objective}</p><p class="progress-text">Progress: ${Math.min(progress, template.target)}/${template.target}</p><p class="reward-text">Reward: ${formatReward(template.reward)}</p><button data-claim-mission="${mission.id}" ${complete ? "" : "disabled"}>Claim Reward</button></div>`; }).join("") || `<p class="empty-note">All current single-player board missions are complete.</p>`}</div>`;
+}
+
+function renderTutorialContent() {
+  const steps = tutorialSteps();
+  const completed = game.tutorial.completedSteps.length;
+  return `<h2 id="tutorialHeading">Tutorial Questline</h2><p class="help-text">${game.tutorial.finished ? "Tutorial complete. You are cleared for open-sector operations." : `${completed}/${steps.length} steps complete.`}</p><div class="tutorial-list">${steps.map((step) => { const done = game.tutorial.completedSteps.includes(step.id); return `<div class="tutorial-step ${done ? "complete" : "locked"}"><strong>${done ? "✓" : "○"} ${step.title}</strong><p class="reward-text">Reward: ${formatReward(step.reward)}</p></div>`; }).join("")}</div>`;
+}
+
+function renderPlanetsScreen() {
+  const sector = sectorMap[game.player.currentSector];
+  const local = sector.type === "planet" ? renderPlanet(sector) : `<p class="empty-note">No planet is present in this sector.</p>`;
+  const owned = Object.values(game.planets || {}).filter((planet) => planet.owner === game.player.pilotName);
+  return `${local}<h3>Owned Planet Summary</h3><div class="planet-grid">${owned.map((planet) => stat(`${planet.name} (Sector ${planet.sectorNumber})`, `${planet.type} · Defense ${getPlanetDefenseRating(planet)}`)).join("") || `<p class="empty-note">No owned planets yet.</p>`}</div>`;
+}
+
+function renderCombatScreen() {
+  const current = renderPirateEncounterPanel() || `<p class="empty-note">No active pirate encounter in this sector.</p>`;
+  const known = Object.values(game.pirates || {}).filter((pirate) => !pirate.defeated).map((pirate) => `<div class="mini-card"><h3>${pirate.name}</h3>${stat("Sector", pirate.sector)}${stat("Threat", pirate.threatLevel)}${stat("Bounty", pirate.bounty)}${stat("Protected Space", isProtectedSpace(pirate.sector) ? "Blocked" : "No")}</div>`).join("");
+  return `${current}<h3>Known NPC Pirate Ledger</h3><div class="trade-grid">${known || `<p class="empty-note">No active pirate signatures.</p>`}</div>`;
+}
+
+function renderAchievementsContent() {
+  const definitions = achievementDefinitions();
+  return `<div class="achievement-grid">${definitions.map((achievement) => { const unlocked = game.achievements.includes(achievement.id); return `<div class="achievement-card ${unlocked ? "unlocked" : "locked"}"><strong>${unlocked ? "✓" : "○"} ${achievement.title}</strong><p>${achievement.description}</p></div>`; }).join("")}</div>`;
+}
+
+function renderReputationScreen() {
+  return `<div class="stats-grid">${stat("Reputation Score", game.player.reputation)}${stat("Alignment", reputationTitle(game.player.reputation))}${stat("Combat Rank", combatRankTitle())}${stat("Next Combat Rank", nextCombatRankProgress())}${stat("Lawful Reputation", game.player.lawfulReputation || 0)}${stat("Pirate Reputation", game.player.pirateReputation || 0)}${stat("Pirates Defeated", game.player.piratesDefeated || 0)}${stat("Bounties Earned", game.player.bountiesEarned || 0)}</div><h3>Lawful Ship Notes</h3><div class="trade-grid">${Object.values(SHIPS).filter((ship) => ship.unlock).map((ship) => `<div class="mini-card"><strong>${ship.name}</strong><p>${ship.unlock.text}</p><p>${shipUnlockStatus(ship).unlocked ? "Unlocked" : "Locked"}</p></div>`).join("")}</div><h3>Reputation Shop: Coming Soon</h3><div class="trade-grid">${["Alliance Beacon", "Patrol Clearance", "Escort Contract", "Bounty License", "Pirate Market Access"].map((item) => `<div class="mini-card locked-ship"><strong>${item}</strong><p class="help-text">Future reputation item.</p></div>`).join("")}</div>`;
+}
+
+function renderCaptainLogScreen() {
+  return `<ol class="log-list">${game.log.map((entry) => `<li>${entry}</li>`).join("")}</ol>`;
+}
+
+function renderSettingsScreen() {
+  return `<div class="screen-grid"><section class="mini-card"><h3>Local Save</h3><p class="help-text">Sector Drift saves automatically to localStorage on this device. Active docked screens are not restored on load; pilots return to the cockpit.</p><button type="button" data-action="saveNow">Save Now</button><button type="button" class="danger-button" data-action="resetLocal">Clear Local Save / Reset Prototype</button></section><section class="mini-card"><h3>Export / Import</h3><p class="help-text">Coming soon. This pass keeps data local and avoids new services or teacher admin tools.</p></section></div>`;
+}
+
+function wireDockedButtons(scope = document) {
+  wireLocationButtons(scope);
+  wireMathMissionControls(scope);
+  wireWarpControls(scope);
+  scope.querySelectorAll("[data-claim-mission]").forEach((button) => button.addEventListener("click", () => claimBoardMission(button.dataset.claimMission)));
+  scope.querySelectorAll("[data-start-delivery]").forEach((button) => button.addEventListener("click", () => startDeliveryQuest(button.dataset.startDelivery)));
+  scope.querySelectorAll("[data-complete-delivery]").forEach((button) => button.addEventListener("click", () => completeDeliveryQuest(button.dataset.completeDelivery)));
+  scope.querySelector("[data-action='saveNow']")?.addEventListener("click", () => { saveGame(); addLog("Manual save complete."); render(); });
+  scope.querySelector("[data-action='resetLocal']")?.addEventListener("click", () => { if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY); sectorMap = createSectorMap(); game = defaultGameState(); addLog("Prototype reset. Welcome back, Cadet."); saveGame(); render(); });
 }
 
 function renderLocationPanel() {
@@ -1281,53 +1611,42 @@ function renderAnomaly() {
   return `<h3>Mysterious Anomaly</h3><p>Spend 1 turn to scan carefully. Better scanners improve your chance of helpful discoveries.</p><button data-action="scan" ${game.player.turns <= 0 ? "disabled" : ""}>Scan Anomaly</button>${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : ""}`;
 }
 
-function wireLocationButtons() {
-  panels.location.querySelectorAll("[data-action='buy']").forEach((button) => button.addEventListener("click", () => buyResource(button.dataset.resource, Number(button.dataset.amount))));
-  panels.location.querySelectorAll("[data-action='sell']").forEach((button) => button.addEventListener("click", () => sellResource(button.dataset.resource, Number(button.dataset.amount))));
-  panels.location.querySelector("[data-action='claim']")?.addEventListener("click", claimPlanet);
-  panels.location.querySelectorAll("[data-action='deposit']").forEach((button) => button.addEventListener("click", () => depositToPlanet(button.dataset.resource)));
-  panels.location.querySelectorAll("[data-action='upgradePlanet']").forEach((button) => button.addEventListener("click", () => upgradePlanet(button.dataset.track || "production")));
-  panels.location.querySelector("[data-action='collectProduction']")?.addEventListener("click", collectPlanetProduction);
-  panels.location.querySelectorAll("[data-action='loadPlanetFighters']").forEach((button) => button.addEventListener("click", () => transferPlanetFighters("load", button.dataset.amount)));
-  panels.location.querySelectorAll("[data-action='unloadPlanetFighters']").forEach((button) => button.addEventListener("click", () => transferPlanetFighters("unload", button.dataset.amount)));
-  panels.location.querySelector("[data-action='mine']")?.addEventListener("click", mineAsteroids);
-  panels.location.querySelector("[data-action='scan']")?.addEventListener("click", scanAnomaly);
-  panels.location.querySelector("[data-action='repair']")?.addEventListener("click", repairHull);
-  panels.location.querySelectorAll("[data-action='refuel']").forEach((button) => button.addEventListener("click", () => buyFuel(button.dataset.amount)));
-  panels.location.querySelectorAll("[data-action='buyShip']").forEach((button) => button.addEventListener("click", () => buyShip(button.dataset.ship)));
-  panels.location.querySelectorAll("[data-action='buyFighters']").forEach((button) => button.addEventListener("click", () => buyFighters(button.dataset.amount)));
-  panels.location.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => sellFighters(button.dataset.amount)));
-  panels.location.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => sellFighters(button.dataset.amount)));
-  panels.location.querySelectorAll("[data-action='pirateCombat']").forEach((button) => button.addEventListener("click", () => resolvePirateCombat(button.dataset.mode)));
-  panels.location.querySelector("[data-action='boardPirate']")?.addEventListener("click", boardPirateShip);
+function wireLocationButtons(scope = panels.location) {
+  if (!scope) return;
+  scope.querySelectorAll("[data-action='buy']").forEach((button) => button.addEventListener("click", () => buyResource(button.dataset.resource, Number(button.dataset.amount))));
+  scope.querySelectorAll("[data-action='sell']").forEach((button) => button.addEventListener("click", () => sellResource(button.dataset.resource, Number(button.dataset.amount))));
+  scope.querySelector("[data-action='claim']")?.addEventListener("click", claimPlanet);
+  scope.querySelectorAll("[data-action='deposit']").forEach((button) => button.addEventListener("click", () => depositToPlanet(button.dataset.resource)));
+  scope.querySelectorAll("[data-action='upgradePlanet']").forEach((button) => button.addEventListener("click", () => upgradePlanet(button.dataset.track || "production")));
+  scope.querySelector("[data-action='collectProduction']")?.addEventListener("click", collectPlanetProduction);
+  scope.querySelectorAll("[data-action='loadPlanetFighters']").forEach((button) => button.addEventListener("click", () => transferPlanetFighters("load", button.dataset.amount)));
+  scope.querySelectorAll("[data-action='unloadPlanetFighters']").forEach((button) => button.addEventListener("click", () => transferPlanetFighters("unload", button.dataset.amount)));
+  scope.querySelector("[data-action='mine']")?.addEventListener("click", mineAsteroids);
+  scope.querySelector("[data-action='scan']")?.addEventListener("click", scanAnomaly);
+  scope.querySelector("[data-action='repair']")?.addEventListener("click", repairHull);
+  scope.querySelectorAll("[data-action='refuel']").forEach((button) => button.addEventListener("click", () => buyFuel(button.dataset.amount)));
+  scope.querySelectorAll("[data-action='buyShip']").forEach((button) => button.addEventListener("click", () => buyShip(button.dataset.ship)));
+  scope.querySelectorAll("[data-action='buyFighters']").forEach((button) => button.addEventListener("click", () => buyFighters(button.dataset.amount)));
+  scope.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => sellFighters(button.dataset.amount)));
+  scope.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => sellFighters(button.dataset.amount)));
+  scope.querySelectorAll("[data-action='pirateCombat']").forEach((button) => button.addEventListener("click", () => resolvePirateCombat(button.dataset.mode)));
+  scope.querySelector("[data-action='boardPirate']")?.addEventListener("click", boardPirateShip);
 }
 
-function renderMathMission() {
-  const mission = game.currentMission;
-  const done = game.missionLocked;
-  const selectedTier = normalizeMissionTier(game.selectedMissionTier || mission.tier || 2);
-  const options = missionTiers().map((tier) => `<option value="${tier.tier}" ${tier.tier === selectedTier ? "selected" : ""}>${tier.tierName} ${tier.rewardMultiplier}x</option>`).join("");
-  panels.math.innerHTML = `<h2 id="mathHeading">Math Mission</h2>
-    <label class="mission-tier-picker" for="missionTier">Choose next mission difficulty</label>
-    <select id="missionTier">${options}</select>
-    <p class="help-text">Basic missions give smaller rewards but are good for quick fuel and turn recovery. Changing difficulty affects the next mission, not this active question.</p>
-    <p class="mission-meta">Difficulty: ${mission.tierName} · Reward: ${mission.rewardMultiplier}x · Skill: ${mission.skillTag}</p>
-    <p><strong>${mission.prompt}</strong></p><p class="help-text">Answer format: ${mission.format}</p>
-    <input id="missionAnswer" type="text" autocomplete="off" aria-label="Math mission answer">
-    <div class="button-row"><button id="submitMission">Submit Answer</button><button id="stuckMission" ${done ? "disabled" : ""}>I'm Stuck</button>${done ? `<button id="nextMission">Next Mission</button>` : ""}</div>
-    <p class="feedback ${game.missionFeedbackClass || ""}">${game.missionFeedback}</p>`;
-  document.getElementById("missionTier")?.addEventListener("change", (event) => {
+function wireMathMissionControls(scope = document) {
+  scope.querySelector("#missionTier")?.addEventListener("change", (event) => {
     game.selectedMissionTier = normalizeMissionTier(event.target.value);
     saveGame();
   });
-  document.getElementById("submitMission")?.addEventListener("click", submitMissionAnswer);
-  document.getElementById("stuckMission")?.addEventListener("click", () => {
+  scope.querySelector("#submitMission")?.addEventListener("click", submitMissionAnswer);
+  scope.querySelector("#stuckMission")?.addEventListener("click", () => {
+    const mission = game.currentMission;
     game.missionFeedback = mission.hint;
     game.missionFeedbackClass = "warn";
     saveGame();
-    renderMathMission();
+    render();
   });
-  document.getElementById("nextMission")?.addEventListener("click", () => {
+  scope.querySelector("#nextMission")?.addEventListener("click", () => {
     game.currentMission = generateMission(game.selectedMissionTier);
     game.missionAttempts = 0;
     game.missionLocked = false;
@@ -1336,6 +1655,12 @@ function renderMathMission() {
     saveGame();
     render();
   });
+}
+
+function renderMathMission() {
+  if (!panels.math) return;
+  panels.math.innerHTML = renderMathMissionContent();
+  wireMathMissionControls(panels.math);
 }
 
 function renderMissionPanel() {
@@ -1615,17 +1940,21 @@ function repairHull() {
 function buyShip(shipId) {
   const ship = SHIPS[shipId];
   if (!ship) return;
-  const owned = game.player.ownedShips.includes(ship.id);
+  const active = currentShip().id === ship.id;
   const lock = shipUnlockStatus(ship);
-  if (!owned && !lock.unlocked) return addAndRender(`${ship.name} is locked: ${lock.reason}`);
+  if (active) return addAndRender(`${ship.name} is already your active ship.`);
+  if (!lock.unlocked) return addAndRender(`${ship.name} is locked: ${lock.reason}`);
+  const oldShip = currentShip();
   const cappedUpgrades = capUpgradesForShip(game.player.upgrades, ship);
   const nextCapacity = calculateCargoCapacity(ship, cappedUpgrades);
+  const nextFighterCapacity = calculateFighterCapacity(ship, cappedUpgrades);
   if (cargoUsed() > nextCapacity) return addAndRender(`${ship.name} cannot hold your current cargo. Sell, deposit, or dump cargo before changing ships.`);
-  if (!owned && game.player.credits < ship.price) return addAndRender(`Not enough credits to buy ${ship.name}.`);
-  if (!owned) {
-    game.player.credits -= ship.price;
-    game.player.ownedShips.push(ship.id);
-  }
+  if (game.player.fighters > nextFighterCapacity) return addAndRender(`${ship.name} cannot hold your current fighters. Sell or offload fighters before changing ships.`);
+  const tradeIn = shipTradeInValue(oldShip);
+  const netCost = Math.max(0, ship.price - tradeIn);
+  if (game.player.credits < netCost) return addAndRender(`Not enough credits to buy ${ship.name} after trade-in.`);
+  game.player.credits -= netCost;
+  game.player.ownedShips = [ship.id];
   game.player.shipId = ship.id;
   game.player.shipName = ship.name;
   game.player.upgrades = cappedUpgrades;
@@ -1633,13 +1962,12 @@ function buyShip(shipId) {
   game.player.maxFuel = calculateFuelCapacity(ship, game.player.upgrades);
   game.player.maxHull = ship.maxHull + Math.max(0, game.player.upgrades.shield - 1) * 4;
   game.player.cargoCapacity = nextCapacity;
-  game.player.fighterCapacity = calculateFighterCapacity(ship, game.player.upgrades);
-  game.player.fighters = Math.min(game.player.fighters, game.player.fighterCapacity);
+  game.player.fighterCapacity = nextFighterCapacity;
   game.player.maxTurns = calculateMaxTurnBank(game.player.upgrades.engine);
   game.player.fuel = Math.min(game.player.fuel, game.player.maxFuel);
   game.player.hull = Math.min(game.player.hull, game.player.maxHull);
   game.player.turns = Math.min(game.player.turns, game.player.maxTurns);
-  addLog(`${owned ? "Switched to" : "Purchased"} ${ship.name}.`);
+  addLog(`Traded in ${oldShip.name} for ${tradeIn} credits and purchased ${ship.name}.`);
   updateScannerReveals();
   saveGame();
   render();
@@ -2374,7 +2702,32 @@ function syncCombatStats(targetGame = game) {
 // defeated-player ejection to Sector 1, owned-planet preservation, active ship/cargo/cash loss rules,
 // and emergency replacement ships. No real player targeting, ship capture, or multiplayer combat exists here.
 
+
+function maybeAlliancePatrolEvent() {
+  const protectedSpace = isProtectedSpace(game.player.currentSector);
+  const chance = protectedSpace ? 0.42 : 0.06;
+  if (Math.random() > chance) return false;
+  if (protectedSpace) addLog("Alliance patrol beacons sweep the lane. Pirates rarely risk this close to Sector 1.");
+  return resolveAllianceSearch(protectedSpace);
+}
+
+function resolveAllianceSearch(protectedSpace = isProtectedSpace(game.player.currentSector)) {
+  const smuggled = Math.max(0, game.player.cargo?.[SMUGGLED_RESOURCE] || 0);
+  if (smuggled <= 0) {
+    addLog("Alliance patrol completed a quick scan and moved on.");
+    return false;
+  }
+  const confiscated = Math.min(smuggled, protectedSpace ? Math.ceil(smuggled / 2) : 1);
+  game.player.cargo[SMUGGLED_RESOURCE] = Math.max(0, smuggled - confiscated);
+  const fine = Math.min(game.player.credits, confiscated * 20);
+  game.player.credits -= fine;
+  addReputation(-Math.min(3, confiscated));
+  addLog("Alliance inspectors confiscated unregistered cargo.");
+  return true;
+}
+
 function maybeTravelEvent() {
+  maybeAlliancePatrolEvent();
   if (Math.random() >= 0.3) return;
   const scanner = game.player.upgrades.scanner;
   const positiveBias = Math.min(0.2, (scanner - 1) * 0.04);
@@ -2633,7 +2986,7 @@ function productionStatusText() {
   if (remaining <= 0) return "Production is ready to collect.";
   return `Production cooldown: ${Math.ceil(remaining / 60000)} minute(s) remaining.`;
 }
-function cargoUsed() { return RESOURCES.reduce((sum, resource) => sum + (game.player.cargo[resource] || 0), 0); }
+function cargoUsed() { return RESOURCES.reduce((sum, resource) => sum + (game.player.cargo[resource] || 0), 0) + Math.max(0, game.player.cargo?.[SMUGGLED_RESOURCE] || 0); }
 function cargoSpaceLeft() { return game.player.cargoCapacity - cargoUsed(); }
 function stat(label, value) { return `<div class="stat"><span class="label">${label}</span><span class="value">${value}</span></div>`; }
 function titleCase(text) { return String(text).replace(/\b\w/g, (letter) => letter.toUpperCase()); }

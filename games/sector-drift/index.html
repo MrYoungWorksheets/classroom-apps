@@ -11,26 +11,18 @@
     <div>
       <p class="eyebrow">Classroom Space Trading Prototype</p>
       <h1>Sector Drift</h1>
-      <p class="subtitle">Explore slow, numbered space lanes. Trade carefully, build planets, and complete math missions to keep drifting.</p>
+      <p class="subtitle">Explore slow, numbered space lanes from a clean cockpit. Dock into starbases, shipyards, missions, planets, and logs only when you need them.</p>
     </div>
     <button id="resetButton" class="danger-button" type="button">Reset Prototype</button>
   </header>
 
-  <main class="dashboard" aria-live="polite">
-    <div class="core-dashboard">
-      <section class="panel" id="shipPanel" aria-labelledby="shipHeading"></section>
-      <section class="panel sector-panel" id="sectorPanel" aria-labelledby="sectorHeading"></section>
-      <section class="panel location-panel" id="locationPanel" aria-labelledby="locationHeading"></section>
+  <main class="dashboard cockpit-shell" aria-live="polite">
+    <div class="cockpit-dashboard" id="cockpitDashboard">
+      <section class="panel cockpit-left" id="shipPanel" aria-labelledby="shipHeading"></section>
+      <section class="panel cockpit-map sector-panel" id="sectorPanel" aria-labelledby="sectorHeading"></section>
+      <section class="panel cockpit-actions" id="actionPanel" aria-labelledby="actionHeading"></section>
     </div>
-    <div class="secondary-dashboard">
-      <section class="panel math-panel" id="mathPanel" aria-labelledby="mathHeading"></section>
-      <section class="panel mission-panel" id="missionPanel" aria-labelledby="missionHeading"></section>
-      <section class="panel tutorial-panel" id="tutorialPanel" aria-labelledby="tutorialHeading"></section>
-      <section class="panel" id="upgradePanel" aria-labelledby="upgradeHeading"></section>
-      <section class="panel achievements-panel" id="achievementsPanel" aria-labelledby="achievementsHeading"></section>
-      <section class="panel stats-panel" id="statsPanel" aria-labelledby="statsHeading"></section>
-      <section class="panel log-panel" id="logPanel" aria-labelledby="logHeading"></section>
-    </div>
+    <section class="panel docked-screen" id="dockedPanel" aria-live="polite" hidden></section>
   </main>
 
   <footer class="footer-note">
