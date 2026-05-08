@@ -1655,3 +1655,96 @@ button.button-admin {
 .map-hit-target {
   pointer-events: all;
 }
+
+/* Display-only multiplayer readiness: live events and safe sector presence. */
+.live-event-box,
+.sector-traffic {
+  background: rgba(255, 209, 102, 0.075);
+  border: 1px solid rgba(255, 209, 102, 0.35);
+  border-radius: 14px;
+  margin: 0 0 0.85rem;
+  padding: 0.8rem;
+}
+
+.live-event-header {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.live-event-list {
+  display: grid;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.live-event-item {
+  background: rgba(255, 255, 255, 0.055);
+  border-left: 4px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.65rem;
+}
+
+.live-event-item.latest {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.live-event-item span,
+.live-event-item em,
+.sector-traffic span,
+.sector-traffic em {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.live-event-positive { border-left-color: var(--good); }
+.live-event-negative { border-left-color: var(--danger); }
+.live-event-neutral { border-left-color: var(--accent); }
+
+.live-event-pulse {
+  animation: liveEventPulse 460ms ease-out;
+}
+
+@keyframes liveEventPulse {
+  0% { box-shadow: 0 0 0 rgba(255, 209, 102, 0); }
+  35% { box-shadow: 0 0 18px rgba(255, 209, 102, 0.38); }
+  100% { box-shadow: 0 0 0 rgba(255, 209, 102, 0); }
+}
+
+.sector-traffic {
+  background: rgba(43, 212, 217, 0.06);
+  border-color: rgba(43, 212, 217, 0.28);
+}
+
+.sector-traffic ul {
+  display: grid;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0.4rem 0;
+  padding: 0;
+}
+
+.sector-traffic li {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  display: grid;
+  gap: 0.2rem;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto;
+  padding: 0.5rem 0.6rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-event-pulse,
+  .action-pulse {
+    animation: none;
+  }
+}

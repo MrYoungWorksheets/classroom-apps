@@ -24,6 +24,8 @@ const SMUGGLED_DESCRIPTION = "Unregistered cargo that local authorities would ra
 const RESOURCES = ["Ore", "Food", "Tech"];
 const REQUIRE_FIREBASE_LOGIN = true;
 const ALLOW_LOCAL_PROTOTYPE_MODE = true;
+const PRESENCE_ONLINE_WINDOW_MS = 4 * 60 * 1000;
+const LIVE_EVENT_LIMIT = 5;
 
 const PLANET_UPGRADE_TRACKS = ["production", "industry", "defense", "fighterBays", "research"];
 const PLANET_PRODUCTION_RESOURCES = ["Ore", "Food", "Tech", "Fighters"];
@@ -279,6 +281,10 @@ let game = loadGame();
 let selectedSectorNumber = game.player.currentSector;
 let selectedMapClickSector = null;
 let firebaseUnsubscribe = null;
+let presenceUnsubscribe = null;
+let liveEvents = [];
+let liveEventPulseToken = 0;
+const sectorTrafficState = { status: "local mode", message: "Sector traffic unavailable. Local prototype mode active.", records: [], listening: false, initialized: false, knownSectors: new Map(), currentSectorOccupants: [] };
 const cloudUiState = { status: "not initialized", message: "Cloud backup unavailable until Firebase finishes loading.", busy: false, user: null, role: "unknown", roleReason: "Waiting for Firebase role lookup.", lastCloudResult: "No cloud action this session." };
 const launchGate = { mode: "checkingAuth", message: "Checking classroom sign-in status...", enteredAt: Date.now() };
 
@@ -311,8 +317,9 @@ if (typeof document !== "undefined") {
     });
 
     if (typeof window !== "undefined") {
-      window.addEventListener("sectorDriftFirebaseReady", () => { refreshFirebaseUiState(); updateLaunchGateFromAuth(); if (["settings", "launch", "adminPanel"].includes(activeScreenName())) render(); });
-      window.setTimeout(() => { refreshFirebaseUiState(); updateLaunchGateFromAuth(); if (["settings", "launch", "adminPanel"].includes(activeScreenName())) render(); }, 500);
+      window.addEventListener("sectorDriftFirebaseReady", () => { refreshFirebaseUiState(); updateLaunchGateFromAuth(); updatePresenceStatus("online"); if (["settings", "launch", "adminPanel"].includes(activeScreenName())) render(); });
+      window.setTimeout(() => { refreshFirebaseUiState(); updateLaunchGateFromAuth(); updatePresenceStatus("online"); if (["settings", "launch", "adminPanel"].includes(activeScreenName())) render(); }, 500);
+      window.addEventListener("beforeunload", () => { updatePresenceStatus("offline", { silent: true }); });
     }
 
     refreshDailyTurns();
@@ -1276,12 +1283,14 @@ function openScreen(screenName) {
   const nextScreen = screenNames().includes(screenName) ? screenName : "cockpit";
   if (nextScreen === "starbase" && sectorMap[game.player.currentSector]?.type === "port" && game.ui.activeScreen !== "starbase") beginDockingSession();
   game.ui.activeScreen = nextScreen;
+  updatePresenceStatus(nextScreen === "combat" ? "combat" : isDockedMode(nextScreen) ? "docked" : "online");
   render();
 }
 
 function closeScreen() {
   game.ui = game.ui || {};
   game.ui.activeScreen = COCKPIT_SCREEN;
+  updatePresenceStatus("online");
   render();
 }
 
@@ -1400,8 +1409,10 @@ function renderSectorPanel() {
   const danger = canSeeDanger(sector.number) && sector.dangerLevel > 0 ? `${HAZARD_TYPES[sector.hazardType].icon} Danger ${sector.dangerLevel}: ${HAZARD_TYPES[sector.hazardType].label}` : "Danger unknown";
   panels.sector.innerHTML = `
     <h2 id="sectorHeading">Tactical Cockpit</h2>
+    ${renderLiveEventBox()}
     ${renderCurrentSituation(sector, danger)}
     ${renderNavigationIntel()}
+    ${renderSectorTraffic()}
     <section class="viewer-map" aria-label="Interactive sector map">
       <div class="viewer-map-heading"><h3>Lane Map</h3><p class="help-text">Tap a node once to scan. Tap an adjacent selected node again to travel.</p></div>
       ${renderMinimap()}
@@ -1994,6 +2005,9 @@ function setSectorActionResult(title, message, options = {}) {
     turn: game.player.turns,
     timestamp: Date.now(),
   });
+  if (!options.skipLiveEvent) {
+    pushLiveEvent({ type: options.eventType || "action", title, message, tone: options.type || "neutral", sectorNumber: options.sector || game.player.currentSector });
+  }
   return game.ui.lastSectorActionResult;
 }
 
@@ -2044,6 +2058,7 @@ function emergencyWarp() {
   updateScannerReveals();
   addLog("Emergency warp engaged. Returned to Sector 1 for 5 fuel.");
   setArrivalReport(1, ["Emergency warp completed for 5 fuel."]);
+  updatePresenceStatus("traveling");
   saveGame();
   render();
 }
@@ -2075,6 +2090,7 @@ function buildArrivalReport(number = game.player.currentSector, extras = []) {
 function setArrivalReport(number = game.player.currentSector, extras = []) {
   game.arrivalReport = buildArrivalReport(number, extras);
   addLog(game.arrivalReport);
+  pushLiveEvent({ type: "travel", title: `Arrived in Sector ${number}`, message: game.arrivalReport, tone: "neutral", sectorNumber: number });
 }
 
 function stationDisplayName(sector) {
@@ -2477,6 +2493,8 @@ function refreshFirebaseUiState(allowSubscribe = true) {
         cloudUiState.status = authStatus?.status || cloudUiState.status || "available";
         cloudUiState.roleReason = authStatus?.roleReason || (user ? "Role loaded from users/{uid}." : "Sign in to load role.");
         updateLaunchGateFromAuth();
+        updatePresenceStatus(user ? "online" : "offline");
+        subscribeToSectorTraffic();
         if (["settings", "launch", "adminPanel"].includes(activeScreenName())) render();
       });
     }
@@ -2496,6 +2514,134 @@ function cloudStatusLabel(allowSubscribe = true) {
   if (cloudUiState.status === "not initialized") return "not initialized";
   return "unavailable";
 }
+
+function safeDisplayText(value, fallback = "") {
+  const text = typeof value === "string" || typeof value === "number" ? String(value) : fallback;
+  return String(text || fallback).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char])).slice(0, 160);
+}
+
+function safePlainText(value, fallback = "") {
+  const text = typeof value === "string" || typeof value === "number" ? String(value) : fallback;
+  return String(text || fallback).replace(/[<>]/g, "").trim().slice(0, 80);
+}
+
+function timestampMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.seconds === "number") return value.seconds * 1000;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function pushLiveEvent({ type = "info", title = "Sector Update", message = "", tone = "neutral", sectorNumber = game?.player?.currentSector } = {}) {
+  liveEventPulseToken += 1;
+  liveEvents.unshift({ id: `${Date.now()}-${liveEventPulseToken}`, type, title: String(title).slice(0, 80), message: String(message).slice(0, 220), tone: ["positive", "negative", "neutral"].includes(tone) ? tone : "neutral", sectorNumber: Number(sectorNumber) || game?.player?.currentSector || 1, timestamp: Date.now() });
+  liveEvents = liveEvents.slice(0, LIVE_EVENT_LIMIT);
+  if (panels.sector && activeScreenName() === "cockpit") renderSectorPanel();
+  return liveEvents[0];
+}
+
+function renderLiveEventBox() {
+  const events = liveEvents.length ? liveEvents : [{ title: "Live Events Ready", message: "Important cockpit results will appear here without replacing the Captain’s Log.", tone: "neutral", sectorNumber: game.player.currentSector }];
+  const items = events.slice(0, LIVE_EVENT_LIMIT).map((event, index) => `<li class="live-event-item live-event-${safeDisplayText(event.tone)} ${index === 0 ? "latest" : ""}"><strong>${safeDisplayText(event.title)}</strong><span>${safeDisplayText(event.message)}</span><em>Sector ${safeDisplayText(event.sectorNumber)}</em></li>`).join("");
+  return `<section class="live-event-box ${liveEventPulseToken ? "live-event-pulse" : ""}" data-live-event-token="${liveEventPulseToken}" aria-live="polite"><div class="live-event-header"><p class="eyebrow">Live Events</p><strong>Immediate Cockpit Feed</strong></div><ol class="live-event-list">${items}</ol></section>`;
+}
+
+function safePresenceRecord(record = {}) {
+  return {
+    uid: String(record.uid || record.id || ""),
+    displayName: safePlainText(record.captainName || record.displayName || "Signed-in Captain", "Signed-in Captain"),
+    shipName: safePlainText(record.shipName || "Unregistered Ship", "Unregistered Ship"),
+    status: safePlainText(record.status || "online", "online"),
+    sectorNumber: Math.max(1, Math.floor(Number(record.sectorNumber) || 1)),
+    updatedAtMs: timestampMillis(record.updatedAt || record.lastSeenAt),
+  };
+}
+
+function currentPresencePayload(status = "online") {
+  return { captainName: game.player.pilotName, displayName: game.player.pilotName, sectorNumber: game.player.currentSector, shipName: game.player.shipName || currentShip().name, status, prototypeVersion: STORAGE_KEY };
+}
+
+function updatePresenceStatus(status = "online", options = {}) {
+  const client = firebaseClient();
+  if (!client?.updatePresence || launchGate.mode === "localPrototype") {
+    sectorTrafficState.status = launchGate.mode === "localPrototype" ? "local mode" : "unavailable";
+    if (!options.silent) sectorTrafficState.message = "Sector traffic unavailable. Local prototype mode active.";
+    return Promise.resolve({ ok: false, error: sectorTrafficState.message });
+  }
+  const result = client.updatePresence(currentPresencePayload(status));
+  Promise.resolve(result).then((response) => {
+    if (!response?.ok && !options.silent) {
+      sectorTrafficState.status = cloudUiState.user ? "unavailable" : "signed out";
+      sectorTrafficState.message = response?.error || "Sector traffic unavailable. Local prototype mode active.";
+    }
+  }).catch((error) => {
+    if (!options.silent) {
+      sectorTrafficState.status = "unavailable";
+      sectorTrafficState.message = error?.message || "Sector traffic unavailable. Local prototype mode active.";
+    }
+  });
+  return result;
+}
+
+function subscribeToSectorTraffic() {
+  const client = firebaseClient();
+  if (!client?.onPresenceChange) {
+    sectorTrafficState.status = "unavailable";
+    sectorTrafficState.message = "Sector traffic unavailable. Local prototype mode active.";
+    sectorTrafficState.listening = false;
+    return;
+  }
+  if (presenceUnsubscribe) return;
+  presenceUnsubscribe = client.onPresenceChange(({ ok, records = [], status } = {}) => {
+    sectorTrafficState.listening = Boolean(ok);
+    sectorTrafficState.status = status?.status || (ok ? "listening" : "unavailable");
+    sectorTrafficState.message = ok ? "Live sector traffic listening." : (status?.error || "Sector traffic unavailable. Local prototype mode active.");
+    applyPresenceRecords(records);
+    if (["cockpit", "settings"].includes(activeScreenName())) render();
+  });
+}
+
+function applyPresenceRecords(records = []) {
+  const ownUid = cloudUiState.user?.uid || "";
+  const now = Date.now();
+  const previous = new Map(sectorTrafficState.knownSectors);
+  const next = new Map();
+  const occupants = [];
+  records.map(safePresenceRecord).forEach((record) => {
+    if (!record.uid || record.uid === ownUid) return;
+    const recent = !record.updatedAtMs || now - record.updatedAtMs <= PRESENCE_ONLINE_WINDOW_MS;
+    if (!recent || record.status === "offline") return;
+    next.set(record.uid, record.sectorNumber);
+    if (record.sectorNumber === game.player.currentSector) occupants.push(record);
+    if (sectorTrafficState.initialized) {
+      const oldSector = previous.get(record.uid);
+      if (oldSector !== game.player.currentSector && record.sectorNumber === game.player.currentSector) pushLiveEvent({ type: "presence", title: "Sector Traffic", message: `Captain ${record.displayName} warped into Sector ${record.sectorNumber}.`, tone: "neutral", sectorNumber: record.sectorNumber });
+      if (oldSector === game.player.currentSector && record.sectorNumber !== game.player.currentSector) pushLiveEvent({ type: "presence", title: "Sector Traffic", message: `Captain ${record.displayName} left Sector ${oldSector}.`, tone: "neutral", sectorNumber: oldSector });
+    }
+  });
+  sectorTrafficState.initialized = true;
+  sectorTrafficState.knownSectors = next;
+  sectorTrafficState.currentSectorOccupants = occupants.slice(0, 6);
+}
+
+function renderSectorTraffic() {
+  if (launchGate.mode === "localPrototype" || sectorTrafficState.status === "unavailable" || sectorTrafficState.status === "local mode") {
+    return `<section class="sector-traffic"><h3>Sector Traffic</h3><p class="empty-note">Sector traffic unavailable. Local prototype mode active.</p></section>`;
+  }
+  if (!cloudUiState.user) return `<section class="sector-traffic"><h3>Sector Traffic</h3><p class="empty-note">Sign in to see display-only nearby captains.</p></section>`;
+  const occupants = sectorTrafficState.currentSectorOccupants || [];
+  const list = occupants.length ? `<ul>${occupants.map((record) => `<li><strong>${safeDisplayText(record.displayName)}</strong><span>${safeDisplayText(record.shipName)}</span><em>${safeDisplayText(record.status)}</em></li>`).join("")}</ul>` : `<p class="empty-note">No other online captains in this sector.</p>`;
+  return `<section class="sector-traffic"><h3>Sector Traffic</h3>${list}<p class="help-text">Display-only presence: no chat, PvP, trading, stealing, or shared combat.</p></section>`;
+}
+
+function presenceStatusLabel() {
+  if (launchGate.mode === "localPrototype") return "local mode";
+  if (!firebaseClient()) return "unavailable";
+  if (!cloudUiState.user) return "signed out";
+  return sectorTrafficState.status === "listening" ? "available" : (sectorTrafficState.status || "available");
+}
+
 
 
 function initializeLaunchGate() {
@@ -2655,10 +2801,12 @@ async function handleCloudBackupSave() {
     cloudUiState.message = "Cloud backup saved successfully.";
     cloudUiState.lastCloudResult = "Saved current browser state to players/{uid}.";
     addLog("Captain’s Log: Cloud backup saved to Firebase.");
+    pushLiveEvent({ type: "save", title: "Cloud Backup Saved", message: "Firebase cloud backup saved successfully.", tone: "positive" });
     saveGame();
   } else {
     cloudUiState.message = result.error || "Cloud backup failed. Local save is unchanged.";
     cloudUiState.lastCloudResult = cloudUiState.message;
+    pushLiveEvent({ type: "save", title: "Cloud Backup Warning", message: cloudUiState.message, tone: "negative" });
   }
   render();
 }
@@ -2686,14 +2834,20 @@ async function handleCloudBackupLoad() {
   const applied = applyLoadedSavePayload(result.data?.saveData);
   cloudUiState.message = applied.ok ? "Cloud backup loaded successfully." : applied.error;
   cloudUiState.lastCloudResult = cloudUiState.message;
-  if (applied.ok) addLog("Captain’s Log: Cloud backup loaded into this browser after confirmation.");
+  if (applied.ok) {
+    addLog("Captain’s Log: Cloud backup loaded into this browser after confirmation.");
+    pushLiveEvent({ type: "save", title: "Cloud Backup Loaded", message: "Cloud save loaded into this browser after confirmation.", tone: "positive" });
+    updatePresenceStatus("online");
+  } else {
+    pushLiveEvent({ type: "save", title: "Cloud Load Warning", message: cloudUiState.message, tone: "negative" });
+  }
   render();
 }
 
 function renderSettingsScreen() {
   const recoveryNotice = sessionRecoveryMessages.length ? `<p class="turn-warning">${sessionRecoveryMessages[0]}</p>` : `<p class="help-text">No save repair was needed this session.</p>`;
   const storageNote = localStorageAvailable ? localSaveStatus : `${localSaveStatus}${lastLocalSaveError ? ` (${lastLocalSaveError})` : ""}`;
-  return `<div class="screen-grid"><section class="mini-card"><h3>Local Save</h3><p class="help-text">Sector Drift saves automatically to localStorage on this device. Active docked screens are not restored on load; pilots return to the cockpit.</p>${stat("Local save status", storageNote)}${stat("Local prototype mode", launchGate.mode === "localPrototype" ? "active" : "available from launch screen")}${recoveryNotice}<div class="button-row"><button type="button" data-action="saveNow">Save Now</button><button type="button" data-action="normalizeSave">Repair / Normalize Save</button><button type="button" class="danger-button" data-action="resetLocal">Clear Local Save / Reset Prototype</button></div></section>${renderCloudLoginPanel()}<section class="mini-card"><h3>Export / Import</h3><p class="help-text">Manual export/import uses this browser save only. Firebase backup/load does not add multiplayer.</p><div class="button-row"><button type="button" data-action="exportSaveJson">Export Save JSON</button><button type="button" data-action="importSaveJson">Import Save JSON</button></div></section></div>`;
+  return `<div class="screen-grid"><section class="mini-card"><h3>Local Save</h3><p class="help-text">Sector Drift saves automatically to localStorage on this device. Active docked screens are not restored on load; pilots return to the cockpit.</p>${stat("Local save status", storageNote)}${stat("Local prototype mode", launchGate.mode === "localPrototype" ? "active" : "available from launch screen")}${stat("Presence", presenceStatusLabel())}${stat("Live sector traffic", sectorTrafficState.listening ? "listening" : sectorTrafficState.status || "unavailable")}${recoveryNotice}<div class="button-row"><button type="button" data-action="saveNow">Save Now</button><button type="button" data-action="normalizeSave">Repair / Normalize Save</button><button type="button" class="danger-button" data-action="resetLocal">Clear Local Save / Reset Prototype</button></div></section>${renderCloudLoginPanel()}<section class="mini-card"><h3>Export / Import</h3><p class="help-text">Manual export/import uses this browser save only. Firebase backup/load does not add multiplayer.</p><div class="button-row"><button type="button" data-action="exportSaveJson">Export Save JSON</button><button type="button" data-action="importSaveJson">Import Save JSON</button></div></section></div>`;
 }
 
 function wireDockedButtons(scope = document) {
@@ -3138,6 +3292,7 @@ function travelToSector(number) {
   game.player.fuel -= 1;
   game.player.currentSector = number;
   selectedSectorNumber = number;
+  updatePresenceStatus("traveling");
   selectedMapClickSector = null;
   game.ui = game.ui || {};
   game.ui.mapHint = "";
@@ -3151,6 +3306,7 @@ function travelToSector(number) {
   maybeTravelEvent();
   const extras = game.log.slice(0, Math.max(0, game.log.length - logStart)).reverse().filter((entry) => !entry.startsWith("Traveled to Sector"));
   setArrivalReport(number, extras);
+  updatePresenceStatus("online");
   saveGame();
   render();
 }

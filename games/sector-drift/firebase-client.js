@@ -8,8 +8,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
 import {
   getFirestore,
+  collection,
   doc,
   getDoc,
+  onSnapshot,
   setDoc,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
@@ -25,6 +27,10 @@ let currentUser = null;
 let currentRole = "unknown";
 let currentRoleReason = "No user signed in yet.";
 const authListeners = new Set();
+const presenceListeners = new Set();
+let presenceUnsubscribe = null;
+let latestPresenceSnapshot = [];
+let presenceListenError = "";
 
 function friendlyError(error, fallback = "Firebase is unavailable right now. Local save still works.") {
   if (!error) return fallback;
@@ -132,6 +138,7 @@ async function signOutOfFirebase() {
   try {
     const ready = requireFirebase();
     if (!ready.ok) return ready;
+    await updatePresence({ status: "offline" });
     await signOut(auth);
     currentUser = null;
     currentRole = "unknown";
@@ -157,6 +164,104 @@ function getCurrentUserRole() {
     return failure(error);
   }
 }
+
+function safePresenceText(value, fallback = "") {
+  const text = typeof value === "string" ? value.trim() : "";
+  return (text || fallback).slice(0, 80);
+}
+
+function currentPresenceName(user = currentUser, captainName = "") {
+  return safePresenceText(captainName) || safePresenceText(user?.displayName) || "Signed-in Captain";
+}
+
+function normalizePresenceStatus(status = "online") {
+  return ["online", "offline", "docked", "traveling", "combat", "idle"].includes(status) ? status : "online";
+}
+
+function presencePayload(input = {}, user = currentUser) {
+  const sectorNumber = Math.max(1, Math.floor(Number(input.sectorNumber) || 1));
+  return {
+    uid: user.uid,
+    displayName: currentPresenceName(user, input.captainName || input.displayName),
+    captainName: currentPresenceName(user, input.captainName || input.displayName),
+    sectorNumber,
+    shipName: safePresenceText(input.shipName, "Unregistered Ship"),
+    status: normalizePresenceStatus(input.status),
+    prototypeVersion: safePresenceText(input.prototypeVersion || input.saveVersion || "sectorDriftSaveV1", "sectorDriftSaveV1"),
+    updatedAt: serverTimestamp(),
+    lastSeenAt: serverTimestamp()
+  };
+}
+
+// Presence is display-only. Do not use it as authority for credits, cargo, combat,
+// ship ownership, planet ownership, or any player-to-player effect. Future multiplayer
+// must require Firestore Security Rules and/or server-side validation. PvP is intentionally not implemented.
+async function updatePresence(input = {}) {
+  try {
+    const ready = requireFirebase();
+    if (!ready.ok) return ready;
+    if (!currentUser) return failure("Presence skipped: signed out. Local prototype mode still works.");
+    const payload = presencePayload(input, currentUser);
+    await setDoc(doc(db, "sectorDriftPresence", currentUser.uid), payload, { merge: true });
+    return success({ uid: currentUser.uid, path: `sectorDriftPresence/${currentUser.uid}`, data: payload });
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+function notifyPresenceListeners(payload = latestPresenceSnapshot) {
+  const status = getPresenceStatus();
+  presenceListeners.forEach((listener) => {
+    try { listener({ ok: status.ok, records: payload, status }); } catch (error) { console.warn("Sector Drift presence listener failed", error); }
+  });
+}
+
+function startPresenceListener() {
+  try {
+    const ready = requireFirebase();
+    if (!ready.ok) return ready;
+    if (presenceUnsubscribe) return success({ listening: true });
+    // Presence is display-only sector traffic. This listener must never enable chat,
+    // PvP, shared economy, player trading, stealing, or shared combat outcomes.
+    // TODO: True disconnect cleanup may later use Realtime Database onDisconnect or Cloud Functions.
+    presenceUnsubscribe = onSnapshot(collection(db, "sectorDriftPresence"), (snapshot) => {
+      presenceListenError = "";
+      latestPresenceSnapshot = snapshot.docs.map((entry) => ({ id: entry.id, ...(entry.data() || {}) }));
+      notifyPresenceListeners(latestPresenceSnapshot);
+    }, (error) => {
+      presenceListenError = friendlyError(error, "Live sector traffic unavailable. Local play continues.");
+      latestPresenceSnapshot = [];
+      notifyPresenceListeners(latestPresenceSnapshot);
+    });
+    return success({ listening: true });
+  } catch (error) {
+    presenceListenError = friendlyError(error, "Live sector traffic unavailable. Local play continues.");
+    return failure(error);
+  }
+}
+
+function onPresenceChange(callback) {
+  try {
+    if (typeof callback !== "function") return () => {};
+    const start = startPresenceListener();
+    presenceListeners.add(callback);
+    callback({ ok: start.ok && !presenceListenError, records: latestPresenceSnapshot, status: getPresenceStatus() });
+    return () => presenceListeners.delete(callback);
+  } catch (error) {
+    presenceListenError = friendlyError(error, "Live sector traffic unavailable. Local play continues.");
+    console.warn("Sector Drift presence callback failed", error);
+    return () => {};
+  }
+}
+
+function getPresenceStatus() {
+  const ready = requireFirebase();
+  if (!ready.ok) return { ok: false, status: "unavailable", error: ready.error };
+  if (!currentUser) return { ok: false, status: "signed out", error: "Sign in to share display-only sector traffic." };
+  if (presenceListenError) return { ok: false, status: "unavailable", error: presenceListenError };
+  return { ok: true, status: presenceUnsubscribe ? "listening" : "available", path: "sectorDriftPresence/{uid}" };
+}
+
 
 // TODO: Future multiplayer must not trust client-side credits, cargo, ship ownership, combat outcomes, planet ownership, or PvP results.
 // TODO: Future teacher dashboard should be role-gated by Firebase Auth and Firestore Security Rules.
@@ -229,7 +334,10 @@ try {
     currentUser = user;
     currentRole = "unknown";
     currentRoleReason = user ? "Loading role from users/{uid}..." : "Signed out; no role loaded.";
-    if (user) await ensureUserProfile(user);
+    if (user) {
+      await ensureUserProfile(user);
+      await updatePresence({ status: "online" });
+    }
     notifyAuthListeners();
   }, (error) => {
     firebaseInitError = friendlyError(error);
@@ -249,6 +357,9 @@ window.SectorDriftFirebase = {
   ensureUserProfile,
   saveCloudBackup,
   loadCloudBackup,
+  updatePresence,
+  onPresenceChange,
+  getPresenceStatus,
   onFirebaseAuthChange
 };
 
