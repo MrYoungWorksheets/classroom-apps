@@ -1095,3 +1095,60 @@ button.button-admin {
     grid-column: 2;
   }
 }
+
+/* Docked experience rework: location modes replace the cockpit instead of sitting beside it. */
+.cockpit-dashboard[hidden],
+.docked-screen[hidden] {
+  display: none !important;
+}
+
+.cockpit-availability {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.8rem 0 1rem;
+}
+
+.cockpit-availability p {
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid rgba(43, 212, 217, 0.18);
+  border-radius: 10px;
+  background: rgba(43, 212, 217, 0.055);
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.location-intro {
+  border-color: rgba(255, 209, 102, 0.34);
+  background: linear-gradient(135deg, rgba(255, 209, 102, 0.08), rgba(43, 212, 217, 0.055));
+}
+
+.location-intro h3 {
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  margin-bottom: 0.45rem;
+}
+
+.starbase-services > .station-activities {
+  border-color: rgba(142, 246, 178, 0.34);
+  background: rgba(142, 246, 178, 0.06);
+}
+
+.station-activities ul,
+.future-tech ul {
+  margin-bottom: 0;
+}
+
+.owned-planet-card .help-text {
+  margin-bottom: 0;
+}
+
+.combat-intro {
+  border-color: rgba(255, 107, 107, 0.34);
+  background: linear-gradient(135deg, rgba(255, 107, 107, 0.09), rgba(255, 209, 102, 0.05));
+}
+
+.docked-header .exit-button {
+  min-width: 13rem;
+  min-height: 3rem;
+  font-size: 0.98rem;
+}

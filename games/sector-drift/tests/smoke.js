@@ -315,10 +315,15 @@ vm.runInContext(`
   renderActiveScreen();
   game.player.currentSector = 1;
   openScreen('starbase');
-  assert(panels.docked.innerHTML.includes('Starbase'), 'starbase docked screen should render at a port');
+  assert(panels.docked.innerHTML.includes('Docked at Sector 1') && panels.docked.innerHTML.includes('Station Activities'), 'starbase mode should render station identity and future activity placeholder');
+  assert(panels.docked.innerHTML.includes('Exit / Return to Ship'), 'starbase mode should render the consistent return button');
+  assert(!panels.docked.innerHTML.includes('sector-map'), 'starbase mode should not render the cockpit map');
+  assert(!panels.docked.innerHTML.includes('Shipyard Ships'), 'starbase mode should keep ship catalog out of port services');
   game.player.currentSector = Object.values(sectorMap).find((sector) => sector.hasShipyard).number;
   openScreen('shipyard');
   assert(panels.docked.innerHTML.includes('Shipyard') && panels.docked.innerHTML.includes('Trade-in'), 'shipyard docked screen should show trade-in cards');
+  assert(panels.docked.innerHTML.includes('Ship purchases only happen in this Shipyard mode'), 'shipyard screen should explain focused purchase mode');
+  assert(panels.docked.innerHTML.includes('Exit / Return to Ship') && !panels.docked.innerHTML.includes('sector-map'), 'shipyard mode should have return button and hide cockpit map');
   assert(panels.docked.innerHTML.includes('stat-delta-positive') && panels.docked.innerHTML.includes('stat-delta-neutral'), 'shipyard cards should render comparison delta classes');
   const currentShipCard = renderShipCard(SHIPS.rustyComet);
   assert(currentShipCard.includes('Current Ship') && currentShipCard.includes('(±0)'), 'current ship card should show current status and neutral comparisons');
@@ -327,7 +332,23 @@ vm.runInContext(`
   const lockedShipCard = renderShipCard(SHIPS.blackfinRaider);
   assert(lockedShipCard.includes('Locked') && lockedShipCard.includes('stat-delta'), 'locked ships should still render comparison deltas');
   openScreen('specialMissions');
-  assert(panels.docked.innerHTML.includes('Math Mission') && panels.docked.innerHTML.includes('Delivery / Fetch Missions'), 'special missions should include math and delivery foundations');
+  assert(panels.docked.innerHTML.includes('Special Missions Terminal') && panels.docked.innerHTML.includes('Math Mission') && panels.docked.innerHTML.includes('Delivery / Fetch Missions'), 'special missions mode should include math and delivery foundations');
+  assert(panels.docked.innerHTML.includes('Dev Code Handling') && !panels.docked.innerHTML.includes('sector-map'), 'missions mode should keep terminal activity focused away from cockpit map');
+  game.player.currentSector = 14;
+  openScreen('planets');
+  assert(panels.docked.innerHTML.includes('Planet Management') && panels.docked.innerHTML.includes('Future Tech Potential'), 'planets mode should render planet management details');
+  assert(!panels.docked.innerHTML.includes('sector-map'), 'planets mode should not render cockpit map');
+  const pirateSector = Number(Object.keys(game.pirates).find((sector) => !game.pirates[sector].defeated));
+  if (pirateSector) game.player.currentSector = pirateSector;
+  openScreen('combat');
+  assert(panels.docked.innerHTML.includes('Focused tactical display') && panels.docked.innerHTML.includes('Known NPC Pirate Ledger'), 'combat mode should render focused tactical display');
+  assert(!panels.docked.innerHTML.includes('sector-map'), 'combat mode should not render cockpit map');
+  openScreen('settings');
+  assert(panels.docked.innerHTML.includes('Settings / Save') && panels.docked.innerHTML.includes('Exit / Return to Ship'), 'settings mode should render as a docked location with return button');
+  closeScreen();
+  assert(game.ui.activeScreen === 'cockpit', 'Exit / Return to Ship returns to cockpit without travel');
+  renderActionPanel();
+  assert(panels.action.innerHTML.includes('Dock at Starbase') && panels.action.innerHTML.includes('Mission terminal available'), 'cockpit should show compact location summaries and action buttons');
 
   // Ship trade-in and fighter/cargo guards.
   game = defaultGameState();
