@@ -748,7 +748,14 @@ vm.runInContext(`
   localStorage.getItem = originalGetItem;
   game = defaultGameState();
   localStorage.setItem = () => { throw new Error('blocked setItem'); };
-  assert(saveGame() === false && localSaveStatus.includes('in memory'), 'localStorage setItem failure is handled without throwing');
+  assert(saveGame() === false && localSaveStatus.includes('continuing in memory'), 'localStorage setItem failure is handled without throwing');
+  game.log = [];
+  const manualSaveResult = manualSaveNow();
+  assert(manualSaveResult === false, 'Settings Save Now returns false when localStorage write is blocked');
+  assert(!game.log.some((entry) => entry.includes('Manual save complete')), 'Settings Save Now should not report success when localStorage write fails');
+  assert(game.log.some((entry) => entry.includes('progress may not persist after reload')) || panels.docked.innerHTML.includes('progress may not persist after reload'), 'Settings Save Now warning is logged or visible when storage is unavailable');
+  game.player.turns = 3;
+  assert(spendTurn('scan') && game.player.turns === 2, 'gameplay remains usable in memory after localStorage setItem failure');
   localStorage.setItem = originalSetItem;
   localStorageAvailable = true;
 

@@ -1035,6 +1035,10 @@ function backupCorruptLocalSave(rawSave) {
   }
 }
 
+function localSaveUnavailableMessage() {
+  return "Local browser save is unavailable. This session is continuing in memory, but progress may not persist after reload.";
+}
+
 function loadGame() {
   if (typeof localStorage === "undefined") {
     localStorageAvailable = false;
@@ -1197,7 +1201,7 @@ function migrateGameState(saved = {}) {
 function saveGame() {
   if (typeof localStorage === "undefined") {
     localStorageAvailable = false;
-    localSaveStatus = "Local browser save is unavailable here; this session is running in memory.";
+    localSaveStatus = localSaveUnavailableMessage();
     return false;
   }
   try {
@@ -1210,9 +1214,16 @@ function saveGame() {
   } catch (error) {
     localStorageAvailable = false;
     lastLocalSaveError = error?.message || "localStorage could not be written.";
-    localSaveStatus = "Local browser save is unavailable, but this session can continue in memory.";
+    localSaveStatus = localSaveUnavailableMessage();
     return false;
   }
+}
+
+function manualSaveNow() {
+  const saved = saveGame();
+  addLog(saved ? "Manual save complete." : localSaveUnavailableMessage());
+  render();
+  return saved;
 }
 
 function render() {
@@ -2406,7 +2417,7 @@ function wireDockedButtons(scope = document) {
     return runGameAction(() => runStationActivity(button.dataset.stationActivity, scope.querySelector(`#${inputId}`)?.value || ""));
   }));
   scope.querySelector("[data-action='readRumor']")?.addEventListener("click", () => runGameAction(readRumorBoard));
-  scope.querySelector("[data-action='saveNow']")?.addEventListener("click", () => { saveGame(); addLog("Manual save complete."); render(); });
+  scope.querySelector("[data-action='saveNow']")?.addEventListener("click", manualSaveNow);
   scope.querySelector("[data-action='resetLocal']")?.addEventListener("click", () => { try { if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY); } catch (error) { lastLocalSaveError = error?.message || "localStorage reset was blocked."; } sectorMap = createSectorMap(); game = defaultGameState(); addLog("Prototype reset. Welcome back, Cadet."); saveGame(); render(); });
   scope.querySelector("[data-action='firebaseSignIn']")?.addEventListener("click", handleFirebaseSignIn);
   scope.querySelector("[data-action='firebaseSignOut']")?.addEventListener("click", handleFirebaseSignOut);
