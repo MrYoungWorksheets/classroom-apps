@@ -466,6 +466,73 @@ vm.runInContext(`
   assert(game.ui.mapZoom > oldZoom, 'map zoom should still update');
   assert(renderMinimap().includes('data-map-sector'), 'minimap should render clickable sector nodes');
 
+  // Navigation feedback, map two-step travel, arrival reports, and docking ledger checks.
+  game = defaultGameState();
+  game.tutorial.completedSteps.push('travel');
+  launchGate.mode = 'localPrototype';
+  maybeTravelEvent = function () { return false; };
+  resolveSectorDanger = function () { return false; };
+  renderSectorPanel();
+  assert(panels.sector.innerHTML.includes('Selected Sector Intel') && panels.sector.innerHTML.includes('Arrival Report'), 'selected sector intel and arrival report render in the main viewer');
+  const fuelBeforeMap = game.player.fuel;
+  const turnsBeforeMap = game.player.turns;
+  handleMapNodeSelect(2);
+  assert(game.player.currentSector === 1 && selectedSectorNumber === 2, 'map node first click selects/scans without travel');
+  assert(panels.sector.innerHTML.includes('Tap again to travel to Sector 2'), 'adjacent selected node shows tap-again travel hint');
+  handleMapNodeSelect(2);
+  assert(game.player.currentSector === 2, 'second click on same adjacent node travels');
+  assert(game.player.fuel === fuelBeforeMap - 1 && game.player.turns === turnsBeforeMap - 1, 'map travel costs fuel and turns');
+  assert(game.arrivalReport.includes('Arrived in Sector 2'), 'arrival report updates after map travel');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  game.revealedSectors = [1, 2, 3];
+  handleMapNodeSelect(3);
+  const nonAdjacentSector = game.player.currentSector;
+  handleMapNodeSelect(3);
+  assert(game.player.currentSector === nonAdjacentSector, 'double-clicking a non-adjacent node does not travel');
+  assert(renderNavigationIntel().includes('Route known') || renderNavigationIntel().includes('Route unknown'), 'non-adjacent selection renders route status');
+  game.player.fuel = 0;
+  handleMapNodeSelect(2);
+  handleMapNodeSelect(2);
+  assert(game.player.currentSector === 1 && game.log[0].includes('Fuel is empty'), 'blocked map travel gives a clear reason');
+  game.player.fuel = 5;
+  game.player.currentSector = 2;
+  emergencyWarp();
+  assert(game.arrivalReport.includes('Emergency warp completed') && game.player.currentSector === 1, 'emergency warp updates the arrival report');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  game.player.currentSector = 1;
+  openScreen('starbase');
+  assert(panels.docked.innerHTML.includes('Docking Ledger'), 'starbase docking ledger starts when docking');
+  const oreBuy = sectorMap[1].portPrices.Ore.buy;
+  const oreSell = sectorMap[1].portPrices.Ore.sell;
+  const dockingStart = game.dockingLedger.startedWith;
+  buyResource('Ore', 5);
+  assert(game.player.cargoCostBasis.Ore.known && game.player.cargoCostBasis.Ore.quantity === 5, 'cargo average purchase price updates on buy');
+  assert(Math.round(game.player.cargoCostBasis.Ore.totalCost / game.player.cargoCostBasis.Ore.quantity) === oreBuy, 'cargo cost basis tracks average buy price');
+  sellResource('Ore', 2);
+  assert(game.dockingLedger.tradeProfit === Math.round((oreSell - oreBuy) * 2), 'selling calculates profit/loss using average cost');
+  game.player.fuel = game.player.maxFuel - 2;
+  buyFuel(1);
+  game.player.hull = game.player.maxHull - 2;
+  repairHull();
+  assert(game.dockingLedger.serviceCosts > 0 && game.dockingLedger.spent > 0, 'fuel and repair costs update docking ledger');
+  const earnedBeforeJob = game.dockingLedger.earned;
+  runStationActivity('cargoSorting', '9');
+  assert(game.dockingLedger.earned === earnedBeforeJob + 35 && game.dockingLedger.activityRewards >= 35, 'starbase activity rewards update docking ledger');
+  assert(game.dockingLedger.current === game.player.credits && game.dockingLedger.startedWith === dockingStart, 'docking ledger tracks current and starting credits');
+  const legacyCost = migrateGameState({ player: { cargo: { Ore: 4 } } });
+  assert(legacyCost.player.cargoCostBasis.Ore.known === false, 'legacy saves without cargo cost basis migrate safely as unknown average cost');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  const targetQuest = deliveryQuestById('deliver-food-24');
+  startDeliveryQuest(targetQuest.id);
+  selectedSectorNumber = targetQuest.targetSector;
+  assert(renderNavigationIntel().includes('Mission Target') && renderNavigationIntel().includes(targetQuest.title), 'selected mission target shows mission indicator');
+
   // Firebase readiness, launch gate, admin role, and local-save safety checks.
   assert(source.includes('const REQUIRE_FIREBASE_LOGIN = true'), 'app.js should define login-first requirement');
   assert(source.includes('function renderLaunchScreen()'), 'launch/login screen renderer should exist');

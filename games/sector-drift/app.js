@@ -272,6 +272,7 @@ const SHIPS = {
 let sectorMap = createSectorMap();
 let game = loadGame();
 let selectedSectorNumber = game.player.currentSector;
+let selectedMapClickSector = null;
 let firebaseUnsubscribe = null;
 const cloudUiState = { status: "not initialized", message: "Cloud backup unavailable until Firebase finishes loading.", busy: false, user: null, role: "unknown", roleReason: "Waiting for Firebase role lookup.", lastCloudResult: "No cloud action this session." };
 const launchGate = { mode: "checkingAuth", message: "Checking classroom sign-in status...", enteredAt: Date.now() };
@@ -689,6 +690,7 @@ function defaultGameState() {
       hull: starter.maxHull,
       maxHull: starter.maxHull,
       cargo: { Ore: 0, Food: 0, Tech: 0, Smuggled: 0 },
+      cargoCostBasis: defaultCargoCostBasis(),
       reputation: 0,
       lawfulReputation: 0,
       pirateReputation: 0,
@@ -723,6 +725,8 @@ function defaultGameState() {
     achievements: [],
     stats: defaultStats(),
     log: ["Welcome to Sector Drift. Start at Sector 1 and move at your own pace."],
+    arrivalReport: "Standing by in Sector 1. Core Port detected. Alliance protected space.",
+    dockingLedger: defaultDockingLedger(500),
     currentMission: generateMission(),
     missionAttempts: 0,
     missionLocked: false,
@@ -736,6 +740,62 @@ function defaultGameState() {
   };
 }
 
+
+function defaultCargoCostBasis() {
+  return [...RESOURCES, SMUGGLED_RESOURCE].reduce((basis, resource) => {
+    basis[resource] = { quantity: 0, totalCost: 0, known: true };
+    return basis;
+  }, {});
+}
+
+function migrateCargoCostBasis(savedBasis = {}, cargo = {}) {
+  const basis = defaultCargoCostBasis();
+  [...RESOURCES, SMUGGLED_RESOURCE].forEach((resource) => {
+    const saved = savedBasis && typeof savedBasis === "object" ? savedBasis[resource] : null;
+    const quantity = Math.max(0, Math.floor(Number(cargo[resource]) || 0));
+    if (saved && typeof saved === "object") {
+      const known = saved.known !== false;
+      const savedQuantity = Math.max(0, Math.floor(Number(saved.quantity) || 0));
+      const totalCost = Math.max(0, Number(saved.totalCost) || 0);
+      basis[resource] = { quantity: Math.min(quantity, savedQuantity || quantity), totalCost: known ? Math.min(totalCost, quantity * Math.max(0, totalCost / Math.max(1, savedQuantity || quantity))) : 0, known };
+      if (quantity === 0) basis[resource] = { quantity: 0, totalCost: 0, known: true };
+      return;
+    }
+    basis[resource] = quantity > 0 ? { quantity, totalCost: 0, known: false } : { quantity: 0, totalCost: 0, known: true };
+  });
+  return basis;
+}
+
+function defaultDockingLedger(startingCredits = 0, sectorNumber = null) {
+  return {
+    active: false,
+    sectorNumber,
+    startedWith: Math.max(0, Math.floor(Number(startingCredits) || 0)),
+    current: Math.max(0, Math.floor(Number(startingCredits) || 0)),
+    earned: 0,
+    spent: 0,
+    tradeProfit: 0,
+    activityRewards: 0,
+    serviceCosts: 0,
+  };
+}
+
+function migrateDockingLedger(savedLedger = {}, credits = 0) {
+  const base = defaultDockingLedger(credits);
+  if (!savedLedger || typeof savedLedger !== "object") return base;
+  return {
+    ...base,
+    active: Boolean(savedLedger.active),
+    sectorNumber: Number(savedLedger.sectorNumber) || null,
+    startedWith: Math.max(0, Math.floor(Number(savedLedger.startedWith) || 0)),
+    current: Math.max(0, Math.floor(Number(credits) || 0)),
+    earned: Math.max(0, Math.floor(Number(savedLedger.earned) || 0)),
+    spent: Math.max(0, Math.floor(Number(savedLedger.spent) || 0)),
+    tradeProfit: Math.floor(Number(savedLedger.tradeProfit) || 0),
+    activityRewards: Math.max(0, Math.floor(Number(savedLedger.activityRewards) || 0)),
+    serviceCosts: Math.max(0, Math.floor(Number(savedLedger.serviceCosts) || 0)),
+  };
+}
 
 function createDeliveryQuests() {
   return [
@@ -919,7 +979,8 @@ function migrateGameState(saved = {}) {
   merged.player.shipId = ship.id;
   merged.player.shipName = ship.name;
   merged.player.cargo = { ...fresh.player.cargo, ...(saved.player?.cargo || {}) };
-  merged.player.cargo[SMUGGLED_RESOURCE] = Math.max(0, Math.floor(Number(merged.player.cargo[SMUGGLED_RESOURCE]) || 0));
+  [...RESOURCES, SMUGGLED_RESOURCE].forEach((resource) => { merged.player.cargo[resource] = Math.max(0, Math.floor(Number(merged.player.cargo[resource]) || 0)); });
+  merged.player.cargoCostBasis = migrateCargoCostBasis(saved.player?.cargoCostBasis, merged.player.cargo);
   merged.player.upgrades = { ...fresh.player.upgrades, ...(saved.player?.upgrades || {}) };
   merged.player.reputation = Math.max(-100, Math.min(100, Math.floor(typeof merged.player.reputation === "number" ? merged.player.reputation : 0)));
   merged.player.lawfulReputation = Math.max(0, Math.floor(typeof merged.player.lawfulReputation === "number" ? merged.player.lawfulReputation : Math.max(0, merged.player.reputation)));
@@ -996,6 +1057,8 @@ function migrateGameState(saved = {}) {
   merged.ui.warpDestination = sectorMap[Number(merged.ui.warpDestination)] ? Number(merged.ui.warpDestination) : null;
   merged.deliveryQuests = migrateDeliveryQuests(saved.deliveryQuests);
   merged.stationActivities = migrateStationActivities(saved.stationActivities);
+  merged.arrivalReport = typeof saved.arrivalReport === "string" ? saved.arrivalReport : initialArrivalReport(merged.player.currentSector);
+  merged.dockingLedger = migrateDockingLedger(saved.dockingLedger, merged.player.credits);
   updateScannerReveals(merged);
   return merged;
 }
@@ -1051,7 +1114,9 @@ function openScreen(screenName) {
     game.ui.activeScreen = "launch";
     return addAndRender(authGateMessage());
   }
-  game.ui.activeScreen = screenNames().includes(screenName) ? screenName : "cockpit";
+  const nextScreen = screenNames().includes(screenName) ? screenName : "cockpit";
+  if (nextScreen === "starbase" && sectorMap[game.player.currentSector]?.type === "port" && game.ui.activeScreen !== "starbase") beginDockingSession();
+  game.ui.activeScreen = nextScreen;
   render();
 }
 
@@ -1191,6 +1256,7 @@ function renderSectorPanel() {
     ${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty. Complete math missions for fuel or trade when you reach a port.</p>` : `<p class="help-text">Travel costs 1 turn and 1 fuel. A sector event may occur after arrival.</p>`}`;
   panels.sector.querySelectorAll("[data-action='travel']").forEach((button) => button.addEventListener("click", () => travelToSector(Number(button.dataset.sector))));
   wireWarpControls(panels.sector);
+  panels.sector.querySelector("[data-action='plotSelectedRoute']")?.addEventListener("click", () => runGameAction(() => plotSelectedRoute(panels.sector.querySelector("[data-action='plotSelectedRoute']")?.dataset.sector)));
   panels.sector.querySelector("[data-map-zoom='out']")?.addEventListener("click", () => zoomMap(-MAP_ZOOM_STEP));
   panels.sector.querySelector("[data-map-zoom='in']")?.addEventListener("click", () => zoomMap(MAP_ZOOM_STEP));
   panels.sector.querySelector("[data-map-zoom='reset']")?.addEventListener("click", resetMapView);
@@ -1255,6 +1321,7 @@ function resetMapView() {
   game.ui = game.ui || {};
   game.ui.mapZoom = DEFAULT_MAP_ZOOM;
   selectedSectorNumber = game.player.currentSector;
+  selectedMapClickSector = null;
   saveGame();
   renderSectorPanel();
 }
@@ -1277,10 +1344,14 @@ function renderMapNode(sector) {
   const detected = !visited && game.revealedSectors.includes(sector.number);
   const selected = selectedSectorNumber === sector.number;
   const danger = canSeeDanger(sector.number) && sector.dangerLevel > 0;
+  const protectedSpace = isProtectedSpace(sector.number);
+  const unknown = !visited && !detected;
+  const travelReady = selected && adjacent && !current;
+  const notAdjacent = selected && !adjacent && !current;
   const radius = current ? 4.2 : sector.routeRole === "crossroad" ? 3.8 : 3.3;
-  const classes = ["map-node", sector.type, sector.routeRole, visited ? "visited" : "", current ? "current" : "", adjacent ? "adjacent" : "", detected ? "detected" : "", selected ? "selected" : "", danger ? "danger-known" : ""].filter(Boolean).join(" ");
+  const classes = ["map-node", sector.type, sector.routeRole, visited ? "visited" : "", current ? "current node-current" : "", adjacent ? "adjacent node-adjacent" : "", detected ? "detected" : "", selected ? "selected node-selected" : "", travelReady ? "node-travel-ready" : "", notAdjacent ? "node-not-adjacent" : "", danger ? "danger-known node-danger-known" : "", protectedSpace ? "node-protected" : "", unknown ? "node-unknown" : ""].filter(Boolean).join(" ");
   const tooltip = sectorTooltip(sector.number);
-  return `<g class="${classes}" data-map-sector="${sector.number}" role="button" tabindex="0" aria-label="${tooltip}"><title>${tooltip}</title><circle class="map-hit-target" cx="${sector.coordinates.x}" cy="${sector.coordinates.y}" r="7.2"></circle><circle class="map-visible-node" cx="${sector.coordinates.x}" cy="${sector.coordinates.y}" r="${radius}"></circle><text x="${sector.coordinates.x}" y="${sector.coordinates.y + 1.35}">${sector.number}</text>${sector.routeRole === "deadEnd" ? `<circle class="role-marker" cx="${sector.coordinates.x + 4.5}" cy="${sector.coordinates.y - 4.5}" r="1.2"></circle>` : ""}${sector.routeRole === "crossroad" ? `<text class="role-symbol" x="${sector.coordinates.x + 5}" y="${sector.coordinates.y - 4}">✚</text>` : ""}${danger ? `<text class="danger-marker" x="${sector.coordinates.x + 4.7}" y="${sector.coordinates.y + 5.8}">!</text>` : ""}</g>`;
+  return `<g class="${classes}" data-map-sector="${sector.number}" role="button" tabindex="0" aria-label="${tooltip}"><title>${tooltip}</title><circle class="map-hit-target" cx="${sector.coordinates.x}" cy="${sector.coordinates.y}" r="7.2"></circle><circle class="map-visible-node" cx="${sector.coordinates.x}" cy="${sector.coordinates.y}" r="${radius}"></circle><text x="${sector.coordinates.x}" y="${sector.coordinates.y + 1.35}">${sector.number}</text>${sector.routeRole === "deadEnd" ? `<circle class="role-marker" cx="${sector.coordinates.x + 4.5}" cy="${sector.coordinates.y - 4.5}" r="1.2"></circle>` : ""}${sector.routeRole === "crossroad" ? `<text class="role-symbol" x="${sector.coordinates.x + 5}" y="${sector.coordinates.y - 4}">✚</text>` : ""}${danger ? `<text class="danger-marker" x="${sector.coordinates.x + 4.7}" y="${sector.coordinates.y + 5.8}">!</text>` : ""}${protectedSpace ? `<text class="protected-marker" x="${sector.coordinates.x - 5}" y="${sector.coordinates.y + 5.8}">A</text>` : ""}</g>`;
 }
 
 
@@ -1383,14 +1454,54 @@ function renderNavigationIntel() {
   const visited = game.visitedSectors.includes(selected.number);
   const detected = game.revealedSectors.includes(selected.number);
   const visible = getVisibleSectorNumbers().includes(selected.number);
-  const status = current ? "Current sector" : adjacent ? "Adjacent" : visited ? "Visited" : detected ? "Detected" : visible ? "Visible" : "Unknown";
-  const canTravel = adjacent && game.player.turns > 0 && game.player.fuel > 0;
+  const route = !current ? findRouteToSector(game.player.currentSector, selected.number) : [selected.number];
+  const status = current ? "Current sector" : adjacent ? "Adjacent · direct lane" : route ? `Route known · ${route.length - 1} jump${route.length === 2 ? "" : "s"}` : visited ? "Visited · route unknown" : detected ? "Detected · route unknown" : visible ? "Visible · route unknown" : "Unknown";
+  const canTravel = adjacent && game.player.turns > 0 && game.player.fuel > 0 && canUseGameActions();
   const danger = canSeeDanger(selected.number) ? (selected.dangerLevel > 0 ? `${HAZARD_TYPES[selected.hazardType].icon} Danger ${selected.dangerLevel}: ${HAZARD_TYPES[selected.hazardType].label}` : "No danger detected") : "Danger unknown";
   const features = scannerFeatureText(selected);
-  return `<aside class="nav-intel" aria-live="polite"><h3>Navigation Intel</h3><div class="intel-grid">
+  const missionIntel = missionTargetIntel(selected.number);
+  const routeStatus = current ? "Already here" : adjacent ? (canTravel ? "Direct lane available" : travelBlockedReason()) : route ? `Route known; next hop Sector ${route[1]}` : "Route unknown. Explore nearby lanes or use future probes.";
+  const suggested = suggestedSectorAction(selected, { current, adjacent, route, missionIntel });
+  const actionButton = !current && !adjacent && route ? `<button type="button" data-action="plotSelectedRoute" data-sector="${selected.number}">Set Warp Destination</button>` : !current && !adjacent ? `<button type="button" data-action="plotSelectedRoute" data-sector="${selected.number}" disabled>Plot Route</button>` : "";
+  const hint = game.ui?.mapHint ? `<p class="action-hint">${game.ui.mapHint}</p>` : "";
+  return `<aside class="nav-intel main-viewer" aria-live="polite"><p class="eyebrow">Main Viewer</p><h3>Selected Sector Intel</h3>${renderArrivalReport()}<div class="intel-grid">
     ${stat("Sector", selected.number)}${stat("Status", status)}${stat("System Type", visible ? titleCase(selected.type) : "Unknown")}${stat("Route Role", canSeeRouteRole(selected.number) ? titleCase(selected.routeRole) : "Scan level 4")}
-    ${stat("Danger", danger)}${stat("Patrol Zone", protectedSpaceLabel(selected.number))}${stat("Travel", adjacent ? (canTravel ? "Available · 1 fuel / 1 turn" : travelBlockedReason()) : current ? "Already here" : "Not directly connected")}
-  </div><p><strong>Known features:</strong> ${features}</p><p class="strategic-note">${canSeeRouteRole(selected.number) ? selected.strategicNote : "Upgrade scanners to reveal route roles such as tunnels, dead ends, and crossroads."}</p><p class="recommendation">${navigationRecommendation(selected.number)}</p></aside>`;
+    ${stat("Danger", danger)}${stat("Patrol Zone", protectedSpaceLabel(selected.number))}${stat("Route / Travel", routeStatus)}${stat("Suggested Action", suggested)}
+  </div><p><strong>Known features:</strong> ${features}</p>${missionIntel ? renderMissionTargetIntel(missionIntel) : ""}<p class="strategic-note">${canSeeRouteRole(selected.number) ? selected.strategicNote : "Upgrade scanners to reveal route roles such as tunnels, dead ends, and crossroads."}</p><p class="recommendation">${navigationRecommendation(selected.number)}</p>${hint}${actionButton}</aside>`;
+}
+
+function renderArrivalReport() {
+  return `<section class="arrival-report"><h4>Arrival Report</h4><p>${game.arrivalReport || buildArrivalReport(game.player.currentSector)}</p></section>`;
+}
+
+function plotSelectedRoute(number = selectedSectorNumber) {
+  return setWarpDestination(Number(number));
+}
+
+function missionTargetIntel(sectorNumber) {
+  const quests = (game.deliveryQuests || []).filter((quest) => ["active", "claimable"].includes(quest.status) && (quest.targetSector === sectorNumber || quest.returnSector === sectorNumber));
+  if (!quests.length) return null;
+  const quest = quests[0];
+  const atCompletion = canCompleteDeliveryQuest(quest);
+  const missing = quest.requiredResource === "Fuel" ? Math.max(0, quest.requiredAmount - game.player.fuel) : isResourceDeliveryQuest(quest) ? Math.max(0, quest.requiredAmount - (game.player.cargo[quest.requiredResource] || 0)) : 0;
+  return { quest, atCompletion, missing };
+}
+
+function renderMissionTargetIntel(intel) {
+  const requirement = intel.missing > 0 ? `Missing ${intel.missing} ${intel.quest.requiredResource}.` : intel.atCompletion ? "Ready to complete here." : "Target marked for active contract.";
+  return `<div class="mission-target-intel"><span class="badge mission-target-badge">Mission Target</span><strong>${intel.quest.title}</strong><p class="help-text">${requirement}</p></div>`;
+}
+
+function suggestedSectorAction(sector, context = {}) {
+  if (context.current && sector.type === "port") return "Dock at Starbase";
+  if (context.current && sector.hasShipyard) return "Open Shipyard";
+  if (context.current && sector.type === "planet") return "Manage Planet";
+  if (context.current && currentPirateEncounter()) return "Engage Pirate";
+  if (context.missionIntel?.atCompletion) return "Open Special Missions";
+  if (context.adjacent && game.player.fuel > 0 && game.player.turns > 0) return "Tap again to travel";
+  if (!context.adjacent && context.route) return "Set Warp Destination";
+  if (!context.adjacent) return "Plot Route";
+  return navigationRecommendation(sector.number);
 }
 
 function renderEmergencyWarpControl() {
@@ -1401,10 +1512,29 @@ function renderEmergencyWarpControl() {
 
 function handleMapNodeSelect(number) {
   if (!canUseGameActions()) return addAndRender(authGateMessage());
-  selectSector(number, true);
+  if (!getVisibleSectorNumbers().includes(number)) return addAndRender("That sector is outside scanner visibility.");
   const current = sectorMap[game.player.currentSector];
-  if (number === game.player.currentSector) return;
-  if (current.adjacent.includes(number)) travelToSector(number);
+  const wasSelected = selectedSectorNumber === number && selectedMapClickSector === number;
+  selectedSectorNumber = number;
+  selectedMapClickSector = number;
+  if (number === game.player.currentSector) { renderSectorPanel(); return; }
+  if (!current.adjacent.includes(number)) {
+    game.ui = game.ui || {};
+    const route = findRouteToSector(game.player.currentSector, number);
+    game.ui.mapHint = route ? `Route known to Sector ${number}. Next hop: Sector ${route[1] || number}.` : `Route unknown to Sector ${number}. Explore nearby lanes or use future probes.`;
+    saveGame();
+    renderSectorPanel();
+    return;
+  }
+  if (!wasSelected) {
+    game.ui = game.ui || {};
+    game.ui.mapHint = `Tap again to travel to Sector ${number}.`;
+    saveGame();
+    renderSectorPanel();
+    return;
+  }
+  selectedMapClickSector = null;
+  travelToSector(number);
 }
 
 function selectSector(number, shouldRender = true) {
@@ -1457,10 +1587,39 @@ function emergencyWarp() {
   markSectorVisited(1);
   updateScannerReveals();
   addLog("Emergency warp engaged. Returned to Sector 1 for 5 fuel.");
+  setArrivalReport(1, ["Emergency warp completed for 5 fuel."]);
   saveGame();
   render();
 }
 
+
+function initialArrivalReport(number = 1) {
+  const sector = sectorMap[number];
+  if (!sector) return "Arrival telemetry unavailable.";
+  const features = (sector.objects || []).filter((feature) => feature && feature !== "Empty space");
+  return [`Arrived in Sector ${number}.`, `${titleCase(sector.type)} detected.`, features.length ? `Visible features: ${features.join(", ")}.` : "", isProtectedSpace(number) ? "Alliance protected space." : ""].filter(Boolean).join(" ");
+}
+
+function buildArrivalReport(number = game.player.currentSector, extras = []) {
+  const sector = sectorMap[number];
+  if (!sector) return "Arrival telemetry unavailable.";
+  const parts = [`Arrived in Sector ${number}.`, `${titleCase(sector.type)} detected.`];
+  const features = knownFeatures(sector).filter((feature) => feature && feature !== "Empty space");
+  if (features.length) parts.push(`Visible features: ${features.join(", ")}.`);
+  if (sector.hasShipyard) parts.push("Shipyard available.");
+  if (isProtectedSpace(number)) parts.push("Alliance protected space.");
+  const pirate = game.pirates?.[number];
+  if (pirate && !pirate.defeated) parts.push(`Warning: pirate patrol signature detected (${pirate.name}).`);
+  const missionIntel = missionTargetIntel(number);
+  if (missionIntel) parts.push(missionIntel.atCompletion ? `${missionIntel.quest.title}: target reached. Open Special Missions to complete contract.` : `${missionIntel.quest.title}: mission target sector.`);
+  extras.filter(Boolean).slice(-3).forEach((entry) => parts.push(entry));
+  return parts.join(" ");
+}
+
+function setArrivalReport(number = game.player.currentSector, extras = []) {
+  game.arrivalReport = buildArrivalReport(number, extras);
+  addLog(game.arrivalReport);
+}
 
 function stationDisplayName(sector) {
   const names = { 1: "Core Classroom Starbase", 3: "Crossroad Exchange", 5: "Brightline Station", 7: "Waypoint Seven", 8: "Rimward Trade Hub", 10: "Long Arc Port", 31: "Deep Lane Depot", 45: "Frontier Starbase" };
@@ -1499,6 +1658,7 @@ function runStationActivity(id, answer = "") {
     if (cleaned !== stationActivityAnswer(id)) return addAndRender("Cargo Sorting check needs the correct crate total before payout.");
     state.cargoSortingUses += 1;
     game.player.credits += 35;
+    recordDockingCredits(35, "activity");
     addLog("Cargo Sorting Job complete. Earned 35 credits for careful station work.");
   } else if (id === "repairAssist") {
     if (state.repairAssistUses >= 2) return addAndRender("Repair Bay Assist is on cooldown for today.");
@@ -1506,6 +1666,7 @@ function runStationActivity(id, answer = "") {
     state.repairAssistUses += 1;
     state.repairDiscount = Math.min(60, (state.repairDiscount || 0) + 20);
     game.player.credits += 20;
+    recordDockingCredits(20, "activity");
     addLog("Repair Bay Assist complete. Earned 20 credits and a 20 credit repair discount at this starbase.");
   } else {
     return addAndRender("Station activity unavailable.");
@@ -1534,12 +1695,97 @@ function readRumorBoard() {
   const cost = 5;
   if (game.player.credits < cost) return addAndRender("Rumor Board access costs 5 credits.");
   game.player.credits -= cost;
+  recordDockingCredits(-cost, "service");
   const rumors = stationRumors(sector);
   const index = (game.player.currentSector + game.player.upgrades.scanner + game.visitedSectors.length + game.player.credits) % rumors.length;
   stationActivitiesState().lastRumor = rumors[index];
   addLog(`Rumor Board: ${rumors[index]}`);
   saveGame();
   render();
+}
+
+function beginDockingSession() {
+  game.dockingLedger = defaultDockingLedger(game.player.credits, game.player.currentSector);
+  game.dockingLedger.active = true;
+}
+
+function activeDockingLedger() {
+  game.dockingLedger = migrateDockingLedger(game.dockingLedger, game.player.credits);
+  if (!game.dockingLedger.active || game.dockingLedger.sectorNumber !== game.player.currentSector) {
+    game.dockingLedger.active = true;
+    game.dockingLedger.sectorNumber = game.player.currentSector;
+    game.dockingLedger.current = game.player.credits;
+  }
+  return game.dockingLedger;
+}
+
+function recordDockingCredits(delta, category = "trade", tradeProfit = 0) {
+  const ledger = activeDockingLedger();
+  ledger.current = game.player.credits;
+  if (delta > 0) ledger.earned += delta;
+  if (delta < 0) ledger.spent += Math.abs(delta);
+  if (category === "activity" && delta > 0) ledger.activityRewards += delta;
+  if (category === "service" && delta < 0) ledger.serviceCosts += Math.abs(delta);
+  if (category === "trade") ledger.tradeProfit += tradeProfit;
+}
+
+function signedCredits(value) {
+  const numeric = Math.floor(Number(value) || 0);
+  return `${numeric > 0 ? "+" : ""}${numeric}`;
+}
+
+function renderDockingLedger() {
+  const ledger = activeDockingLedger();
+  ledger.current = game.player.credits;
+  const net = ledger.current - ledger.startedWith;
+  const netClass = net > 0 ? "ledger-positive" : net < 0 ? "ledger-negative" : "ledger-neutral";
+  return `<section class="mini-card docking-ledger ${netClass}"><h3>Docking Ledger</h3><div class="intel-grid">${stat("Started with", `${ledger.startedWith} credits`)}${stat("Current", `${ledger.current} credits`)}${stat("Net", signedCredits(net))}${stat("Earned", `+${ledger.earned}`)}${stat("Spent", `-${ledger.spent}`)}${stat("Trade P/L", signedCredits(ledger.tradeProfit))}${stat("Activity Rewards", `+${ledger.activityRewards}`)}${stat("Fuel/Repair/Services", `-${ledger.serviceCosts}`)}</div></section>`;
+}
+
+function cargoCostInfo(resource) {
+  const basis = (game.player.cargoCostBasis || defaultCargoCostBasis())[resource] || { quantity: 0, totalCost: 0, known: true };
+  const held = Math.max(0, Math.floor(Number(game.player.cargo[resource]) || 0));
+  if (!held || !basis.known || basis.quantity <= 0) return { known: false, avg: 0, held };
+  return { known: true, avg: basis.totalCost / Math.max(1, basis.quantity), held };
+}
+
+function renderTradeCostIntel(resource, price) {
+  const info = cargoCostInfo(resource);
+  const sellAll = info.held * (price.sell - info.avg);
+  return `<p class="trade-cost-intel">Avg Cost: ${info.known ? Math.round(info.avg) : "unknown"}${info.known ? ` · Profit: ${signedCredits(Math.round(price.sell - info.avg))} each · Sell all: ${signedCredits(Math.round(sellAll))}` : ""}</p>`;
+}
+
+function ensureCargoCostBasis() {
+  game.player.cargoCostBasis = { ...defaultCargoCostBasis(), ...(game.player.cargoCostBasis || {}) };
+  [...RESOURCES, SMUGGLED_RESOURCE].forEach((resource) => {
+    const basis = game.player.cargoCostBasis[resource] || { quantity: 0, totalCost: 0, known: true };
+    basis.quantity = Math.max(0, Math.floor(Number(basis.quantity) || 0));
+    basis.totalCost = Math.max(0, Number(basis.totalCost) || 0);
+    basis.known = basis.known !== false;
+    game.player.cargoCostBasis[resource] = basis;
+  });
+  return game.player.cargoCostBasis;
+}
+
+function updateCargoCostOnBuy(resource, amount, unitPrice) {
+  const basis = ensureCargoCostBasis()[resource];
+  if (!basis.known && basis.quantity <= 0) basis.known = true;
+  if (basis.known) basis.totalCost += amount * unitPrice;
+  basis.quantity += amount;
+}
+
+function updateCargoCostOnSell(resource, amount, unitPrice) {
+  const basis = ensureCargoCostBasis()[resource];
+  let profit = 0;
+  const knownBeforeSale = basis.known;
+  if (basis.known && basis.quantity > 0) {
+    const avg = basis.totalCost / basis.quantity;
+    profit = Math.round((unitPrice - avg) * amount);
+    basis.totalCost = Math.max(0, basis.totalCost - avg * amount);
+  }
+  basis.quantity = Math.max(0, basis.quantity - amount);
+  if (basis.quantity === 0) { basis.totalCost = 0; basis.known = true; }
+  return knownBeforeSale ? profit : 0;
 }
 
 function renderStationActivities(sector) {
@@ -1550,10 +1796,10 @@ function renderStationActivities(sector) {
 }
 
 function renderStarbaseScreen(sector) {
-  return `<section class="location-intro starbase-intro mini-card"><p class="eyebrow">Docked at Sector ${sector.number}</p><h3>${stationDisplayName(sector)}</h3><div class="intel-grid">${stat("Station Type", sector.portType)}${stat("Services", `Trading · Fuel · Repairs · Activities · Rumors${sector.hasShipyard ? " · Shipyard next door" : ""}`)}${stat("Current Sector", sector.number)}</div><p class="help-text">${sector.flavor}</p></section><div class="screen-grid starbase-services"><section class="mini-card service-counter"><h3>Port Services</h3><p><span class="badge">${sector.portType}</span></p><p class="help-text"><strong>Local market notes:</strong> ${sector.marketNote}</p><p class="help-text"><strong>Trade tip:</strong> ${sector.tradeTip}</p><div class="trade-grid">${RESOURCES.map((resource) => {
+  return `${renderDockingLedger()}<section class="location-intro starbase-intro mini-card"><p class="eyebrow">Docked at Sector ${sector.number}</p><h3>${stationDisplayName(sector)}</h3><div class="intel-grid">${stat("Station Type", sector.portType)}${stat("Services", `Trading · Fuel · Repairs · Activities · Rumors${sector.hasShipyard ? " · Shipyard next door" : ""}`)}${stat("Current Sector", sector.number)}</div><p class="help-text">${sector.flavor}</p></section><div class="screen-grid starbase-services"><section class="mini-card service-counter"><h3>Port Services</h3><p><span class="badge">${sector.portType}</span></p><p class="help-text"><strong>Local market notes:</strong> ${sector.marketNote}</p><p class="help-text"><strong>Trade tip:</strong> ${sector.tradeTip}</p><div class="trade-grid">${RESOURCES.map((resource) => {
     const price = sector.portPrices[resource];
     const buyDisabled = cargoSpaceLeft() <= 0 ? "disabled" : "";
-    return `<div class="mini-card"><h3>${resource}</h3><p>Buy ${price.buy} credits · Sell ${price.sell} credits</p><div class="resource-actions"><button data-action="buy" data-resource="${resource}" data-amount="1" ${buyDisabled}>Buy 1</button><button data-action="buy" data-resource="${resource}" data-amount="5" ${buyDisabled}>Buy 5</button><button data-action="sell" data-resource="${resource}" data-amount="1">Sell 1</button><button data-action="sell" data-resource="${resource}" data-amount="5">Sell 5</button></div></div>`;
+    return `<div class="mini-card"><h3>${resource}</h3><p>Buy ${price.buy} credits · Sell ${price.sell} credits</p>${renderTradeCostIntel(resource, price)}<div class="resource-actions"><button data-action="buy" data-resource="${resource}" data-amount="1" ${buyDisabled}>Buy 1</button><button data-action="buy" data-resource="${resource}" data-amount="5" ${buyDisabled}>Buy 5</button><button data-action="sell" data-resource="${resource}" data-amount="1">Sell 1</button><button data-action="sell" data-resource="${resource}" data-amount="5">Sell 5</button></div></div>`;
   }).join("")}</div>${renderRefuelPanel()}${renderRepairPanel(sector)}</section>${renderStationActivities(sector)}<section class="mini-card item-shop-placeholder"><h3>Item Shop: Coming Soon</h3><p><strong>Scanning Probe</strong></p><p class="help-text">Scanning Probes will allow long-range sector scans in a future update. They will be expensive, limited, and will not reveal the entire map cheaply.</p></section></div>`;
 }
 
@@ -2134,7 +2380,7 @@ function renderPort(sector) {
   return `<p><span class="badge">${sector.portType}</span>${sector.hasShipyard ? ` <span class="badge soft-badge">Shipyard</span>` : ""}</p><p class="help-text">${sector.marketNote}</p><p class="help-text"><strong>Trade tip:</strong> ${sector.tradeTip}</p><div class="trade-grid">${RESOURCES.map((resource) => {
     const price = sector.portPrices[resource];
     const buyDisabled = cargoSpaceLeft() <= 0 ? "disabled" : "";
-    return `<div class="mini-card"><h3>${resource}</h3><p>Buy ${price.buy} credits · Sell ${price.sell} credits</p><div class="resource-actions">
+    return `<div class="mini-card"><h3>${resource}</h3><p>Buy ${price.buy} credits · Sell ${price.sell} credits</p>${renderTradeCostIntel(resource, price)}<div class="resource-actions">
       <button data-action="buy" data-resource="${resource}" data-amount="1" ${buyDisabled}>Buy 1</button><button data-action="buy" data-resource="${resource}" data-amount="5" ${buyDisabled}>Buy 5</button>
       <button data-action="sell" data-resource="${resource}" data-amount="1">Sell 1</button><button data-action="sell" data-resource="${resource}" data-amount="5">Sell 5</button>
     </div></div>`;
@@ -2300,6 +2546,7 @@ function runGameAction(callback) {
 function wireLocationButtons(scope = panels.location) {
   if (!scope) return;
   scope.querySelectorAll("[data-action='buy']").forEach((button) => button.addEventListener("click", () => runGameAction(() => buyResource(button.dataset.resource, Number(button.dataset.amount)))));
+  scope.querySelector("[data-action='plotSelectedRoute']")?.addEventListener("click", () => runGameAction(() => plotSelectedRoute(scope.querySelector("[data-action='plotSelectedRoute']")?.dataset.sector)));
   scope.querySelectorAll("[data-action='sell']").forEach((button) => button.addEventListener("click", () => runGameAction(() => sellResource(button.dataset.resource, Number(button.dataset.amount)))));
   scope.querySelector("[data-action='claim']")?.addEventListener("click", () => runGameAction(claimPlanet));
   scope.querySelectorAll("[data-action='deposit']").forEach((button) => button.addEventListener("click", () => runGameAction(() => depositToPlanet(button.dataset.resource))));
@@ -2407,18 +2654,24 @@ function renderLogPanel() {
 
 function travelToSector(number) {
   const current = sectorMap[game.player.currentSector];
-  if (!current.adjacent.includes(number)) return addAndRender("That sector is not adjacent from here.");
+  if (!current.adjacent.includes(number)) return addAndRender("That sector is not adjacent from here. Select an adjacent node or plot a known route.");
   if (!spendTurn("travel")) return;
   game.player.fuel -= 1;
   game.player.currentSector = number;
   selectedSectorNumber = number;
+  selectedMapClickSector = null;
+  game.ui = game.ui || {};
+  game.ui.mapHint = "";
   markSectorVisited(number);
+  const logStart = game.log.length;
   updateDeliveryQuestProgress();
   addLog(`Traveled to Sector ${number}.`);
   completeTutorialStep("travel");
   resolveSectorDanger(number);
   updateScannerReveals();
   maybeTravelEvent();
+  const extras = game.log.slice(0, Math.max(0, game.log.length - logStart)).reverse().filter((entry) => !entry.startsWith("Traveled to Sector"));
+  setArrivalReport(number, extras);
   saveGame();
   render();
 }
@@ -2429,6 +2682,8 @@ function buyResource(resource, amount) {
   if (cargoSpaceLeft() < amount) return addAndRender(`Not enough cargo space for ${amount} ${resource}.`);
   game.player.credits -= price;
   game.player.cargo[resource] += amount;
+  updateCargoCostOnBuy(resource, amount, sectorMap[game.player.currentSector].portPrices[resource].buy);
+  recordDockingCredits(-price, "trade", 0);
   addLog(`Bought ${amount} ${resource} for ${price} credits.`);
   completeTutorialStep("buy");
   saveGame();
@@ -2438,8 +2693,10 @@ function buyResource(resource, amount) {
 function sellResource(resource, amount) {
   if (game.player.cargo[resource] < amount) return addAndRender(`Not enough ${resource} to sell ${amount}.`);
   const price = sectorMap[game.player.currentSector].portPrices[resource].sell * amount;
+  const tradeProfit = updateCargoCostOnSell(resource, amount, sectorMap[game.player.currentSector].portPrices[resource].sell);
   game.player.cargo[resource] -= amount;
   game.player.credits += price;
+  recordDockingCredits(price, "trade", tradeProfit);
   game.stats.creditsEarnedFromTrade += price;
   game.stats.resourcesSold += amount;
   if (resource === "Tech") game.stats.techSold += amount;
@@ -2606,6 +2863,7 @@ function buyFuel(amount) {
   if (units <= 0) return addAndRender("Choose a valid fuel amount.");
   if (game.player.credits < cost) return addAndRender("Not enough credits to refuel.");
   game.player.credits -= cost;
+  recordDockingCredits(-cost, "service");
   game.player.fuel = Math.min(game.player.maxFuel, game.player.fuel + units);
   addLog(`Refueled ${units} fuel for ${cost} credits.`);
   saveGame();
@@ -2620,6 +2878,7 @@ function repairHull() {
   if (baseCost <= 0) return addAndRender("Hull is already fully repaired.");
   if (game.player.credits < cost) return addAndRender("Not enough credits for full repairs.");
   game.player.credits -= cost;
+  recordDockingCredits(-cost, "service");
   stationActivitiesState().repairDiscount = Math.max(0, (stationActivitiesState().repairDiscount || 0) - discount);
   game.player.hull = game.player.maxHull;
   addLog(`Repair service restored hull for ${cost} credits${discount ? ` after a ${discount} credit repair bay discount` : ""}.`);
