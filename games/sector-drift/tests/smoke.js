@@ -934,6 +934,85 @@ vm.runInContext(`
   try { refreshFirebaseUiState(); } catch (error) { firebaseStatusOk = false; }
   assert(firebaseStatusOk, 'Firebase unavailable status does not crash app');
   assert(cloudUiState.status === 'not initialized' && cloudUiState.message.includes('Local prototype save'), 'Firebase unavailable status explains local prototype fallback');
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  renderSectorPanel();
+  assert(panels.sector.innerHTML.includes('Sector traffic unavailable. Local prototype mode active.'), 'sector traffic renders local unavailable state');
+  assert(panels.sector.innerHTML.includes('Live Events') && panels.sector.innerHTML.includes('Immediate Cockpit Feed'), 'live event box renders in cockpit');
+  const liveTokenBefore = liveEventPulseToken;
+  pushLiveEvent({ type: 'test', title: 'Test Event', message: 'Smoke test event visible.', tone: 'positive', sectorNumber: 1 });
+  assert(liveEvents[0].title === 'Test Event' && panels.sector.innerHTML.includes('Smoke test event visible.'), 'local live event push displays an event');
+  assert(liveEventPulseToken > liveTokenBefore && panels.sector.innerHTML.includes('live-event-pulse'), 'live event pulse state changes when event is pushed');
+  const localPresence = updatePresenceStatus('online');
+  assert(localPresence && typeof localPresence.then === 'function', 'presence write helper returns safely without Firebase');
+
+  let subscribeCalls = 0;
+  window = { SectorDriftFirebase: { onPresenceChange: () => { subscribeCalls += 1; return () => {}; } } };
+  launchGate.mode = 'signedOut';
+  cloudUiState.user = null;
+  subscribeToSectorTraffic();
+  assert(subscribeCalls === 0 && !presenceUnsubscribe && sectorTrafficState.status === 'signed out', 'signed-out sector traffic subscribe does not start or leave stale listener');
+  cloudUiState.user = { uid: 'student-retry', displayName: 'Retry Student' };
+  launchGate.mode = 'signedIn';
+  window.SectorDriftFirebase.onPresenceChange = (callback) => { subscribeCalls += 1; callback({ ok: true, records: [], status: { ok: true, status: 'listening' } }); return () => {}; };
+  subscribeToSectorTraffic();
+  assert(subscribeCalls === 1 && presenceUnsubscribe && sectorTrafficState.listening && sectorTrafficState.listenerUserUid === 'student-retry', 'sector traffic retries successfully after sign-in');
+
+  let permissionUnsubscribed = false;
+  clearSectorTrafficSubscription('reset for permission test', 'unavailable');
+  cloudUiState.user = { uid: 'student-denied', displayName: 'Denied Student' };
+  window.SectorDriftFirebase.onPresenceChange = (callback) => {
+    callback({ ok: false, records: [], status: { ok: false, status: 'permission-denied', error: 'permission-denied: signed in required' } });
+    return () => { permissionUnsubscribed = true; };
+  };
+  subscribeToSectorTraffic();
+  assert(permissionUnsubscribed && !presenceUnsubscribe && !sectorTrafficState.listening && sectorTrafficState.status === 'permission-denied', 'permission-denied clears stale sector traffic listener state');
+
+  let oldUserUnsubscribed = false;
+  let newUserSubscribed = false;
+  clearSectorTrafficSubscription('reset for user change test', 'unavailable');
+  cloudUiState.user = { uid: 'old-user', displayName: 'Old User' };
+  window.SectorDriftFirebase.onPresenceChange = (callback) => { callback({ ok: true, records: [], status: { ok: true, status: 'listening' } }); return () => { oldUserUnsubscribed = true; }; };
+  subscribeToSectorTraffic();
+  assert(presenceUnsubscribe && sectorTrafficState.listenerUserUid === 'old-user', 'old user listener starts before user change');
+  cloudUiState.user = { uid: 'new-user', displayName: 'New User' };
+  window.SectorDriftFirebase.onPresenceChange = (callback) => { newUserSubscribed = true; callback({ ok: true, records: [], status: { ok: true, status: 'listening' } }); return () => {}; };
+  subscribeToSectorTraffic();
+  assert(oldUserUnsubscribed && newUserSubscribed && sectorTrafficState.listenerUserUid === 'new-user', 'changing user clears old sector traffic listener and starts a new one');
+  clearSectorTrafficSubscription('reset after subscription smoke checks', 'unavailable');
+  window = undefined;
+
+  window = { SectorDriftFirebase: {
+    getFirebaseStatus: () => ({ ok: true, status: 'available', user: { uid: 'student-2', displayName: 'Student Two' }, role: 'student' }),
+    getCurrentFirebaseUser: () => ({ ok: true, data: { uid: 'student-2', displayName: 'Student Two' } }),
+    getCurrentUserRole: () => ({ ok: true, data: 'student', reason: 'test' }),
+    updatePresence: (payload) => ({ ok: Boolean(payload && payload.sectorNumber), data: payload }),
+    onPresenceChange: (callback) => { callback({ ok: true, records: [], status: { ok: true, status: 'listening' } }); return () => {}; },
+  } };
+  launchGate.mode = 'signedIn';
+  refreshFirebaseUiState(false);
+  subscribeToSectorTraffic();
+  renderSectorPanel();
+  assert(panels.sector.innerHTML.includes('No other online captains in this sector.'), 'sector traffic renders empty signed-in state');
+  const remoteNow = Date.now();
+  applyPresenceRecords([{ uid: 'other-1', captainName: 'Jordan', shipName: 'Rusty Comet', sectorNumber: 2, status: 'docked', updatedAt: remoteNow }]);
+  game.player.currentSector = 1;
+  applyPresenceRecords([{ uid: 'other-1', captainName: 'Jordan', shipName: 'Rusty Comet', sectorNumber: 1, status: 'docked', updatedAt: remoteNow }]);
+  assert(liveEvents.some((event) => event.message.includes('Jordan') && event.message.includes('warped into Sector 1')), 'remote sector arrival pushes live event without initial spam');
+  assert(renderSectorTraffic().includes('Jordan') && renderSectorTraffic().includes('Rusty Comet') && renderSectorTraffic().includes('docked'), 'sector traffic lists nearby captain, ship, and status');
+  const firebaseSource = fs.readFileSync('games/sector-drift/firebase-client.js', 'utf8');
+  const presenceFunction = firebaseSource.slice(firebaseSource.indexOf('function presencePayload'), firebaseSource.indexOf('// Presence is display-only'));
+  assert(presenceFunction.includes('sectorNumber') && presenceFunction.includes('shipName') && presenceFunction.includes('status'), 'presence data model includes safe display fields');
+  assert(!/credits|cargo|saveData|combatWins|combatLosses/.test(presenceFunction), 'presence data model excludes credits, cargo, full save, and combat outcomes');
+
+  game = defaultGameState();
+  game.player.fuel = 10;
+  game.player.turns = 10;
+  liveEvents = [];
+  travelToSector(2);
+  assert(liveEvents.some((event) => event.type === 'travel' && event.title.includes('Arrived in Sector 2')), 'travel pushes a live event');
+  setWarpDestination(1);
+  assert(liveEvents.some((event) => event.title.includes('Route Set') && event.message.includes('Sector 1')), 'route setting pushes a live event');
   window = undefined;
 
   game.player.credits = 2468;
