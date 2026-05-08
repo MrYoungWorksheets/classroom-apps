@@ -1250,6 +1250,7 @@ function renderSectorPanel() {
     ${renderNavigationIntel()}
     ${renderWarpControls()}
     <h3>Adjacent Sectors</h3>
+    <p class="help-text">Manual travel controls. Map nodes are the primary two-step scan and travel control.</p>
     <div class="travel-grid">
       ${sector.adjacent.map((number) => `<button type="button" ${cannotTravel ? "disabled" : ""} data-action="travel" data-sector="${number}">${scannerTravelLabel(number)}</button>`).join("")}
     </div>
@@ -1260,18 +1261,25 @@ function renderSectorPanel() {
   panels.sector.querySelector("[data-map-zoom='out']")?.addEventListener("click", () => zoomMap(-MAP_ZOOM_STEP));
   panels.sector.querySelector("[data-map-zoom='in']")?.addEventListener("click", () => zoomMap(MAP_ZOOM_STEP));
   panels.sector.querySelector("[data-map-zoom='reset']")?.addEventListener("click", resetMapView);
-  panels.sector.querySelectorAll("[data-map-sector]").forEach((node) => {
+  wireMapSectorNodes(panels.sector);
+  panels.ship.querySelector("[data-action='emergencyWarp']")?.addEventListener("click", emergencyWarp);
+}
+
+function wireMapSectorNodes(container) {
+  container.querySelectorAll("[data-map-sector]").forEach((node) => {
     const number = Number(node.dataset.mapSector);
     node.addEventListener("click", () => handleMapNodeSelect(number));
     node.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
+      if (event.key === "Enter") {
+        handleMapNodeSelect(number);
+      }
+      if (event.key === " ") {
         event.preventDefault();
         handleMapNodeSelect(number);
       }
     });
     node.addEventListener("focus", () => selectSector(number, true));
   });
-  panels.ship.querySelector("[data-action='emergencyWarp']")?.addEventListener("click", emergencyWarp);
 }
 
 function renderMinimap() {

@@ -18,7 +18,79 @@ vm.runInContext(`
 (function () {
   function assert(condition, message) { if (!condition) throw new Error(message); }
   function clean(text) { return normalize(text).replace(/[^a-z0-9^=,./()+-]/g, ''); }
-  function makePanelStub() { return { hidden: false, innerHTML: '', querySelector: () => null, querySelectorAll: () => [] }; }
+  function makeEventTargetStub({ dataset = {}, className = '', parent = null } = {}) {
+    const listeners = {};
+    return {
+      dataset,
+      className,
+      parent,
+      addEventListener(type, handler) {
+        listeners[type] = listeners[type] || [];
+        listeners[type].push(handler);
+      },
+      dispatchEvent(event) {
+        const evt = event || { type: '' };
+        evt.target = evt.target || this;
+        evt.currentTarget = this;
+        if (!evt.preventDefault) evt.preventDefault = function () { evt.defaultPrevented = true; };
+        for (const handler of listeners[evt.type] || []) handler(evt);
+        if (evt.bubbles !== false && this.parent) this.parent.dispatchEvent(evt);
+        return !evt.defaultPrevented;
+      },
+      querySelector(selector) {
+        return (this.children || []).find((child) => child.matches?.(selector)) || null;
+      },
+      querySelectorAll(selector) {
+        return (this.children || []).filter((child) => child.matches?.(selector));
+      },
+      matches(selector) {
+        if (selector === '.map-hit-target') return this.className === 'map-hit-target';
+        if (selector === '.map-visible-node') return this.className === 'map-visible-node';
+        if (selector === 'text') return this.className === 'map-label';
+        return false;
+      },
+    };
+  }
+  function makePanelStub() {
+    const panel = makeEventTargetStub();
+    panel.hidden = false;
+    panel.value = '';
+    panel._innerHTML = '';
+    panel._mapNodes = [];
+    panel._travelButtons = [];
+    Object.defineProperty(panel, 'innerHTML', {
+      get() { return this._innerHTML; },
+      set(value) {
+        this._innerHTML = String(value);
+        this._mapNodes = [];
+        this._travelButtons = [];
+        const mapNodePattern = /<g\\b[^>]*data-map-sector="(\\d+)"[^>]*>([\\s\\S]*?)<\\/g>/g;
+        let match;
+        while ((match = mapNodePattern.exec(this._innerHTML))) {
+          const node = makeEventTargetStub({ dataset: { mapSector: match[1] }, parent: this });
+          node.children = [
+            makeEventTargetStub({ className: 'map-hit-target', parent: node }),
+            makeEventTargetStub({ className: 'map-visible-node', parent: node }),
+            makeEventTargetStub({ className: 'map-label', parent: node }),
+          ];
+          this._mapNodes.push(node);
+        }
+        const travelPattern = /<button\\b[^>]*data-action="travel"[^>]*data-sector="(\\d+)"[^>]*>/g;
+        while ((match = travelPattern.exec(this._innerHTML))) {
+          this._travelButtons.push(makeEventTargetStub({ dataset: { action: 'travel', sector: match[1] }, parent: this }));
+        }
+      },
+    });
+    panel.querySelectorAll = function (selector) {
+      if (selector === '[data-map-sector]') return this._mapNodes;
+      if (selector === "[data-action='travel']") return this._travelButtons;
+      return [];
+    };
+    panel.querySelector = function (selector) {
+      return this.querySelectorAll(selector)[0] || null;
+    };
+    return panel;
+  }
   Object.assign(panels, {
     ship: makePanelStub(),
     sector: makePanelStub(),
@@ -474,15 +546,54 @@ vm.runInContext(`
   resolveSectorDanger = function () { return false; };
   renderSectorPanel();
   assert(panels.sector.innerHTML.includes('Selected Sector Intel') && panels.sector.innerHTML.includes('Arrival Report'), 'selected sector intel and arrival report render in the main viewer');
+  const sector2Node = panels.sector.querySelectorAll('[data-map-sector]').find((node) => node.dataset.mapSector === '2');
+  assert(sector2Node, 'rendered sector panel should expose Sector 2 as a clickable map node');
+  assert(sector2Node.querySelector('.map-hit-target') && sector2Node.querySelector('.map-visible-node') && sector2Node.querySelector('text'), 'map node should expose hit target, visible circle, and text label children');
   const fuelBeforeMap = game.player.fuel;
   const turnsBeforeMap = game.player.turns;
-  handleMapNodeSelect(2);
-  assert(game.player.currentSector === 1 && selectedSectorNumber === 2, 'map node first click selects/scans without travel');
+  sector2Node.dispatchEvent({ type: 'click' });
+  assert(game.player.currentSector === 1 && selectedSectorNumber === 2, 'map node click selects/scans without travel');
   assert(panels.sector.innerHTML.includes('Tap again to travel to Sector 2'), 'adjacent selected node shows tap-again travel hint');
-  handleMapNodeSelect(2);
+  panels.sector.querySelectorAll('[data-map-sector]').find((node) => node.dataset.mapSector === '2').dispatchEvent({ type: 'click' });
   assert(game.player.currentSector === 2, 'second click on same adjacent node travels');
   assert(game.player.fuel === fuelBeforeMap - 1 && game.player.turns === turnsBeforeMap - 1, 'map travel costs fuel and turns');
   assert(game.arrivalReport.includes('Arrived in Sector 2'), 'arrival report updates after map travel');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  maybeTravelEvent = function () { return false; };
+  resolveSectorDanger = function () { return false; };
+  renderSectorPanel();
+  panels.sector.querySelectorAll('[data-map-sector]').find((node) => node.dataset.mapSector === '2').querySelector('.map-hit-target').dispatchEvent({ type: 'click' });
+  panels.sector.querySelectorAll('[data-map-sector]').find((node) => node.dataset.mapSector === '2').querySelector('.map-visible-node').dispatchEvent({ type: 'click' });
+  assert(game.player.currentSector === 2, 'clicks from the transparent hit target and visible circle bubble to map-node travel wiring');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  renderSectorPanel();
+  const keydownNode = panels.sector.querySelectorAll('[data-map-sector]').find((node) => node.dataset.mapSector === '2');
+  keydownNode.dispatchEvent({ type: 'keydown', key: 'Enter' });
+  assert(selectedSectorNumber === 2 && game.player.currentSector === 1, 'Enter key selects a map node');
+  let spacePrevented = false;
+  panels.sector.querySelectorAll('[data-map-sector]').find((node) => node.dataset.mapSector === '2').dispatchEvent({ type: 'keydown', key: ' ', preventDefault: () => { spacePrevented = true; } });
+  assert(spacePrevented && game.player.currentSector === 2, 'Space key prevents page scroll and triggers map-node travel');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  renderSectorPanel();
+  const labelNode = panels.sector.querySelectorAll('[data-map-sector]').find((node) => node.dataset.mapSector === '2');
+  labelNode.querySelector('text').dispatchEvent({ type: 'click' });
+  assert(selectedSectorNumber === 2 && game.player.currentSector === 1, 'clicks from the text label bubble to map-node travel wiring');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  renderSectorPanel();
+  const manualTravelButton = panels.sector.querySelectorAll("[data-action='travel']").find((button) => button.dataset.sector === '2');
+  assert(manualTravelButton, 'manual adjacent-sector travel button should still render as a fallback');
+  manualTravelButton.dispatchEvent({ type: 'click' });
+  assert(game.player.currentSector === 2, 'manual adjacent-sector travel button still travels directly');
+
+  // Manual browser smoke-test note: Start at Sector 1. Click Sector 2 on the map once; the main viewer should show Sector 2 and "Tap again to travel." Click Sector 2 again; the ship should travel to Sector 2, Arrival Report should update, and fuel and turns should decrease.
 
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
