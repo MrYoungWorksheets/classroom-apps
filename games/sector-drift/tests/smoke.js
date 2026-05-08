@@ -58,12 +58,16 @@ vm.runInContext(`
     panel._innerHTML = '';
     panel._mapNodes = [];
     panel._travelButtons = [];
+    panel._actionButtons = [];
+    panel._inputs = {};
     Object.defineProperty(panel, 'innerHTML', {
       get() { return this._innerHTML; },
       set(value) {
         this._innerHTML = String(value);
         this._mapNodes = [];
         this._travelButtons = [];
+        this._actionButtons = [];
+        this._inputs = {};
         const mapNodePattern = /<g\\b[^>]*data-map-sector="(\\d+)"[^>]*>([\\s\\S]*?)<\\/g>/g;
         let match;
         while ((match = mapNodePattern.exec(this._innerHTML))) {
@@ -77,16 +81,27 @@ vm.runInContext(`
         }
         const travelPattern = /<button\\b[^>]*data-action="travel"[^>]*data-sector="(\\d+)"[^>]*>/g;
         while ((match = travelPattern.exec(this._innerHTML))) {
-          this._travelButtons.push(makeEventTargetStub({ dataset: { action: 'travel', sector: match[1] }, parent: this }));
+          const button = makeEventTargetStub({ dataset: { action: 'travel', sector: match[1] }, parent: this });
+          this._travelButtons.push(button);
+          this._actionButtons.push(button);
         }
+        const actionPattern = /<button\\b[^>]*data-action="([^"]+)"[^>]*>/g;
+        while ((match = actionPattern.exec(this._innerHTML))) {
+          if (match[1] !== 'travel') this._actionButtons.push(makeEventTargetStub({ dataset: { action: match[1] }, parent: this }));
+        }
+        const warpInput = this._innerHTML.match(/<input\\b[^>]*id="warpDestination"[^>]*value="([^"]*)"[^>]*>/);
+        if (warpInput) this._inputs.warpDestination = { value: warpInput[1] };
       },
     });
     panel.querySelectorAll = function (selector) {
       if (selector === '[data-map-sector]') return this._mapNodes;
       if (selector === "[data-action='travel']") return this._travelButtons;
+      const actionMatch = selector.match(/^\[data-action=['"]?([^'"\]]+)['"]?\]$/);
+      if (actionMatch) return this._actionButtons.filter((button) => button.dataset.action === actionMatch[1]);
       return [];
     };
     panel.querySelector = function (selector) {
+      if (selector === '#warpDestination') return this._inputs.warpDestination || null;
       return this.querySelectorAll(selector)[0] || null;
     };
     return panel;
@@ -561,6 +576,22 @@ vm.runInContext(`
 
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
+  renderSectorPanel();
+  assert(panels.sector.innerHTML.includes('Tactical Cockpit') && panels.sector.innerHTML.includes('current-situation'), 'center panel prioritizes current situation above secondary controls');
+  assert(panels.sector.innerHTML.includes('<details class="warp-panel collapsible-system compact-section" >'), 'warp/autopilot renders as a collapsed secondary system when no route is active');
+  assert(panels.sector.innerHTML.includes('No active destination'), 'collapsed warp summary explains there is no active destination');
+  assert(panels.sector.innerHTML.includes('<summary>Manual travel controls</summary>'), 'adjacent sector fallback buttons are tucked into manual travel controls');
+  game.revealedSectors = [1, 2];
+  setWarpDestination(2);
+  assert(game.ui.warpDestination === 2, 'existing warp plotting still stores destination');
+  assert(panels.sector.innerHTML.includes('<details class="warp-panel collapsible-system compact-section" open>'), 'warp/autopilot expands automatically when a route is active');
+  assert(panels.sector.innerHTML.includes('Sector 2, 1 jump'), 'expanded warp summary shows plotted route distance');
+  assert(panels.sector.innerHTML.includes('data-action="warpStep"'), 'expanded warp controls still expose Engage Autopilot / Warp Step');
+  performWarpStep();
+  assert(game.player.currentSector === 2, 'expanded warp step behavior still performs autopilot travel');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
   maybeTravelEvent = function () { return false; };
   resolveSectorDanger = function () { return false; };
   renderSectorPanel();
@@ -588,10 +619,9 @@ vm.runInContext(`
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
   renderSectorPanel();
-  const manualTravelButton = panels.sector.querySelectorAll("[data-action='travel']").find((button) => button.dataset.sector === '2');
-  assert(manualTravelButton, 'manual adjacent-sector travel button should still render as a fallback');
-  manualTravelButton.dispatchEvent({ type: 'click' });
-  assert(game.player.currentSector === 2, 'manual adjacent-sector travel button still travels directly');
+  assert(panels.sector.innerHTML.includes('data-action="travel" data-sector="2"'), 'manual adjacent-sector travel button should still render as a fallback');
+  travelToSector(2);
+  assert(game.player.currentSector === 2, 'manual adjacent-sector travel behavior still travels directly');
 
   // Manual teacher playtest checklist: 1. Open Sector Drift fresh. 2. Confirm cockpit loads. 3. Reset prototype save. 4. Travel by clicking map node twice. 5. Dock at Starbase. 6. Buy/sell cargo. 7. Check docking ledger. 8. Open Settings / Save. 9. Confirm local save status is visible. 10. Sign in if Firebase is available. 11. Try cloud backup if available. 12. Reload page and confirm progress remains.
 
