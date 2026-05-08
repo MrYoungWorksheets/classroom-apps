@@ -1019,7 +1019,10 @@ function renderCockpit() {
 
 function renderDockedScreen(title, subtitle, contentHtml) {
   if (!panels.docked) return;
-  panels.docked.innerHTML = `<div class="docked-header"><div><p class="eyebrow">Docked Action Screen</p><h2>${title}</h2><p class="help-text">${subtitle}</p></div><button type="button" class="exit-button" data-action="closeScreen">Exit / Return to Cockpit</button></div><div class="docked-content">${contentHtml}</div>`;
+  const screen = activeScreenName();
+  const locationLabel = screen === "launch" ? "Launch Bay" : screen === "adminPanel" ? "Teacher Command Console" : "Docked Station Terminal";
+  panels.docked.className = `panel docked-screen docked-${screen}`;
+  panels.docked.innerHTML = `<div class="docked-header"><div><p class="eyebrow">${locationLabel}</p><h2>${title}</h2><p class="help-text">${subtitle}</p></div>${screen === "launch" ? "" : `<button type="button" class="exit-button button-exit" data-action="closeScreen">Return to Ship</button>`}</div><div class="docked-content">${contentHtml}</div>`;
   panels.docked.querySelector("[data-action='closeScreen']")?.addEventListener("click", closeScreen);
   wireDockedButtons(panels.docked);
 }
@@ -1060,7 +1063,7 @@ function renderActionPanel() {
     { screen: "settings", label: "Settings / Save", enabled: true, reason: "Cloud login and local save controls" },
   ];
   if (isTeacher()) actions.push({ screen: "adminPanel", label: "Admin Panel", enabled: true, reason: "Teacher-only classroom tools" });
-  panels.action.innerHTML = `<h2 id="actionHeading">Cockpit Actions</h2><p class="help-text">${gateOpen ? "Dock into one screen at a time. Complex systems stay off the main map until selected." : authGateMessage()}</p><div class="action-menu">${actions.map((action) => `<button type="button" data-screen="${action.screen}" ${action.enabled && (gateOpen || action.screen === "settings") ? "" : "disabled"}><strong>${action.label}</strong><span>${gateOpen || action.screen === "settings" ? action.reason : "Launch required"}</span></button>`).join("")}</div>${gateOpen ? renderEmergencyWarpControl() : ""}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 5).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
+  panels.action.innerHTML = `<h2 id="actionHeading">Cockpit Actions</h2><p class="help-text">${gateOpen ? "Choose one docked console. Flight controls stay focused on the map." : authGateMessage()}</p><div class="action-menu">${actions.map((action) => `<button type="button" class="${action.screen === "adminPanel" ? "button-admin" : action.enabled ? "button-secondary" : ""}" data-screen="${action.screen}" ${action.enabled && (gateOpen || action.screen === "settings") ? "" : "disabled"}><strong>${action.label}</strong><span>${gateOpen || action.screen === "settings" ? action.reason : "Launch required"}</span></button>`).join("")}</div>${gateOpen ? renderEmergencyWarpControl() : ""}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 5).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
   panels.action.querySelectorAll("[data-screen]").forEach((button) => button.addEventListener("click", () => openScreen(button.dataset.screen)));
   panels.action.querySelector("[data-action='emergencyWarp']")?.addEventListener("click", emergencyWarp);
 }
@@ -1071,9 +1074,10 @@ function renderShipPanel() {
   const caps = ship.upgradeCaps;
   panels.ship.innerHTML = `
     <h2 id="shipHeading">Ship Status</h2>
-    <div class="stat-grid">
-      ${stat("Pilot", p.pilotName)}${stat("Rank", currentRank())}${stat("Reputation", `${p.reputation} · ${reputationTitle(p.reputation)}`)}${stat("Combat Rank", combatRankTitle())}${stat("Ship", p.shipName)}${stat("Credits", p.credits)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Turns", `${p.turns}/${p.maxTurns} bank`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Sector", p.currentSector)}${stat("Cargo Space", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Hazard Resist", ship.hazardResist + Math.max(0, p.upgrades.shield - 1))}${stat("Warp Destination", game.ui?.warpDestination ? `Sector ${game.ui.warpDestination}` : "None")}${stat("Alignment", p.alignmentStatus || reputationTitle(p.reputation))}
+    <div class="stat-grid compact-stat-grid">
+      ${stat("Pilot", p.pilotName)}${stat("Rank", currentRank())}${stat("Ship", p.shipName)}${stat("Credits", p.credits)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Turns", `${p.turns}/${p.maxTurns}`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Sector", p.currentSector)}${stat("Cargo", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Hazard Resist", ship.hazardResist + Math.max(0, p.upgrades.shield - 1))}${stat("Warp", game.ui?.warpDestination ? `Sector ${game.ui.warpDestination}` : "None")}
     </div>
+    <details class="compact-section cockpit-extra"><summary>Reputation and alignment</summary><div class="stat-grid compact-stat-grid">${stat("Reputation", `${p.reputation} · ${reputationTitle(p.reputation)}`)}${stat("Combat Rank", combatRankTitle())}${stat("Alignment", p.alignmentStatus || reputationTitle(p.reputation))}</div></details>
     <p class="help-text">${ship.description}</p>
     ${p.cargo[SMUGGLED_RESOURCE] > 0 ? `<p class="help-text"><strong>${SMUGGLED_DISPLAY_NAME}:</strong> ${p.cargo[SMUGGLED_RESOURCE]} · ${SMUGGLED_DESCRIPTION}</p>` : ""}
     ${p.legacyUpgradeOverride ? `<p class="cooldown">Legacy upgrade override active: ${upgradeReductionSummary(p.upgrades, caps)}</p>` : ""}
@@ -1384,7 +1388,7 @@ function renderStarbaseScreen(sector) {
 }
 
 function renderShipyardScreen() {
-  return `${renderFighterPurchasePanel()}<div class="ship-card-grid">${Object.values(SHIPS).map(renderShipCard).join("")}</div>`;
+  return `<section class="shipyard-brief mini-card"><p class="eyebrow">Industrial Hull Catalog</p><h3>Compare before you trade</h3><p class="help-text">Every card is measured against your active ship, including locked hulls, cargo fit, fighter bay limits, upgrade caps, and trade-in pricing.</p></section>${renderFighterPurchasePanel()}<div class="ship-card-grid">${Object.values(SHIPS).map(renderShipCard).join("")}</div>`;
 }
 
 function shipTradeInValue(ship = currentShip()) {
@@ -1396,19 +1400,66 @@ function netShipCost(ship) {
   return Math.max(0, (ship.price || 0) - shipTradeInValue(currentShip()));
 }
 
+function shipStatDelta(targetValue, baseValue) {
+  const delta = Number(targetValue) - Number(baseValue);
+  if (!Number.isFinite(delta)) return { className: "stat-delta-neutral", text: "—" };
+  if (delta > 0) return { className: "stat-delta-positive", text: `+${delta}` };
+  if (delta < 0) return { className: "stat-delta-negative", text: String(delta) };
+  return { className: "stat-delta-neutral", text: "±0" };
+}
+
+function comparisonRow(label, targetValue, baseValue) {
+  const delta = shipStatDelta(targetValue, baseValue);
+  return `<div class="ship-stat-row"><span class="ship-stat-label">${label}</span><span class="ship-stat-value">${targetValue}</span><span class="ship-stat-delta ${delta.className}">(${delta.text})</span></div>`;
+}
+
+function shipRoleLabel(ship) {
+  if (ship.role) return ship.role;
+  if (ship.cargoCapacity >= 50) return "Freighter";
+  if (ship.basePower >= 35) return "Combat";
+  if (ship.maxFuel >= 38 || ship.upgradeCaps.scanner >= 8) return "Explorer";
+  if (ship.hazardResist >= 2) return "Hazard";
+  return "Multi-role";
+}
+
 function renderShipCard(ship) {
-  const active = currentShip().id === ship.id;
+  const activeShip = currentShip();
+  const active = activeShip.id === ship.id;
   const lock = shipUnlockStatus(ship);
   const capped = capUpgradesForShip(game.player.upgrades, ship);
+  const baselineCapped = capUpgradesForShip(game.player.upgrades, activeShip);
+  const nextHull = ship.maxHull + Math.max(0, Math.min(game.player.upgrades.shield, ship.upgradeCaps.shield) - 1) * 4;
+  const baselineHull = activeShip.maxHull + Math.max(0, Math.min(game.player.upgrades.shield, activeShip.upgradeCaps.shield) - 1) * 4;
+  const nextFuel = calculateFuelCapacity(ship, capped);
+  const baselineFuel = calculateFuelCapacity(activeShip, baselineCapped);
   const nextCargo = calculateCargoCapacity(ship, capped);
+  const baselineCargo = calculateCargoCapacity(activeShip, baselineCapped);
   const nextFighters = calculateFighterCapacity(ship, capped);
+  const baselineFighters = calculateFighterCapacity(activeShip, baselineCapped);
   const cargoBlocked = cargoUsed() > nextCargo;
   const fighterBlocked = game.player.fighters > nextFighters;
+  const tradeIn = shipTradeInValue(activeShip);
   const netCost = netShipCost(ship);
   const unaffordable = game.player.credits < netCost;
   const disabledReason = active ? "Current ship" : !lock.unlocked ? lock.reason : cargoBlocked ? "Current cargo will not fit" : fighterBlocked ? "Current fighters exceed the new bay" : unaffordable ? "Not enough credits after trade-in" : "Ready for purchase";
+  const status = active ? "Current Ship" : !lock.unlocked ? "Locked" : cargoBlocked ? "Cannot Fit Cargo" : fighterBlocked ? "Cannot Fit Fighters" : "Available";
+  const statusClass = active ? "status-current" : !lock.unlocked ? "status-locked" : cargoBlocked || fighterBlocked || unaffordable ? "status-blocked" : "status-available";
   const blocked = active || !lock.unlocked || cargoBlocked || fighterBlocked || unaffordable;
-  return `<article class="ship-card ${lock.unlocked ? "" : "locked-ship"}"><h3>${ship.name}</h3><p>${ship.description}</p><div class="intel-grid">${stat("Role", ship.role || "Multi-role")}${stat("Price", ship.futureLocked ? "Future locked" : ship.price)}${stat("Trade-in", shipTradeInValue(currentShip()))}${stat("Net Cost", ship.futureLocked ? "Locked" : netCost)}${stat("Hull", ship.maxHull + Math.max(0, Math.min(game.player.upgrades.shield, ship.upgradeCaps.shield) - 1) * 4)}${stat("Fuel Capacity", calculateFuelCapacity(ship, capped))}${stat("Cargo Capacity", nextCargo)}${stat("Base Power", ship.basePower)}${stat("Fighter Capacity", nextFighters)}${stat("Hazard Resist", ship.hazardResist)}${stat("Upgrade Caps", Object.entries(ship.upgradeCaps).map(([key, value]) => `${titleCase(key)} ${value}`).join(", "))}${stat("Unlock", lock.unlocked ? "Unlocked" : lock.reason)}</div><button data-action="buyShip" data-ship="${ship.id}" ${blocked ? "disabled" : ""}>${active ? "Current Ship" : "Buy / Trade In"}</button><p class="help-text">${disabledReason}</p></article>`;
+  const coreRows = [
+    comparisonRow("Hull", nextHull, baselineHull),
+    comparisonRow("Fuel", nextFuel, baselineFuel),
+    comparisonRow("Cargo", nextCargo, baselineCargo),
+    comparisonRow("Base Power", ship.basePower, activeShip.basePower),
+    comparisonRow("Fighters", nextFighters, baselineFighters),
+    comparisonRow("Hazard", ship.hazardResist, activeShip.hazardResist),
+  ].join("");
+  const capRows = [
+    comparisonRow("Cargo Hold Cap", ship.upgradeCaps.cargoHold, activeShip.upgradeCaps.cargoHold),
+    comparisonRow("Engine Cap", ship.upgradeCaps.engine, activeShip.upgradeCaps.engine),
+    comparisonRow("Scanner Cap", ship.upgradeCaps.scanner, activeShip.upgradeCaps.scanner),
+    comparisonRow("Shield Cap", ship.upgradeCaps.shield, activeShip.upgradeCaps.shield),
+  ].join("");
+  return `<article class="ship-card ${lock.unlocked ? "" : "locked-ship"} ${active ? "current-ship-card" : ""}"><div class="ship-card-top"><div><h3>${ship.name}</h3><p class="ship-role-line"><span class="role-badge">${shipRoleLabel(ship)}</span></p></div><span class="status-badge ${statusClass}">${status}</span></div><p class="ship-description">${ship.description}</p><div class="ship-stat-table" aria-label="${ship.name} core stat comparison">${coreRows}</div><details class="ship-cap-details" open><summary>Upgrade cap comparison</summary><div class="ship-stat-table ship-cap-table">${capRows}</div></details><div class="ship-price-row"><span>${ship.futureLocked ? "Future locked" : `Price: ${ship.price}`}</span><span>Trade-in: ${tradeIn}</span><strong>${ship.futureLocked ? "Net: Locked" : `Net: ${netCost}`}</strong></div><p class="ship-requirement">${lock.unlocked ? "Requirements met" : lock.reason}</p><button class="${blocked ? "" : "button-primary"}" data-action="buyShip" data-ship="${ship.id}" ${blocked ? "disabled" : ""}>${active ? "Current Ship" : "Buy / Trade In"}</button><p class="help-text disabled-reason">${disabledReason}</p></article>`;
 }
 
 function renderSpecialMissionsScreen() {

@@ -777,3 +777,321 @@ details.compact-section summary {
     align-items: stretch;
   }
 }
+
+/* UI Redecorating Pass 1: button hierarchy */
+.button-primary,
+button.button-primary {
+  border-color: rgba(142, 246, 178, 0.78);
+  background: linear-gradient(180deg, #1d5638, #0b2b1b);
+  color: #effff5;
+  font-weight: 800;
+}
+
+.button-secondary,
+button.button-secondary {
+  border-color: rgba(43, 212, 217, 0.38);
+  background: linear-gradient(180deg, #17313b, #0a2028);
+}
+
+.button-exit,
+.exit-button {
+  border-color: rgba(255, 209, 102, 0.82);
+  background: linear-gradient(180deg, #573f13, #2d210a);
+  color: #fff7da;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.button-admin,
+button.button-admin {
+  border-color: rgba(255, 184, 107, 0.72);
+  background: linear-gradient(180deg, #4b2d16, #26160c);
+  color: #fff0de;
+}
+
+/* UI Redecorating Pass 1: cockpit layout polish */
+.compact-stat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 0.45rem;
+}
+
+.compact-stat-grid .stat {
+  padding: 0.5rem;
+}
+
+.compact-stat-grid .value {
+  font-size: 1rem;
+}
+
+.cockpit-extra {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.5rem;
+}
+
+.cockpit-map {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 209, 102, 0.1), transparent 26rem),
+    linear-gradient(180deg, rgba(12, 31, 42, 0.98), rgba(4, 10, 18, 0.98));
+}
+
+.cockpit-map h2 {
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+}
+
+.cockpit-map .badge {
+  box-shadow: 0 0 14px rgba(255, 209, 102, 0.22);
+}
+
+.map-toolbar button {
+  min-height: 2.2rem;
+  padding: 0.4rem 0.65rem;
+}
+
+/* UI Redecorating Pass 1: docked screens */
+.docked-screen {
+  max-width: 1540px;
+  width: calc(100% - 2rem);
+  margin: 1rem auto 0;
+  padding: clamp(1rem, 2vw, 1.35rem);
+  overflow: hidden;
+}
+
+.docked-screen::before {
+  content: "";
+  display: block;
+  height: 4px;
+  margin: -1rem -1rem 1rem;
+  background: linear-gradient(90deg, transparent, var(--line), var(--accent), transparent);
+  opacity: 0.72;
+}
+
+.docked-header {
+  align-items: center;
+}
+
+.docked-header h2 {
+  color: var(--text);
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.docked-content > .mini-card:first-child,
+.shipyard-brief {
+  margin-top: 0;
+}
+
+.docked-starbase {
+  background: radial-gradient(circle at top left, rgba(43, 212, 217, 0.14), transparent 26rem), linear-gradient(180deg, rgba(12, 37, 43, 0.98), rgba(5, 13, 17, 0.98));
+}
+
+.docked-shipyard {
+  background: radial-gradient(circle at top right, rgba(255, 184, 107, 0.14), transparent 26rem), linear-gradient(180deg, rgba(35, 30, 23, 0.98), rgba(8, 13, 18, 0.98));
+  border-color: rgba(255, 184, 107, 0.34);
+}
+
+.docked-specialMissions {
+  background: radial-gradient(circle at top right, rgba(142, 246, 178, 0.12), transparent 24rem), linear-gradient(180deg, rgba(13, 35, 28, 0.98), rgba(5, 13, 16, 0.98));
+}
+
+.docked-planets {
+  background: radial-gradient(circle at top left, rgba(89, 211, 255, 0.16), transparent 24rem), linear-gradient(180deg, rgba(10, 30, 50, 0.98), rgba(6, 12, 24, 0.98));
+}
+
+.docked-combat {
+  background: radial-gradient(circle at top right, rgba(255, 107, 122, 0.15), transparent 24rem), linear-gradient(180deg, rgba(48, 16, 24, 0.98), rgba(12, 9, 14, 0.98));
+  border-color: rgba(255, 107, 122, 0.35);
+}
+
+.docked-reputation,
+.docked-achievements,
+.docked-captainLog {
+  background: radial-gradient(circle at top left, rgba(255, 209, 102, 0.12), transparent 24rem), linear-gradient(180deg, rgba(32, 28, 18, 0.98), rgba(6, 12, 18, 0.98));
+}
+
+.docked-settings,
+.docked-adminPanel {
+  background: radial-gradient(circle at top right, rgba(43, 212, 217, 0.13), transparent 24rem), linear-gradient(180deg, rgba(15, 25, 38, 0.98), rgba(5, 10, 18, 0.98));
+}
+
+/* UI Redecorating Pass 1: shipyard cards */
+.shipyard-brief {
+  border-color: rgba(255, 184, 107, 0.28);
+  background: linear-gradient(135deg, rgba(255, 184, 107, 0.12), rgba(43, 212, 217, 0.06));
+}
+
+.ship-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: stretch;
+}
+
+.ship-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-height: 100%;
+  background:
+    linear-gradient(135deg, rgba(255, 184, 107, 0.08), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.025));
+}
+
+.ship-card-top,
+.ship-price-row {
+  display: flex;
+  gap: 0.65rem;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.ship-card h3 {
+  color: var(--text);
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.ship-role-line,
+.ship-description,
+.disabled-reason,
+.ship-requirement {
+  margin: 0;
+}
+
+.ship-description {
+  color: var(--muted);
+}
+
+.role-badge,
+.status-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.22rem 0.58rem;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.role-badge {
+  color: #071014;
+  background: linear-gradient(135deg, #8df3ff, #ffd166);
+}
+
+.status-badge {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  white-space: nowrap;
+}
+
+.status-current { color: #081014; background: var(--accent); }
+.status-available { color: #06130b; background: var(--good); }
+.status-locked { color: #fff1dc; background: rgba(255, 184, 107, 0.22); }
+.status-blocked { color: #ffecef; background: rgba(255, 107, 122, 0.24); }
+
+.current-ship-card {
+  border-color: rgba(255, 209, 102, 0.62);
+  box-shadow: 0 0 20px rgba(255, 209, 102, 0.12), inset 0 0 18px rgba(255, 209, 102, 0.06);
+}
+
+.ship-stat-table {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.ship-stat-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(4.2rem, auto);
+  gap: 0.5rem;
+  align-items: baseline;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 0.45rem 0.55rem;
+  background: rgba(5, 12, 18, 0.42);
+}
+
+.ship-stat-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ship-stat-value {
+  font-weight: 800;
+}
+
+.ship-stat-delta {
+  font-weight: 900;
+  text-align: right;
+}
+
+.stat-delta-positive { color: var(--good); }
+.stat-delta-negative { color: var(--danger); }
+.stat-delta-neutral { color: var(--muted); }
+
+.ship-cap-details {
+  margin-top: 0;
+}
+
+.ship-cap-details summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 800;
+  margin-bottom: 0.45rem;
+}
+
+.ship-price-row {
+  margin-top: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.65rem;
+  color: var(--accent);
+  flex-wrap: wrap;
+}
+
+.ship-card button {
+  width: 100%;
+}
+
+.ship-requirement {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+/* UI Redecorating Pass 1: Chromebook/readability */
+@media (max-width: 980px) {
+  .docked-screen {
+    width: auto;
+    margin-left: 1rem;
+    margin-right: 1rem;
+  }
+
+  .ship-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .docked-screen {
+    margin-left: 0.65rem;
+    margin-right: 0.65rem;
+  }
+
+  .ship-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ship-card-top,
+  .ship-price-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .status-badge {
+    align-self: flex-start;
+  }
+
+  .ship-stat-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .ship-stat-delta {
+    grid-column: 2;
+  }
+}
