@@ -23,6 +23,7 @@ let provider = null;
 let firebaseInitError = "";
 let currentUser = null;
 let currentRole = "unknown";
+let currentRoleReason = "No user signed in yet.";
 const authListeners = new Set();
 
 function friendlyError(error, fallback = "Firebase is unavailable right now. Local save still works.") {
@@ -55,12 +56,12 @@ function isFirebaseConfigured() {
 
 function getFirebaseStatus() {
   if (firebaseInitError) {
-    return { ok: false, status: "unavailable", error: firebaseInitError };
+    return { ok: false, status: "unavailable", error: firebaseInitError, role: currentRole, roleReason: currentRoleReason };
   }
   if (!isFirebaseConfigured()) {
-    return { ok: false, status: "not initialized", error: "Firebase is not initialized. Local save still works." };
+    return { ok: false, status: "not initialized", error: "Firebase is not initialized. Local save still works.", role: currentRole, roleReason: currentRoleReason };
   }
-  return { ok: true, status: "available", user: safeUser(currentUser), role: currentRole };
+  return { ok: true, status: "available", user: safeUser(currentUser), role: currentRole, roleReason: currentRoleReason };
 }
 
 function requireFirebase() {
@@ -72,7 +73,11 @@ async function ensureUserProfile(user = currentUser) {
   try {
     const ready = requireFirebase();
     if (!ready.ok) return ready;
-    if (!user) return failure("Sign in first to use cloud backup.");
+    if (!user) {
+      currentRole = "unknown";
+      currentRoleReason = "No signed-in user is available for role lookup.";
+      return failure("Sign in first to use cloud backup.");
+    }
 
     const userRef = doc(db, "users", user.uid);
     const snapshot = await getDoc(userRef);
@@ -88,9 +93,11 @@ async function ensureUserProfile(user = currentUser) {
         lastLoginAt: now
       });
       currentRole = "student";
+      currentRoleReason = "Created users/{uid} with default student role.";
     } else {
       const data = snapshot.data() || {};
-      currentRole = typeof data.role === "string" ? data.role : "unknown";
+      currentRole = typeof data.role === "string" && data.role ? data.role : "unknown";
+      currentRoleReason = currentRole === "unknown" ? "users/{uid}.role is missing or blank." : "Loaded role from users/{uid}.";
       await setDoc(userRef, {
         uid: user.uid,
         email: user.email || "",
@@ -99,8 +106,10 @@ async function ensureUserProfile(user = currentUser) {
       }, { merge: true });
     }
 
-    return success({ user: safeUser(user), role: currentRole });
+    return success({ user: safeUser(user), role: currentRole, roleReason: currentRoleReason });
   } catch (error) {
+    currentRole = "unknown";
+    currentRoleReason = friendlyError(error, "Role lookup failed.");
     return failure(error);
   }
 }
@@ -112,7 +121,7 @@ async function signInWithGoogle() {
     const result = await signInWithPopup(auth, provider);
     currentUser = result.user;
     const profile = await ensureUserProfile(result.user);
-    return profile.ok ? success({ user: safeUser(result.user), role: currentRole }) : profile;
+    return profile.ok ? success({ user: safeUser(result.user), role: currentRole, roleReason: currentRoleReason }) : profile;
   } catch (error) {
     return failure(error);
   }
@@ -125,6 +134,7 @@ async function signOutOfFirebase() {
     await signOut(auth);
     currentUser = null;
     currentRole = "unknown";
+    currentRoleReason = "Signed out; no role loaded.";
     return success({ signedOut: true });
   } catch (error) {
     return failure(error);
@@ -141,7 +151,7 @@ function getCurrentFirebaseUser() {
 
 function getCurrentUserRole() {
   try {
-    return success(currentRole || "unknown");
+    return { ok: true, data: currentRole || "unknown", reason: currentRoleReason };
   } catch (error) {
     return failure(error);
   }
@@ -189,7 +199,7 @@ async function loadCloudBackup() {
 }
 
 function notifyAuthListeners() {
-  const payload = { user: safeUser(currentUser), role: currentRole, status: getFirebaseStatus() };
+  const payload = { user: safeUser(currentUser), role: currentRole, roleReason: currentRoleReason, status: getFirebaseStatus() };
   authListeners.forEach((listener) => {
     try { listener(payload); } catch (error) { console.warn("Sector Drift Firebase listener failed", error); }
   });
@@ -199,7 +209,7 @@ function onFirebaseAuthChange(callback) {
   try {
     if (typeof callback !== "function") return () => {};
     authListeners.add(callback);
-    callback({ user: safeUser(currentUser), role: currentRole, status: getFirebaseStatus() });
+    callback({ user: safeUser(currentUser), role: currentRole, roleReason: currentRoleReason, status: getFirebaseStatus() });
     return () => authListeners.delete(callback);
   } catch (error) {
     console.warn("Sector Drift Firebase auth callback failed", error);
@@ -215,6 +225,7 @@ try {
   onAuthStateChanged(auth, async (user) => {
     currentUser = user;
     currentRole = "unknown";
+    currentRoleReason = user ? "Loading role from users/{uid}..." : "Signed out; no role loaded.";
     if (user) await ensureUserProfile(user);
     notifyAuthListeners();
   }, (error) => {

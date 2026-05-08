@@ -22,6 +22,8 @@ const SMUGGLED_RESOURCE = "Smuggled";
 const SMUGGLED_DISPLAY_NAME = "Smuggled Inventory";
 const SMUGGLED_DESCRIPTION = "Unregistered cargo that local authorities would rather not find.";
 const RESOURCES = ["Ore", "Food", "Tech"];
+const REQUIRE_FIREBASE_LOGIN = true;
+const ALLOW_LOCAL_PROTOTYPE_MODE = true;
 
 const PLANET_UPGRADE_TRACKS = ["production", "industry", "defense", "fighterBays", "research"];
 const PLANET_PRODUCTION_RESOURCES = ["Ore", "Food", "Tech", "Fighters"];
@@ -271,7 +273,8 @@ let sectorMap = createSectorMap();
 let game = loadGame();
 let selectedSectorNumber = game.player.currentSector;
 let firebaseUnsubscribe = null;
-const cloudUiState = { status: "not initialized", message: "Cloud backup unavailable until Firebase finishes loading.", busy: false, user: null, role: "unknown" };
+const cloudUiState = { status: "not initialized", message: "Cloud backup unavailable until Firebase finishes loading.", busy: false, user: null, role: "unknown", roleReason: "Waiting for Firebase role lookup.", lastCloudResult: "No cloud action this session." };
+const launchGate = { mode: "checkingAuth", message: "Checking classroom sign-in status...", enteredAt: Date.now() };
 
 const panels = {};
 
@@ -302,14 +305,15 @@ if (typeof document !== "undefined") {
     });
 
     if (typeof window !== "undefined") {
-      window.addEventListener("sectorDriftFirebaseReady", () => { refreshFirebaseUiState(); if (activeScreenName() === "settings") render(); });
-      window.setTimeout(() => { refreshFirebaseUiState(); if (activeScreenName() === "settings") render(); }, 500);
+      window.addEventListener("sectorDriftFirebaseReady", () => { refreshFirebaseUiState(); updateLaunchGateFromAuth(); if (["settings", "launch", "adminPanel"].includes(activeScreenName())) render(); });
+      window.setTimeout(() => { refreshFirebaseUiState(); updateLaunchGateFromAuth(); if (["settings", "launch", "adminPanel"].includes(activeScreenName())) render(); }, 500);
     }
 
     refreshDailyTurns();
     updateAchievements();
     saveGame();
     refreshFirebaseUiState();
+    initializeLaunchGate();
     render();
   });
 }
@@ -958,12 +962,21 @@ const SCREEN_TITLES = {
   reputation: ["Reputation", "Alignment, combat rank, bounty record, and future reputation shop."],
   captainLog: ["Captain's Log", "Newest entries first with full recent history."],
   settings: ["Settings / Save", "Local save controls and prototype safety notes."],
+  launch: ["Sector Drift", "Board your ship through classroom login or local prototype mode."],
+  adminPanel: ["Admin Panel", "Teacher controls and classroom oversight tools."],
 };
 
 function screenNames() { return Object.keys(SCREEN_TITLES); }
 
 function openScreen(screenName) {
   game.ui = game.ui || {};
+  if (screenName === "adminPanel" && !isTeacher()) {
+    return addAndRender("Admin Panel is available only to signed-in teacher accounts.");
+  }
+  if (!canUseGameActions() && !["launch", "settings"].includes(screenName)) {
+    game.ui.activeScreen = "launch";
+    return addAndRender(authGateMessage());
+  }
   game.ui.activeScreen = screenNames().includes(screenName) ? screenName : "cockpit";
   render();
 }
@@ -977,11 +990,20 @@ function activeScreenName() {
 }
 
 function renderActiveScreen() {
+  updateLaunchGateFromAuth();
+  const screen = activeScreenName();
+  const cockpit = document.getElementById("cockpitDashboard");
+  if (screen === "launch") {
+    if (cockpit) cockpit.hidden = true;
+    if (panels.docked) {
+      panels.docked.hidden = false;
+      renderDockedScreen(...SCREEN_TITLES.launch, renderLaunchScreen());
+    }
+    return;
+  }
   renderShipPanel();
   renderSectorPanel();
   renderActionPanel();
-  const screen = activeScreenName();
-  const cockpit = document.getElementById("cockpitDashboard");
   if (panels.docked) panels.docked.hidden = screen === "cockpit";
   if (cockpit) cockpit.hidden = screen !== "cockpit";
   if (screen === "cockpit") {
@@ -1013,12 +1035,15 @@ function renderScreenContent(screen) {
   if (screen === "reputation") return renderReputationScreen();
   if (screen === "captainLog") return renderCaptainLogScreen();
   if (screen === "settings") return renderSettingsScreen();
+  if (screen === "launch") return renderLaunchScreen();
+  if (screen === "adminPanel") return renderAdminPanelScreen();
   return "";
 }
 
 
 function renderActionPanel() {
   if (!panels.action) return;
+  const gateOpen = canUseGameActions();
   const sector = sectorMap[game.player.currentSector];
   const ownedPlanetCount = Object.values(game.planets || {}).filter((planet) => planet.owner === game.player.pilotName).length;
   const planetHere = sector.type === "planet";
@@ -1032,9 +1057,10 @@ function renderActionPanel() {
     { screen: "achievements", label: "Achievements", enabled: true, reason: `${game.achievements.length} unlocked` },
     { screen: "reputation", label: "Reputation", enabled: true, reason: `${reputationTitle(game.player.reputation)} · ${combatRankTitle()}` },
     { screen: "captainLog", label: "Captain's Log", enabled: true, reason: "Recent events" },
-    { screen: "settings", label: "Settings / Save", enabled: true, reason: "Local save controls" },
+    { screen: "settings", label: "Settings / Save", enabled: true, reason: "Cloud login and local save controls" },
   ];
-  panels.action.innerHTML = `<h2 id="actionHeading">Cockpit Actions</h2><p class="help-text">Dock into one screen at a time. Complex systems stay off the main map until selected.</p><div class="action-menu">${actions.map((action) => `<button type="button" data-screen="${action.screen}" ${action.enabled ? "" : "disabled"}><strong>${action.label}</strong><span>${action.reason}</span></button>`).join("")}</div>${renderEmergencyWarpControl()}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 5).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
+  if (isTeacher()) actions.push({ screen: "adminPanel", label: "Admin Panel", enabled: true, reason: "Teacher-only classroom tools" });
+  panels.action.innerHTML = `<h2 id="actionHeading">Cockpit Actions</h2><p class="help-text">${gateOpen ? "Dock into one screen at a time. Complex systems stay off the main map until selected." : authGateMessage()}</p><div class="action-menu">${actions.map((action) => `<button type="button" data-screen="${action.screen}" ${action.enabled && (gateOpen || action.screen === "settings") ? "" : "disabled"}><strong>${action.label}</strong><span>${gateOpen || action.screen === "settings" ? action.reason : "Launch required"}</span></button>`).join("")}</div>${gateOpen ? renderEmergencyWarpControl() : ""}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 5).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
   panels.action.querySelectorAll("[data-screen]").forEach((button) => button.addEventListener("click", () => openScreen(button.dataset.screen)));
   panels.action.querySelector("[data-action='emergencyWarp']")?.addEventListener("click", emergencyWarp);
 }
@@ -1261,9 +1287,9 @@ function renderWarpControls() {
 }
 
 function wireWarpControls(scope = document) {
-  scope.querySelector("[data-action='plotWarp']")?.addEventListener("click", () => setWarpDestination(scope.querySelector("#warpDestination")?.value));
-  scope.querySelector("[data-action='warpStep']")?.addEventListener("click", performWarpStep);
-  scope.querySelector("[data-action='clearWarp']")?.addEventListener("click", clearWarpDestination);
+  scope.querySelector("[data-action='plotWarp']")?.addEventListener("click", () => runGameAction(() => setWarpDestination(scope.querySelector("#warpDestination")?.value)));
+  scope.querySelector("[data-action='warpStep']")?.addEventListener("click", () => runGameAction(performWarpStep));
+  scope.querySelector("[data-action='clearWarp']")?.addEventListener("click", () => runGameAction(clearWarpDestination));
 }
 
 function renderNavigationIntel() {
@@ -1291,6 +1317,7 @@ function renderEmergencyWarpControl() {
 }
 
 function handleMapNodeSelect(number) {
+  if (!canUseGameActions()) return addAndRender(authGateMessage());
   selectSector(number, true);
   const current = sectorMap[game.player.currentSector];
   if (number === game.player.currentSector) return;
@@ -1338,6 +1365,7 @@ function navigationRecommendation(number) {
 }
 
 function emergencyWarp() {
+  if (!canUseGameActions()) return addAndRender(authGateMessage());
   if (game.player.currentSector === 1) return addAndRender("Already at Sector 1.");
   if (game.player.fuel < 5) return addAndRender("Emergency warp requires 5 fuel.");
   game.player.fuel -= 5;
@@ -1466,12 +1494,13 @@ function firebaseClient() {
   return window.SectorDriftFirebase || null;
 }
 
-function refreshFirebaseUiState() {
+function refreshFirebaseUiState(allowSubscribe = true) {
   const client = firebaseClient();
   if (!client) {
     cloudUiState.status = "not initialized";
     cloudUiState.user = null;
     cloudUiState.role = "unknown";
+    cloudUiState.roleReason = "Firebase client script has not reported ready status.";
     return;
   }
 
@@ -1481,23 +1510,105 @@ function refreshFirebaseUiState() {
   cloudUiState.status = status?.status || (status?.ok ? "available" : "unavailable");
   cloudUiState.user = status?.user || userResult?.data || null;
   cloudUiState.role = status?.role || roleResult?.data || "unknown";
+  cloudUiState.roleReason = status?.roleReason || roleResult?.reason || roleResult?.error || (cloudUiState.user ? "Role loaded from users/{uid}." : "Sign in to load role.");
   if (!status?.ok && status?.error) cloudUiState.message = status.error;
 
-  if (!firebaseUnsubscribe && typeof client.onFirebaseAuthChange === "function") {
+  if (allowSubscribe && !firebaseUnsubscribe && typeof client.onFirebaseAuthChange === "function") {
     firebaseUnsubscribe = client.onFirebaseAuthChange(({ user, role, status: authStatus } = {}) => {
       cloudUiState.user = user || null;
       cloudUiState.role = role || "unknown";
       cloudUiState.status = authStatus?.status || cloudUiState.status || "available";
-      if (activeScreenName() === "settings") render();
+      cloudUiState.roleReason = authStatus?.roleReason || (user ? "Role loaded from users/{uid}." : "Sign in to load role.");
+      updateLaunchGateFromAuth();
+      if (["settings", "launch", "adminPanel"].includes(activeScreenName())) render();
     });
   }
 }
 
-function cloudStatusLabel() {
-  refreshFirebaseUiState();
+function cloudStatusLabel(allowSubscribe = true) {
+  refreshFirebaseUiState(allowSubscribe);
   if (cloudUiState.status === "available") return "available";
   if (cloudUiState.status === "not initialized") return "not initialized";
   return "unavailable";
+}
+
+
+function initializeLaunchGate() {
+  if (!REQUIRE_FIREBASE_LOGIN) {
+    launchGate.mode = "signedIn";
+    launchGate.message = "Classroom sign-in is optional for this build.";
+    return;
+  }
+  game.ui = game.ui || {};
+  updateLaunchGateFromAuth();
+  if (!canUseGameActions()) game.ui.activeScreen = "launch";
+}
+
+function updateLaunchGateFromAuth() {
+  refreshFirebaseUiState(false);
+  if (launchGate.mode === "localPrototype") return;
+  const client = firebaseClient();
+  if (!REQUIRE_FIREBASE_LOGIN) {
+    launchGate.mode = "signedIn";
+    launchGate.message = "Classroom sign-in is optional for this build.";
+  } else if (!client || ["unavailable", "not initialized"].includes(cloudUiState.status)) {
+    launchGate.mode = "signedOut";
+    launchGate.message = cloudUiState.message || "Cloud login is unavailable right now. Local Prototype Mode can still be used for testing.";
+  } else if (cloudUiState.user) {
+    launchGate.mode = "signedIn";
+    launchGate.message = "Signed in. Continue to Ship when ready; cloud saves load only after confirmation.";
+  } else {
+    launchGate.mode = "signedOut";
+    launchGate.message = "Sign in with Google or choose Local Prototype Mode before launching.";
+  }
+}
+
+function authGateMessage() {
+  return "Sign in or choose Local Prototype Mode before launching.";
+}
+
+function canUseGameActions() {
+  if (typeof window === "undefined") return true;
+  if (!REQUIRE_FIREBASE_LOGIN) return true;
+  return launchGate.mode === "signedIn" || launchGate.mode === "localPrototype";
+}
+
+function isTeacher() {
+  return Boolean(cloudUiState.user) && cloudUiState.role === "teacher";
+}
+
+function launchModeLabel() {
+  if (launchGate.mode === "localPrototype") return "Local Prototype Mode";
+  if (launchGate.mode === "signedIn") return "Signed-in classroom mode";
+  if (launchGate.mode === "checkingAuth") return "Checking auth";
+  return "Signed out";
+}
+
+function continueToShip() {
+  updateLaunchGateFromAuth();
+  if (!canUseGameActions()) return addAndRender(authGateMessage());
+  game.ui.activeScreen = "cockpit";
+  addLog(launchGate.mode === "localPrototype" ? "Local Prototype Mode launched. Progress stays in this browser." : "Classroom launch complete. Welcome aboard.");
+  saveGame();
+  render();
+}
+
+function enterLocalPrototypeMode() {
+  if (!ALLOW_LOCAL_PROTOTYPE_MODE) return;
+  launchGate.mode = "localPrototype";
+  launchGate.message = "Local Prototype Mode active. Saves stay in this browser and are not tied to a school account.";
+  continueToShip();
+}
+
+function renderLaunchScreen() {
+  const signedIn = Boolean(cloudUiState.user);
+  const account = signedIn ? `${cloudUiState.user.displayName || "Google user"} (${cloudUiState.user.email || "no email"})` : "Not signed in";
+  const firebaseStatus = cloudStatusLabel(false);
+  const canContinue = signedIn || launchGate.mode === "localPrototype" || !REQUIRE_FIREBASE_LOGIN;
+  const signInDisabled = !firebaseClient() || firebaseStatus !== "available" || signedIn || cloudUiState.busy ? "disabled" : "";
+  const continueDisabled = canContinue ? "" : "disabled";
+  const role = signedIn ? (cloudUiState.role || "unknown") : "not signed in";
+  return `<section class="launch-screen"><div class="launch-hero-card"><p class="eyebrow">Classroom launch gate</p><h2>Sector Drift</h2><p class="subtitle">Board your ship with a school Google account, then choose when to enter the cockpit. Cloud backups are never loaded automatically.</p><div class="launch-status-grid">${stat("Firebase status", firebaseStatus)}${stat("Launch mode", launchModeLabel())}${stat("Sign-in state", signedIn ? "signed in" : "signed out")}${stat("Account", account)}${stat("Role", role)}${stat("Role note", cloudUiState.roleReason || "Role lookup pending.")}</div><p class="help-text">${launchGate.message}</p><div class="button-row"><button type="button" data-action="firebaseSignIn" ${signInDisabled}>Sign in with Google</button><button type="button" class="primary-launch-button" data-action="continueToShip" ${continueDisabled}>Continue to Ship</button></div></div><section class="mini-card prototype-card"><h3>Local Prototype Mode</h3><p>Use only for testing. Saves stay in this browser.</p><p class="turn-warning">Local Prototype Mode saves only on this browser and is not tied to a school account.</p><button type="button" data-action="localPrototype" ${ALLOW_LOCAL_PROTOTYPE_MODE ? "" : "disabled"}>Continue Local Prototype Mode</button></section></section>`;
 }
 
 function renderCloudLoginPanel() {
@@ -1517,9 +1628,9 @@ function renderCloudLoginPanel() {
     ? "Cloud backup unavailable. LocalStorage play still works."
     : signedIn
       ? "Cloud backup is optional. Loading requires confirmation before replacing this browser save."
-      : "Sign in first to save or load a cloud backup. Login is never required to play.";
+      : "Sign in first to save or load a cloud backup. Classroom play requires launch sign-in unless Local Prototype Mode is selected.";
 
-  return `<section class="mini-card"><h3>Cloud Login / Firebase Backup</h3><p class="help-text">${helper}</p>${stat("Firebase status", status)}${stat("Sign-in status", signedIn ? "signed in" : "signed out")}${stat("Account", userText)}${stat("Role", cloudUiState.role || "unknown")}<div class="button-row"><button type="button" data-action="firebaseSignIn" ${signInDisabled}>Sign in with Google</button><button type="button" data-action="firebaseSignOut" ${signOutDisabled}>Sign out</button></div><div class="button-row"><button type="button" data-action="cloudBackupSave" ${saveDisabled}>Save Cloud Backup</button><button type="button" data-action="cloudBackupLoad" ${loadDisabled}>Load Cloud Backup</button></div><p class="help-text">${cloudUiState.busy ? "Working with Firebase..." : cloudUiState.message}</p></section>`;
+  return `<section class="mini-card"><h3>Cloud Login / Firebase Backup</h3><p class="help-text">${helper}</p>${stat("Firebase status", status)}${stat("Sign-in status", signedIn ? "signed in" : "signed out")}${stat("Account", userText)}${stat("Role", cloudUiState.role || "unknown")}${stat("Role note", cloudUiState.roleReason || "Role lookup pending.")}<div class="button-row"><button type="button" data-action="firebaseSignIn" ${signInDisabled}>Sign in with Google</button><button type="button" data-action="firebaseSignOut" ${signOutDisabled}>Sign out</button></div><div class="button-row"><button type="button" data-action="cloudBackupSave" ${saveDisabled}>Save Cloud Backup</button><button type="button" data-action="cloudBackupLoad" ${loadDisabled}>Load Cloud Backup</button></div><p class="help-text">${cloudUiState.busy ? "Working with Firebase..." : cloudUiState.message}</p><p class="help-text"><strong>Last cloud result:</strong> ${cloudUiState.lastCloudResult}</p></section>`;
 }
 
 async function handleFirebaseSignIn() {
@@ -1534,8 +1645,10 @@ async function handleFirebaseSignIn() {
     cloudUiState.user = result.data?.user || null;
     cloudUiState.role = result.data?.role || "unknown";
     cloudUiState.message = "Signed in. Local save was not changed.";
+    cloudUiState.lastCloudResult = "Signed in successfully; local save unchanged.";
   } else {
     cloudUiState.message = result.error || "Google sign-in failed. Local save still works.";
+    cloudUiState.lastCloudResult = cloudUiState.message;
   }
   refreshFirebaseUiState();
   render();
@@ -1552,6 +1665,8 @@ async function handleFirebaseSignOut() {
     cloudUiState.user = null;
     cloudUiState.role = "unknown";
     cloudUiState.message = "Signed out of Firebase. Local save remains on this device.";
+    cloudUiState.lastCloudResult = "Signed out; local save remains on this device.";
+    launchGate.mode = "signedOut";
   } else {
     cloudUiState.message = result.error || "Sign-out failed. Local save remains unchanged.";
   }
@@ -1573,10 +1688,12 @@ async function handleCloudBackupSave() {
   cloudUiState.busy = false;
   if (result.ok) {
     cloudUiState.message = "Cloud backup saved successfully.";
-    addLog("Cloud backup saved to Firebase.");
+    cloudUiState.lastCloudResult = "Saved current browser state to players/{uid}.";
+    addLog("Captain’s Log: Cloud backup saved to Firebase.");
     saveGame();
   } else {
     cloudUiState.message = result.error || "Cloud backup failed. Local save is unchanged.";
+    cloudUiState.lastCloudResult = cloudUiState.message;
   }
   render();
 }
@@ -1603,26 +1720,142 @@ async function handleCloudBackupLoad() {
 
   const applied = applyLoadedSavePayload(result.data?.saveData);
   cloudUiState.message = applied.ok ? "Cloud backup loaded successfully." : applied.error;
+  cloudUiState.lastCloudResult = cloudUiState.message;
+  if (applied.ok) addLog("Captain’s Log: Cloud backup loaded into this browser after confirmation.");
   render();
 }
 
 function renderSettingsScreen() {
-  return `<div class="screen-grid"><section class="mini-card"><h3>Local Save</h3><p class="help-text">Sector Drift saves automatically to localStorage on this device. Active docked screens are not restored on load; pilots return to the cockpit.</p><button type="button" data-action="saveNow">Save Now</button><button type="button" class="danger-button" data-action="resetLocal">Clear Local Save / Reset Prototype</button></section>${renderCloudLoginPanel()}<section class="mini-card"><h3>Export / Import</h3><p class="help-text">Manual export/import remains a future local-save tool. Firebase is currently backup/load only and does not add multiplayer.</p></section></div>`;
+  return `<div class="screen-grid"><section class="mini-card"><h3>Local Save</h3><p class="help-text">Sector Drift saves automatically to localStorage on this device. Active docked screens are not restored on load; pilots return to the cockpit.</p><div class="button-row"><button type="button" data-action="saveNow">Save Now</button><button type="button" data-action="normalizeSave">Repair / Normalize Save</button><button type="button" class="danger-button" data-action="resetLocal">Clear Local Save / Reset Prototype</button></div></section>${renderCloudLoginPanel()}<section class="mini-card"><h3>Export / Import</h3><p class="help-text">Manual export/import uses this browser save only. Firebase backup/load does not add multiplayer.</p><div class="button-row"><button type="button" data-action="exportSaveJson">Export Save JSON</button><button type="button" data-action="importSaveJson">Import Save JSON</button></div></section></div>`;
 }
 
 function wireDockedButtons(scope = document) {
   wireLocationButtons(scope);
   wireMathMissionControls(scope);
   wireWarpControls(scope);
-  scope.querySelectorAll("[data-claim-mission]").forEach((button) => button.addEventListener("click", () => claimBoardMission(button.dataset.claimMission)));
-  scope.querySelectorAll("[data-start-delivery]").forEach((button) => button.addEventListener("click", () => startDeliveryQuest(button.dataset.startDelivery)));
-  scope.querySelectorAll("[data-complete-delivery]").forEach((button) => button.addEventListener("click", () => completeDeliveryQuest(button.dataset.completeDelivery)));
+  scope.querySelectorAll("[data-claim-mission]").forEach((button) => button.addEventListener("click", () => runGameAction(() => claimBoardMission(button.dataset.claimMission))));
+  scope.querySelectorAll("[data-start-delivery]").forEach((button) => button.addEventListener("click", () => runGameAction(() => startDeliveryQuest(button.dataset.startDelivery))));
+  scope.querySelectorAll("[data-complete-delivery]").forEach((button) => button.addEventListener("click", () => runGameAction(() => completeDeliveryQuest(button.dataset.completeDelivery))));
   scope.querySelector("[data-action='saveNow']")?.addEventListener("click", () => { saveGame(); addLog("Manual save complete."); render(); });
   scope.querySelector("[data-action='resetLocal']")?.addEventListener("click", () => { if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY); sectorMap = createSectorMap(); game = defaultGameState(); addLog("Prototype reset. Welcome back, Cadet."); saveGame(); render(); });
   scope.querySelector("[data-action='firebaseSignIn']")?.addEventListener("click", handleFirebaseSignIn);
   scope.querySelector("[data-action='firebaseSignOut']")?.addEventListener("click", handleFirebaseSignOut);
   scope.querySelector("[data-action='cloudBackupSave']")?.addEventListener("click", handleCloudBackupSave);
   scope.querySelector("[data-action='cloudBackupLoad']")?.addEventListener("click", handleCloudBackupLoad);
+  scope.querySelector("[data-action='continueToShip']")?.addEventListener("click", continueToShip);
+  scope.querySelector("[data-action='localPrototype']")?.addEventListener("click", enterLocalPrototypeMode);
+  scope.querySelector("[data-action='normalizeSave']")?.addEventListener("click", normalizeCurrentSave);
+  scope.querySelector("[data-action='exportSaveJson']")?.addEventListener("click", exportSaveJson);
+  scope.querySelector("[data-action='importSaveJson']")?.addEventListener("click", importSaveJson);
+  scope.querySelector("[data-action='softResetSave']")?.addEventListener("click", softResetCurrentBrowserSave);
+  scope.querySelector("[data-action='fullResetSave']")?.addEventListener("click", fullResetCurrentBrowserSave);
+  scope.querySelector("[data-action='refreshRole']")?.addEventListener("click", refreshRoleAndAuthStatus);
+  scope.querySelector("[data-action='showUid']")?.addEventListener("click", showFirebaseUid);
+  scope.querySelector("[data-action='viewAccount']")?.addEventListener("click", viewCurrentAccountRecord);
+  scope.querySelectorAll("[data-admin-grant]").forEach((button) => button.addEventListener("click", () => adminGrant(button.dataset.adminGrant)));
+}
+
+
+function normalizeCurrentSave() {
+  const beforeScreen = activeScreenName();
+  game = migrateGameState(getCurrentSavePayload());
+  game.ui = { ...(game.ui || {}), activeScreen: beforeScreen === "launch" ? "launch" : beforeScreen };
+  selectedSectorNumber = game.player.currentSector;
+  saveGame();
+  addLog("Teacher tool: current browser save repaired and normalized.");
+  render();
+}
+
+function exportSaveJson() {
+  const text = JSON.stringify(getCurrentSavePayload(), null, 2);
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(() => addAndRender("Save JSON copied to clipboard."), () => addAndRender("Save JSON ready, but clipboard copy was blocked."));
+    return;
+  }
+  if (typeof window !== "undefined") window.prompt("Copy Sector Drift save JSON:", text);
+}
+
+function importSaveJson() {
+  if (typeof window === "undefined") return;
+  const text = window.prompt("Paste Sector Drift save JSON. This replaces the browser save after validation:");
+  if (!text) return addAndRender("Import canceled. Local save was not changed.");
+  try {
+    const parsed = JSON.parse(text);
+    const applied = applyLoadedSavePayload(parsed);
+    addAndRender(applied.ok ? "Imported save JSON into this browser." : applied.error);
+  } catch (error) {
+    addAndRender("Import failed: JSON could not be parsed. Local save was not changed.");
+  }
+}
+
+function softResetCurrentBrowserSave() {
+  if (typeof window !== "undefined" && !confirm("Soft reset this browser save? This starts a new pilot locally but keeps the app available.")) return;
+  game = defaultGameState();
+  game.ui.activeScreen = isTeacher() ? "adminPanel" : "cockpit";
+  selectedSectorNumber = game.player.currentSector;
+  addLog("Teacher tool: soft reset created a fresh local pilot save.");
+  saveGame();
+  render();
+}
+
+function fullResetCurrentBrowserSave() {
+  if (typeof window !== "undefined" && !confirm("Full reset this browser save? localStorage will be cleared and a fresh save created.")) return;
+  if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY);
+  sectorMap = createSectorMap();
+  game = defaultGameState();
+  game.ui.activeScreen = isTeacher() ? "adminPanel" : "cockpit";
+  selectedSectorNumber = game.player.currentSector;
+  addLog("Teacher tool: full reset cleared localStorage and rebuilt a fresh save.");
+  saveGame();
+  render();
+}
+
+async function refreshRoleAndAuthStatus() {
+  const client = firebaseClient();
+  if (client?.ensureUserProfile && cloudUiState.user) {
+    const result = await client.ensureUserProfile();
+    cloudUiState.role = result.data?.role || cloudUiState.role || "unknown";
+    cloudUiState.roleReason = result.ok ? "Role refreshed from users/{uid}." : (result.error || "Role refresh failed.");
+  }
+  refreshFirebaseUiState();
+  updateLaunchGateFromAuth();
+  render();
+}
+
+function showFirebaseUid() {
+  addAndRender(cloudUiState.user?.uid ? `Firebase UID: ${cloudUiState.user.uid}` : "No signed-in Firebase UID is available.");
+}
+
+function viewCurrentAccountRecord() {
+  const user = cloudUiState.user;
+  const detail = user ? `users/${user.uid} · ${user.email || "no email"} · role ${cloudUiState.role || "unknown"}` : "No signed-in account record is available.";
+  addAndRender(detail);
+}
+
+function adminGrant(type) {
+  if (!isTeacher()) return addAndRender("Admin gameplay tools are available only to teacher accounts.");
+  if (type === "credits") game.player.credits += 500;
+  if (type === "fuel") game.player.fuel = Math.min(game.player.maxFuel, game.player.fuel + 10);
+  if (type === "turns") game.player.turns = Math.min(game.player.maxTurns, game.player.turns + 25);
+  if (type === "hull") game.player.hull = game.player.maxHull;
+  if (type === "fighters") game.player.fighters = game.player.fighterCapacity;
+  if (type === "resources") RESOURCES.forEach((resource) => { game.player.cargo[resource] = Math.min(game.player.cargoCapacity, (game.player.cargo[resource] || 0) + 3); });
+  addLog(`Teacher tool: applied ${type} to current browser save.`);
+  saveGame();
+  render();
+}
+
+function placeholderButton(label) {
+  return `<button type="button" disabled>${label} · Coming soon</button>`;
+}
+
+function renderAdminPanelScreen() {
+  if (!isTeacher()) return `<section class="mini-card"><h3>Teacher access required</h3><p class="help-text">Admin Panel is available only to signed-in accounts whose users/{uid}.role is teacher.</p></section>`;
+  const user = cloudUiState.user || {};
+  const diagnostics = [
+    stat("Firebase status", cloudStatusLabel(false)), stat("Current screen", activeScreenName()), stat("Launch mode", launchModeLabel()), stat("Signed-in user", user.email || user.displayName || "unknown"), stat("Role", cloudUiState.role || "unknown"), stat("Current sector", game.player.currentSector), stat("Credits", game.player.credits), stat("Fuel", `${game.player.fuel}/${game.player.maxFuel}`), stat("Turns", `${game.player.turns}/${game.player.maxTurns}`), stat("Hull", `${game.player.hull}/${game.player.maxHull}`), stat("Fighters", `${game.player.fighters}/${game.player.fighterCapacity}`), stat("Visited sectors", (game.visitedSectors || []).length), stat("Owned planets", Object.values(game.planets || {}).filter((planet) => planet.owner === game.player.pilotName).length), stat("Active missions", (game.activeMissions || []).length), stat("Pirates remaining", Object.values(game.pirates || {}).filter((pirate) => !pirate.defeated).length), stat("Cloud backup status", cloudUiState.lastCloudResult)
+  ].join("");
+  return `<div class="admin-panel-grid"><section class="mini-card admin-card"><h3>Teacher Identity</h3>${stat("Account", user.email || user.displayName || "unknown")}${stat("Role", cloudUiState.role)}${stat("UID", user.uid || "unknown")}<p class="reward-text">Teacher access confirmed.</p></section><section class="mini-card admin-card"><h3>Cloud Save / Recovery Tools</h3><div class="button-row"><button type="button" data-action="cloudBackupSave">Save Current Browser State to Cloud</button><button type="button" data-action="cloudBackupLoad">Load Cloud Save to Browser</button><button type="button" data-action="normalizeSave">Repair / Normalize Current Save</button><button type="button" data-action="exportSaveJson">Export Save JSON</button><button type="button" data-action="importSaveJson">Import Save JSON</button><button type="button" data-action="softResetSave">Soft Reset Current Browser Save</button><button type="button" class="danger-button" data-action="fullResetSave">Full Reset Current Browser Save</button></div></section><section class="mini-card admin-card"><h3>Classroom / Account Tools</h3><div class="button-row"><button type="button" data-action="viewAccount">View Current Account Record</button><button type="button" data-action="refreshRole">Refresh Role / Auth Status</button><button type="button" data-action="showUid">Show Firebase UID</button>${placeholderButton("Open Student / Teacher Help")}${placeholderButton("List Future Classroom Features")}</div></section><section class="mini-card admin-card"><h3>Admin Gameplay Tools</h3><div class="button-row"><button type="button" data-admin-grant="credits">Give Credits</button><button type="button" data-admin-grant="fuel">Give Fuel</button><button type="button" data-admin-grant="turns">Give Turns</button><button type="button" data-admin-grant="hull">Repair Hull</button><button type="button" data-admin-grant="fighters">Fill Fighters</button><button type="button" data-admin-grant="resources">Add Test Resources</button>${["Reveal Current Sector", "Reveal All Sectors", "Clear Current Pirate", "Clear Warp Destination", "Return to Sector 1", "Add Smuggled Inventory", "Remove Smuggled Inventory"].map(placeholderButton).join("")}</div></section><section class="mini-card admin-card"><h3>Classroom Controls Placeholder</h3><p class="help-text">Future multiplayer/classroom tools - not active yet</p><div class="button-row">${["Student Roster", "Reset Student Save", "Restore Student Save", "Freeze PvP", "Enable / Disable Combat", "Enable / Disable Smuggled Inventory Events", "Enable / Disable Local Prototype Mode", "Start New Season", "End Current Season"].map(placeholderButton).join("")}</div></section><section class="mini-card admin-card diagnostics-card"><h3>Diagnostics</h3><div class="stats-grid">${diagnostics}</div><div class="button-row">${placeholderButton("Copy Diagnostics")}</div></section></div>`;
 }
 
 function renderLocationPanel() {
@@ -1798,26 +2031,31 @@ function renderAnomaly() {
   return `<h3>Mysterious Anomaly</h3><p>Spend 1 turn to scan carefully. Better scanners improve your chance of helpful discoveries.</p><button data-action="scan" ${game.player.turns <= 0 ? "disabled" : ""}>Scan Anomaly</button>${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : ""}`;
 }
 
+function runGameAction(callback) {
+  if (!canUseGameActions()) return addAndRender(authGateMessage());
+  return callback();
+}
+
 function wireLocationButtons(scope = panels.location) {
   if (!scope) return;
-  scope.querySelectorAll("[data-action='buy']").forEach((button) => button.addEventListener("click", () => buyResource(button.dataset.resource, Number(button.dataset.amount))));
-  scope.querySelectorAll("[data-action='sell']").forEach((button) => button.addEventListener("click", () => sellResource(button.dataset.resource, Number(button.dataset.amount))));
-  scope.querySelector("[data-action='claim']")?.addEventListener("click", claimPlanet);
-  scope.querySelectorAll("[data-action='deposit']").forEach((button) => button.addEventListener("click", () => depositToPlanet(button.dataset.resource)));
-  scope.querySelectorAll("[data-action='upgradePlanet']").forEach((button) => button.addEventListener("click", () => upgradePlanet(button.dataset.track || "production")));
-  scope.querySelector("[data-action='collectProduction']")?.addEventListener("click", collectPlanetProduction);
-  scope.querySelectorAll("[data-action='loadPlanetFighters']").forEach((button) => button.addEventListener("click", () => transferPlanetFighters("load", button.dataset.amount)));
-  scope.querySelectorAll("[data-action='unloadPlanetFighters']").forEach((button) => button.addEventListener("click", () => transferPlanetFighters("unload", button.dataset.amount)));
-  scope.querySelector("[data-action='mine']")?.addEventListener("click", mineAsteroids);
-  scope.querySelector("[data-action='scan']")?.addEventListener("click", scanAnomaly);
-  scope.querySelector("[data-action='repair']")?.addEventListener("click", repairHull);
-  scope.querySelectorAll("[data-action='refuel']").forEach((button) => button.addEventListener("click", () => buyFuel(button.dataset.amount)));
-  scope.querySelectorAll("[data-action='buyShip']").forEach((button) => button.addEventListener("click", () => buyShip(button.dataset.ship)));
-  scope.querySelectorAll("[data-action='buyFighters']").forEach((button) => button.addEventListener("click", () => buyFighters(button.dataset.amount)));
-  scope.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => sellFighters(button.dataset.amount)));
-  scope.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => sellFighters(button.dataset.amount)));
-  scope.querySelectorAll("[data-action='pirateCombat']").forEach((button) => button.addEventListener("click", () => resolvePirateCombat(button.dataset.mode)));
-  scope.querySelector("[data-action='boardPirate']")?.addEventListener("click", boardPirateShip);
+  scope.querySelectorAll("[data-action='buy']").forEach((button) => button.addEventListener("click", () => runGameAction(() => buyResource(button.dataset.resource, Number(button.dataset.amount)))));
+  scope.querySelectorAll("[data-action='sell']").forEach((button) => button.addEventListener("click", () => runGameAction(() => sellResource(button.dataset.resource, Number(button.dataset.amount)))));
+  scope.querySelector("[data-action='claim']")?.addEventListener("click", () => runGameAction(claimPlanet));
+  scope.querySelectorAll("[data-action='deposit']").forEach((button) => button.addEventListener("click", () => runGameAction(() => depositToPlanet(button.dataset.resource))));
+  scope.querySelectorAll("[data-action='upgradePlanet']").forEach((button) => button.addEventListener("click", () => runGameAction(() => upgradePlanet(button.dataset.track || "production"))));
+  scope.querySelector("[data-action='collectProduction']")?.addEventListener("click", () => runGameAction(collectPlanetProduction));
+  scope.querySelectorAll("[data-action='loadPlanetFighters']").forEach((button) => button.addEventListener("click", () => runGameAction(() => transferPlanetFighters("load", button.dataset.amount))));
+  scope.querySelectorAll("[data-action='unloadPlanetFighters']").forEach((button) => button.addEventListener("click", () => runGameAction(() => transferPlanetFighters("unload", button.dataset.amount))));
+  scope.querySelector("[data-action='mine']")?.addEventListener("click", () => runGameAction(mineAsteroids));
+  scope.querySelector("[data-action='scan']")?.addEventListener("click", () => runGameAction(scanAnomaly));
+  scope.querySelector("[data-action='repair']")?.addEventListener("click", () => runGameAction(repairHull));
+  scope.querySelectorAll("[data-action='refuel']").forEach((button) => button.addEventListener("click", () => runGameAction(() => buyFuel(button.dataset.amount))));
+  scope.querySelectorAll("[data-action='buyShip']").forEach((button) => button.addEventListener("click", () => runGameAction(() => buyShip(button.dataset.ship))));
+  scope.querySelectorAll("[data-action='buyFighters']").forEach((button) => button.addEventListener("click", () => runGameAction(() => buyFighters(button.dataset.amount))));
+  scope.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => runGameAction(() => sellFighters(button.dataset.amount))));
+  scope.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => runGameAction(() => sellFighters(button.dataset.amount))));
+  scope.querySelectorAll("[data-action='pirateCombat']").forEach((button) => button.addEventListener("click", () => runGameAction(() => resolvePirateCombat(button.dataset.mode))));
+  scope.querySelector("[data-action='boardPirate']")?.addEventListener("click", () => runGameAction(boardPirateShip));
 }
 
 function wireMathMissionControls(scope = document) {
@@ -1825,7 +2063,7 @@ function wireMathMissionControls(scope = document) {
     game.selectedMissionTier = normalizeMissionTier(event.target.value);
     saveGame();
   });
-  scope.querySelector("#submitMission")?.addEventListener("click", submitMissionAnswer);
+  scope.querySelector("#submitMission")?.addEventListener("click", () => runGameAction(submitMissionAnswer));
   scope.querySelector("#stuckMission")?.addEventListener("click", () => {
     const mission = game.currentMission;
     game.missionFeedback = mission.hint;
@@ -1857,7 +2095,7 @@ function renderMissionPanel() {
     const complete = progress >= template.target;
     return `<div class="mission-card ${complete ? "complete" : ""}"><h3>${template.title}</h3><p>${template.objective}</p><p class="progress-text">Progress: ${Math.min(progress, template.target)}/${template.target}</p><p class="reward-text">Reward: ${formatReward(template.reward)}</p><button data-claim-mission="${mission.id}" ${complete ? "" : "disabled"}>Claim Reward</button></div>`;
   }).join("") || `<p class="empty-note">All current single-player board missions are complete.</p>`}</div>`;
-  panels.mission.querySelectorAll("[data-claim-mission]").forEach((button) => button.addEventListener("click", () => claimBoardMission(button.dataset.claimMission)));
+  panels.mission.querySelectorAll("[data-claim-mission]").forEach((button) => button.addEventListener("click", () => runGameAction(() => claimBoardMission(button.dataset.claimMission))));
 }
 
 function renderTutorialPanel() {
@@ -2948,6 +3186,10 @@ function maybeTravelEvent() {
 }
 
 function spendTurn(action) {
+  if (!canUseGameActions()) {
+    addAndRender(authGateMessage());
+    return false;
+  }
   if (game.player.turns <= 0) {
     addAndRender("Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.");
     return false;
