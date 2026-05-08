@@ -4,7 +4,14 @@ const assert = require('assert');
 
 const source = fs.readFileSync('games/sector-drift/app.js', 'utf8');
 const elementStub = { addEventListener: () => {}, querySelector: () => null, querySelectorAll: () => [], innerHTML: '', value: '' };
-const context = { console, Math, Date, JSON, setTimeout, clearTimeout, document: { addEventListener: () => {}, getElementById: () => elementStub } };
+const storage = new Map();
+const localStorage = {
+  getItem: (key) => storage.has(key) ? storage.get(key) : null,
+  setItem: (key, value) => storage.set(key, String(value)),
+  removeItem: (key) => storage.delete(key),
+  clear: () => storage.clear(),
+};
+const context = { console, Math, Date, JSON, setTimeout, clearTimeout, fs, localStorage, document: { addEventListener: () => {}, getElementById: () => elementStub } };
 vm.createContext(context);
 vm.runInContext(source, context);
 vm.runInContext(`
@@ -384,6 +391,25 @@ vm.runInContext(`
   zoomMap(0.25);
   assert(game.ui.mapZoom > oldZoom, 'map zoom should still update');
   assert(renderMinimap().includes('data-map-sector'), 'minimap should render clickable sector nodes');
+
+  // Firebase readiness and local-save safety checks.
+  game = defaultGameState();
+  openScreen('settings');
+  assert(panels.docked.innerHTML.includes('Cloud Login / Firebase Backup'), 'settings should render Firebase login/cloud backup section');
+  assert(panels.docked.innerHTML.includes('Cloud backup unavailable') || panels.docked.innerHTML.includes('not initialized'), 'settings should be friendly when Firebase global is missing');
+  assert(!panels.docked.innerHTML.includes('Login required to play'), 'game should not require login to play');
+  const currentCredits = game.player.credits;
+  const badLoad = applyLoadedSavePayload({ notPlayerData: true });
+  assert(!badLoad.ok && game.player.credits === currentCredits, 'bad cloud save payload cannot wipe current local save');
+  const migratedCloud = applyLoadedSavePayload({ player: { credits: 4321, shipId: 'rustyComet' }, log: ['cloud legacy'] });
+  assert(migratedCloud.ok && game.player.credits === 4321 && game.player.shipId === 'rustyComet', 'cloud load should run migration before applying');
+  const payload = getCurrentSavePayload();
+  assert(payload.version === STORAGE_KEY && payload.ui.activeScreen === 'cockpit', 'cloud payload should preserve save data while avoiding docked-screen restore');
+  game.player.credits = 2468;
+  saveGame();
+  assert(loadGame().player.credits === 2468, 'localStorage save/load should still work');
+  const html = fs.readFileSync('games/sector-drift/index.html', 'utf8');
+  assert(html.includes('<script type="module" src="firebase-client.js"></script>'), 'index.html should load firebase-client.js as a module script');
 })();
 `, context);
 console.log('Sector Drift smoke checks passed.');
