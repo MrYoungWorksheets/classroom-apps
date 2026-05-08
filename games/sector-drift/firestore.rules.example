@@ -40,7 +40,9 @@ service cloud.firestore {
 
     match /players/{uid} {
       // Cloud backups are private to each signed-in user. Teachers can read/write for support.
-      allow read, write: if isSelf(uid) || isTeacher();
+      allow read: if isSelf(uid) || isTeacher();
+      allow create: if isSelf(uid) || isTeacher();
+      allow update: if isSelf(uid) || isTeacher();
       allow delete: if false;
     }
 
