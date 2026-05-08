@@ -1,0 +1,51 @@
+rules_version = '2';
+
+// Starter rules for Sector Drift cloud-save backup testing.
+// Review and harden these rules before any future multiplayer, PvP, shared economy,
+// shared planets, teacher dashboard, or classroom-wide admin features go live.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isTeacher() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "teacher";
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isTeacher();
+
+      // Students can create only their own profile and only with the default role.
+      allow create: if isSelf(uid)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.role == "student";
+
+      // Students can update safe profile fields but cannot change uid or role.
+      allow update: if isSelf(uid)
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.uid == resource.data.uid;
+
+      // Teachers may adjust student fields later if needed. Keep teacher tooling role-gated.
+      allow update: if isTeacher();
+
+      allow delete: if false;
+    }
+
+    match /players/{uid} {
+      // Cloud backups are private to each signed-in user. Teachers can read/write for support.
+      allow read, write: if isSelf(uid) || isTeacher();
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -270,6 +270,8 @@ const SHIPS = {
 let sectorMap = createSectorMap();
 let game = loadGame();
 let selectedSectorNumber = game.player.currentSector;
+let firebaseUnsubscribe = null;
+const cloudUiState = { status: "not initialized", message: "Cloud backup unavailable until Firebase finishes loading.", busy: false, user: null, role: "unknown" };
 
 const panels = {};
 
@@ -299,9 +301,15 @@ if (typeof document !== "undefined") {
       }
     });
 
+    if (typeof window !== "undefined") {
+      window.addEventListener("sectorDriftFirebaseReady", () => { refreshFirebaseUiState(); if (activeScreenName() === "settings") render(); });
+      window.setTimeout(() => { refreshFirebaseUiState(); if (activeScreenName() === "settings") render(); }, 500);
+    }
+
     refreshDailyTurns();
     updateAchievements();
     saveGame();
+    refreshFirebaseUiState();
     render();
   });
 }
@@ -1423,8 +1431,183 @@ function renderCaptainLogScreen() {
   return `<ol class="log-list">${game.log.map((entry) => `<li>${entry}</li>`).join("")}</ol>`;
 }
 
+function getCurrentSavePayload() {
+  return JSON.parse(JSON.stringify({
+    ...game,
+    version: STORAGE_KEY,
+    ui: { ...(game.ui || {}), activeScreen: "cockpit" }
+  }));
+}
+
+function applyLoadedSavePayload(saveData) {
+  if (!saveData || typeof saveData !== "object" || Array.isArray(saveData) || !saveData.player) {
+    return { ok: false, error: "Cloud save did not look like a Sector Drift save. Local save was not changed." };
+  }
+
+  try {
+    const migrated = migrateGameState(saveData);
+    if (!migrated?.player || !Number.isFinite(Number(migrated.player.currentSector)) || !sectorMap[migrated.player.currentSector]) {
+      return { ok: false, error: "Cloud save could not be normalized safely. Local save was not changed." };
+    }
+    game = migrated;
+    game.ui = { ...(game.ui || {}), activeScreen: "settings" };
+    selectedSectorNumber = game.player.currentSector;
+    saveGame();
+    addLog("Cloud backup loaded into this browser after confirmation.");
+    saveGame();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: "Cloud save could not be applied safely. Local save was not changed." };
+  }
+}
+
+function firebaseClient() {
+  if (typeof window === "undefined") return null;
+  return window.SectorDriftFirebase || null;
+}
+
+function refreshFirebaseUiState() {
+  const client = firebaseClient();
+  if (!client) {
+    cloudUiState.status = "not initialized";
+    cloudUiState.user = null;
+    cloudUiState.role = "unknown";
+    return;
+  }
+
+  const status = client.getFirebaseStatus?.();
+  const userResult = client.getCurrentFirebaseUser?.();
+  const roleResult = client.getCurrentUserRole?.();
+  cloudUiState.status = status?.status || (status?.ok ? "available" : "unavailable");
+  cloudUiState.user = status?.user || userResult?.data || null;
+  cloudUiState.role = status?.role || roleResult?.data || "unknown";
+  if (!status?.ok && status?.error) cloudUiState.message = status.error;
+
+  if (!firebaseUnsubscribe && typeof client.onFirebaseAuthChange === "function") {
+    firebaseUnsubscribe = client.onFirebaseAuthChange(({ user, role, status: authStatus } = {}) => {
+      cloudUiState.user = user || null;
+      cloudUiState.role = role || "unknown";
+      cloudUiState.status = authStatus?.status || cloudUiState.status || "available";
+      if (activeScreenName() === "settings") render();
+    });
+  }
+}
+
+function cloudStatusLabel() {
+  refreshFirebaseUiState();
+  if (cloudUiState.status === "available") return "available";
+  if (cloudUiState.status === "not initialized") return "not initialized";
+  return "unavailable";
+}
+
+function renderCloudLoginPanel() {
+  const client = firebaseClient();
+  const status = cloudStatusLabel();
+  const signedIn = Boolean(cloudUiState.user);
+  const unavailable = !client || status !== "available" || cloudUiState.busy;
+  const saveLoadDisabled = unavailable || !signedIn;
+  const userText = signedIn
+    ? `${cloudUiState.user.displayName || "Google user"} (${cloudUiState.user.email || "no email"})`
+    : "Not signed in";
+  const signInDisabled = unavailable || signedIn ? "disabled" : "";
+  const signOutDisabled = unavailable || !signedIn ? "disabled" : "";
+  const saveDisabled = saveLoadDisabled ? "disabled" : "";
+  const loadDisabled = saveLoadDisabled ? "disabled" : "";
+  const helper = !client
+    ? "Cloud backup unavailable. LocalStorage play still works."
+    : signedIn
+      ? "Cloud backup is optional. Loading requires confirmation before replacing this browser save."
+      : "Sign in first to save or load a cloud backup. Login is never required to play.";
+
+  return `<section class="mini-card"><h3>Cloud Login / Firebase Backup</h3><p class="help-text">${helper}</p>${stat("Firebase status", status)}${stat("Sign-in status", signedIn ? "signed in" : "signed out")}${stat("Account", userText)}${stat("Role", cloudUiState.role || "unknown")}<div class="button-row"><button type="button" data-action="firebaseSignIn" ${signInDisabled}>Sign in with Google</button><button type="button" data-action="firebaseSignOut" ${signOutDisabled}>Sign out</button></div><div class="button-row"><button type="button" data-action="cloudBackupSave" ${saveDisabled}>Save Cloud Backup</button><button type="button" data-action="cloudBackupLoad" ${loadDisabled}>Load Cloud Backup</button></div><p class="help-text">${cloudUiState.busy ? "Working with Firebase..." : cloudUiState.message}</p></section>`;
+}
+
+async function handleFirebaseSignIn() {
+  const client = firebaseClient();
+  if (!client) { cloudUiState.message = "Cloud backup unavailable. Local save still works."; render(); return; }
+  cloudUiState.busy = true;
+  cloudUiState.message = "Opening Google sign-in...";
+  render();
+  const result = await client.signInWithGoogle();
+  cloudUiState.busy = false;
+  if (result.ok) {
+    cloudUiState.user = result.data?.user || null;
+    cloudUiState.role = result.data?.role || "unknown";
+    cloudUiState.message = "Signed in. Local save was not changed.";
+  } else {
+    cloudUiState.message = result.error || "Google sign-in failed. Local save still works.";
+  }
+  refreshFirebaseUiState();
+  render();
+}
+
+async function handleFirebaseSignOut() {
+  const client = firebaseClient();
+  if (!client) { cloudUiState.message = "Cloud backup unavailable. Local save still works."; render(); return; }
+  cloudUiState.busy = true;
+  render();
+  const result = await client.signOutOfFirebase();
+  cloudUiState.busy = false;
+  if (result.ok) {
+    cloudUiState.user = null;
+    cloudUiState.role = "unknown";
+    cloudUiState.message = "Signed out of Firebase. Local save remains on this device.";
+  } else {
+    cloudUiState.message = result.error || "Sign-out failed. Local save remains unchanged.";
+  }
+  render();
+}
+
+// TODO: Future multiplayer must not trust client-side credits, cargo, ship ownership, combat outcomes, planet ownership, or PvP results.
+// TODO: Future teacher dashboard should be role-gated by Firebase Auth and Firestore Security Rules.
+// TODO: Future shared universe needs server-side validation or very careful rules.
+// TODO: Future PvP must wait until teacher controls, safe zones, protected space, and restore tools exist.
+// TODO: Cloud backup is not anti-cheat. It is only save portability and login readiness.
+async function handleCloudBackupSave() {
+  const client = firebaseClient();
+  if (!client) { cloudUiState.message = "Cloud backup unavailable. Local save still works."; render(); return; }
+  cloudUiState.busy = true;
+  cloudUiState.message = "Saving cloud backup...";
+  render();
+  const result = await client.saveCloudBackup(getCurrentSavePayload(), STORAGE_KEY);
+  cloudUiState.busy = false;
+  if (result.ok) {
+    cloudUiState.message = "Cloud backup saved successfully.";
+    addLog("Cloud backup saved to Firebase.");
+    saveGame();
+  } else {
+    cloudUiState.message = result.error || "Cloud backup failed. Local save is unchanged.";
+  }
+  render();
+}
+
+async function handleCloudBackupLoad() {
+  const client = firebaseClient();
+  if (!client) { cloudUiState.message = "Cloud backup unavailable. Local save still works."; render(); return; }
+  if (!confirm("Load cloud save and replace this browser’s current local save?")) {
+    cloudUiState.message = "Cloud load canceled. Local save was not changed.";
+    render();
+    return;
+  }
+
+  cloudUiState.busy = true;
+  cloudUiState.message = "Loading cloud backup...";
+  render();
+  const result = await client.loadCloudBackup();
+  cloudUiState.busy = false;
+  if (!result.ok) {
+    cloudUiState.message = result.error || "Cloud load failed. Local save was not changed.";
+    render();
+    return;
+  }
+
+  const applied = applyLoadedSavePayload(result.data?.saveData);
+  cloudUiState.message = applied.ok ? "Cloud backup loaded successfully." : applied.error;
+  render();
+}
+
 function renderSettingsScreen() {
-  return `<div class="screen-grid"><section class="mini-card"><h3>Local Save</h3><p class="help-text">Sector Drift saves automatically to localStorage on this device. Active docked screens are not restored on load; pilots return to the cockpit.</p><button type="button" data-action="saveNow">Save Now</button><button type="button" class="danger-button" data-action="resetLocal">Clear Local Save / Reset Prototype</button></section><section class="mini-card"><h3>Export / Import</h3><p class="help-text">Coming soon. This pass keeps data local and avoids new services or teacher admin tools.</p></section></div>`;
+  return `<div class="screen-grid"><section class="mini-card"><h3>Local Save</h3><p class="help-text">Sector Drift saves automatically to localStorage on this device. Active docked screens are not restored on load; pilots return to the cockpit.</p><button type="button" data-action="saveNow">Save Now</button><button type="button" class="danger-button" data-action="resetLocal">Clear Local Save / Reset Prototype</button></section>${renderCloudLoginPanel()}<section class="mini-card"><h3>Export / Import</h3><p class="help-text">Manual export/import remains a future local-save tool. Firebase is currently backup/load only and does not add multiplayer.</p></section></div>`;
 }
 
 function wireDockedButtons(scope = document) {
@@ -1436,6 +1619,10 @@ function wireDockedButtons(scope = document) {
   scope.querySelectorAll("[data-complete-delivery]").forEach((button) => button.addEventListener("click", () => completeDeliveryQuest(button.dataset.completeDelivery)));
   scope.querySelector("[data-action='saveNow']")?.addEventListener("click", () => { saveGame(); addLog("Manual save complete."); render(); });
   scope.querySelector("[data-action='resetLocal']")?.addEventListener("click", () => { if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY); sectorMap = createSectorMap(); game = defaultGameState(); addLog("Prototype reset. Welcome back, Cadet."); saveGame(); render(); });
+  scope.querySelector("[data-action='firebaseSignIn']")?.addEventListener("click", handleFirebaseSignIn);
+  scope.querySelector("[data-action='firebaseSignOut']")?.addEventListener("click", handleFirebaseSignOut);
+  scope.querySelector("[data-action='cloudBackupSave']")?.addEventListener("click", handleCloudBackupSave);
+  scope.querySelector("[data-action='cloudBackupLoad']")?.addEventListener("click", handleCloudBackupLoad);
 }
 
 function renderLocationPanel() {
