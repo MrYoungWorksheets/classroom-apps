@@ -34,6 +34,16 @@ const SMUGGLED_RESOURCE = "Smuggled";
 const SMUGGLED_DISPLAY_NAME = "Smuggled Inventory";
 const SMUGGLED_DESCRIPTION = "Unregistered cargo that local authorities would rather not find.";
 const RESOURCES = ["Ore", "Food", "Tech"];
+
+const CAPTAIN_TITLES = ["Cadet", "Captain", "Mr.", "Mrs.", "Mx.", "Commander"];
+const CAPTAIN_SPECIALTIES = {
+  Explorer: { label: "Explorer", bonus: "Anomaly scans get a tiny +2% discovery nudge and scanner visibility feels a little sharper." },
+  Engineer: { label: "Engineer", bonus: "Repair bills are reduced by 5% and hazards treat your ship as slightly tougher." },
+  Trader: { label: "Trader", bonus: "Cargo sales earn a tiny 2% market bonus, rounded down safely." },
+  Marshal: { label: "Marshal", bonus: "Pirate encounters grant +2 combat power and +1 reputation on victories." },
+  Miner: { label: "Miner", bonus: "Asteroid mining yields +1 Ore when cargo space is available." },
+};
+const DEFAULT_CAPTAIN_PROFILE = { name: "Cadet", title: "Cadet", specialty: "Explorer", setupComplete: false };
 const REQUIRE_FIREBASE_LOGIN = true;
 const ALLOW_LOCAL_PROTOTYPE_MODE = true;
 const PRESENCE_ONLINE_WINDOW_MS = 4 * 60 * 1000;
@@ -973,6 +983,7 @@ function defaultGameState() {
   return {
     player: {
       pilotName: "Cadet",
+      captainProfile: { ...DEFAULT_CAPTAIN_PROFILE },
       shipId: starter.id,
       shipName: starter.name,
       credits: 500,
@@ -1100,6 +1111,88 @@ function createDeliveryQuests() {
     { id: "deliver-fuel-45", title: "Deliver 20 Fuel to Frontier Starbase 45", description: "A frontier station filed a long-range refuel request. Bring reserve fuel and plan the route before launching.", targetSector: 45, originSector: 1, requiredResource: "Fuel", requiredAmount: 20, reward: { credits: 980, fuel: 16, turns: 14, reputation: 3 }, status: "available", acceptedAtSector: null },
     { id: "fetch-danger-18", title: "Survey Sector 18 and Return to Sector 1", description: "Visit a dangerous lane marker, then return to the safe Sector 1 mission hub with your report.", targetSector: 18, returnSector: 1, originSector: 1, requiredResource: "Survey Report", requiredAmount: 1, reward: { credits: 430, fuel: 6, turns: 6, reputation: 1 }, status: "available", acceptedAtSector: null, visitedTarget: false },
   ];
+}
+
+
+function sanitizeCaptainName(value) {
+  const cleaned = safePlainText(value, DEFAULT_CAPTAIN_PROFILE.name).replace(/[^A-Za-z0-9 ._'-]/g, "").trim().slice(0, 24);
+  return cleaned || DEFAULT_CAPTAIN_PROFILE.name;
+}
+
+function normalizeCaptainTitle(value) {
+  return CAPTAIN_TITLES.includes(value) ? value : DEFAULT_CAPTAIN_PROFILE.title;
+}
+
+function normalizeCaptainSpecialty(value) {
+  return CAPTAIN_SPECIALTIES[value] ? value : DEFAULT_CAPTAIN_PROFILE.specialty;
+}
+
+function normalizeCaptainProfile(profile = {}, fallbackName = DEFAULT_CAPTAIN_PROFILE.name, setupFallback = false) {
+  const safeProfile = safeObject(profile);
+  const name = sanitizeCaptainName(safeProfile.name || fallbackName || DEFAULT_CAPTAIN_PROFILE.name);
+  const title = normalizeCaptainTitle(safeProfile.title);
+  const specialty = normalizeCaptainSpecialty(safeProfile.specialty);
+  return { name, title, specialty, setupComplete: Boolean(safeProfile.setupComplete ?? setupFallback) };
+}
+
+function captainProfile() {
+  game.player.captainProfile = normalizeCaptainProfile(game.player.captainProfile, game.player.pilotName, game.player.captainProfile?.setupComplete);
+  game.player.pilotName = captainDisplayName(game.player.captainProfile);
+  return game.player.captainProfile;
+}
+
+function captainDisplayName(profile = captainProfile()) {
+  const normalized = normalizeCaptainProfile(profile, profile.name, profile.setupComplete);
+  return normalized.title === normalized.name ? normalized.name : `${normalized.title} ${normalized.name}`.trim();
+}
+
+function captainSpecialtyKey() {
+  return normalizeCaptainSpecialty(game?.player?.captainProfile?.specialty);
+}
+
+function captainSpecialtyData(key = captainSpecialtyKey()) {
+  return CAPTAIN_SPECIALTIES[key] || CAPTAIN_SPECIALTIES[DEFAULT_CAPTAIN_PROFILE.specialty];
+}
+
+function captainSpecialtyBonusText(key = captainSpecialtyKey()) {
+  const specialty = captainSpecialtyData(key);
+  return `${specialty.label}: ${specialty.bonus}`;
+}
+
+function needsCaptainSetup() {
+  return !game?.player?.captainProfile?.setupComplete;
+}
+
+function applyCaptainProfile({ name, title, specialty } = {}) {
+  const profile = normalizeCaptainProfile({ name, title, specialty, setupComplete: true }, game.player.pilotName, true);
+  game.player.captainProfile = profile;
+  game.player.pilotName = captainDisplayName(profile);
+  addLog(`Captain profile saved: ${game.player.pilotName}, ${profile.specialty}.`);
+  updatePresenceStatus("online", { silent: true });
+  saveGame();
+  game.ui.activeScreen = "cockpit";
+  render();
+  return profile;
+}
+
+function renderCaptainProfileForm({ compact = false } = {}) {
+  const profile = captainProfile();
+  const titleOptions = CAPTAIN_TITLES.map((title) => `<option value="${title}" ${profile.title === title ? "selected" : ""}>${title}</option>`).join("");
+  const specialtyCards = Object.values(CAPTAIN_SPECIALTIES).map((specialty) => `<label class="specialty-option"><input type="radio" name="captainSpecialty" value="${specialty.label}" ${profile.specialty === specialty.label ? "checked" : ""}><strong>${specialty.label}</strong><span>${specialty.bonus}</span></label>`).join("");
+  return `<section class="captain-profile-card mini-card"><h3>${compact ? "Edit Captain Profile" : "Create Your Captain"}</h3><p class="help-text">Keep it quick: choose a name, title, and one tiny specialty bonus. You can edit this later in Settings / Save.</p><label class="form-row"><span>Captain name</span><input id="captainNameInput" maxlength="24" value="${safeDisplayText(profile.name)}" placeholder="Cadet"></label><label class="form-row"><span>Title</span><select id="captainTitleInput">${titleOptions}</select></label><div class="specialty-grid" role="radiogroup" aria-label="Captain specialty">${specialtyCards}</div><p class="help-text">Current bonus: ${captainSpecialtyBonusText(profile.specialty)}</p><div class="button-row"><button type="button" class="primary-launch-button" data-action="saveCaptainProfile">${compact ? "Save Captain Profile" : "Start as Captain"}</button></div></section>`;
+}
+
+function renderCaptainSetupScreen() {
+  return `<section class="captain-setup-screen"><div class="launch-hero-card"><p class="eyebrow">First login setup</p><h2>Name Your Captain</h2><p class="subtitle">A simple identity helps your ship feel like yours. No Firebase login is required for this step.</p>${renderCaptainProfileForm()}</div></section>`;
+}
+
+function readCaptainProfileForm(scope = document) {
+  const specialtyInput = scope.querySelector("input[name='captainSpecialty']:checked") || scope.querySelector("[name='captainSpecialty']:checked");
+  return {
+    name: scope.querySelector("#captainNameInput")?.value || DEFAULT_CAPTAIN_PROFILE.name,
+    title: scope.querySelector("#captainTitleInput")?.value || DEFAULT_CAPTAIN_PROFILE.title,
+    specialty: specialtyInput?.value || DEFAULT_CAPTAIN_PROFILE.specialty,
+  };
 }
 
 function normalizeDeliveryQuest(quest) {
@@ -1414,6 +1507,9 @@ function migrateGameState(saved = {}) {
 
     const merged = { ...fresh, ...safeObject(saved) };
     merged.player = { ...fresh.player, ...savedPlayer };
+    const hadCaptainProfile = Boolean(savedPlayer.captainProfile && typeof savedPlayer.captainProfile === "object");
+    merged.player.captainProfile = normalizeCaptainProfile(savedPlayer.captainProfile, savedPlayer.pilotName || fresh.player.pilotName, !saved.player ? false : !hadCaptainProfile);
+    merged.player.pilotName = captainDisplayName(merged.player.captainProfile);
     const originalSector = merged.player.currentSector;
     merged.player.currentSector = normalizeSectorNumber(merged.player.currentSector, 1);
     if (Number(originalSector) !== merged.player.currentSector) repairs.push(`invalid sector reset to Sector ${merged.player.currentSector}`);
@@ -1577,6 +1673,7 @@ const SCREEN_TITLES = {
   reputation: ["Reputation", "Alignment, combat rank, bounty record, and future reputation shop."],
   captainLog: ["Captain's Log", "Newest entries first with full recent history."],
   settings: ["Settings / Save", "Local save controls and prototype safety notes."],
+  captainSetup: ["Captain Setup", "Choose a quick captain identity and one tiny specialty bonus."],
   launch: ["Sector Drift", "Board your ship through classroom login or local prototype mode."],
   adminPanel: ["Admin Panel", "Teacher controls and classroom oversight tools."],
 };
@@ -1584,7 +1681,7 @@ const SCREEN_TITLES = {
 function screenNames() { return Object.keys(SCREEN_TITLES); }
 
 const COCKPIT_SCREEN = "cockpit";
-const LOCATION_MODE_SCREENS = ["starbase", "shipyard", "specialMissions", "planets", "combat", "achievements", "stats", "reputation", "captainLog", "settings", "adminPanel"];
+const LOCATION_MODE_SCREENS = ["starbase", "shipyard", "specialMissions", "planets", "combat", "achievements", "stats", "reputation", "captainLog", "settings", "captainSetup", "adminPanel"];
 
 function isDockedMode(screen = activeScreenName()) {
   return LOCATION_MODE_SCREENS.includes(screen);
@@ -1639,6 +1736,15 @@ function renderActiveScreen() {
   updateLaunchGateFromAuth();
   const screen = activeScreenName();
   const cockpit = document.getElementById("cockpitDashboard");
+  if (screen !== "launch" && needsCaptainSetup() && canUseGameActions() && typeof window !== "undefined") {
+    game.ui.activeScreen = "captainSetup";
+    if (cockpit) cockpit.hidden = true;
+    if (panels.docked) {
+      panels.docked.hidden = false;
+      renderDockedScreen(...SCREEN_TITLES.captainSetup, renderCaptainSetupScreen());
+    }
+    return;
+  }
   if (screen === "launch") {
     if (cockpit) cockpit.hidden = true;
     if (panels.docked) {
@@ -1669,7 +1775,7 @@ function renderDockedScreen(title, subtitle, contentHtml) {
   const screen = activeScreenName();
   const locationLabel = screen === "launch" ? "Launch Bay" : screen === "adminPanel" ? "Teacher Command Console" : screen === "combat" ? "Tactical Display" : "Docked Location Mode";
   panels.docked.className = `panel docked-screen docked-${screen}`;
-  panels.docked.innerHTML = `<div class="docked-header"><div><p class="eyebrow">${locationLabel}</p><h2>${title}</h2><p class="help-text">${subtitle}</p></div>${screen === "launch" ? "" : `<button type="button" class="exit-button button-exit" data-action="closeScreen">${returnToShipLabel()}</button>`}</div><div class="docked-content">${contentHtml}</div>`;
+  panels.docked.innerHTML = `<div class="docked-header"><div><p class="eyebrow">${locationLabel}</p><h2>${title}</h2><p class="help-text">${subtitle}</p></div>${["launch", "captainSetup"].includes(screen) ? "" : `<button type="button" class="exit-button button-exit" data-action="closeScreen">${returnToShipLabel()}</button>`}</div><div class="docked-content">${contentHtml}</div>`;
   panels.docked.querySelector("[data-action='closeScreen']")?.addEventListener("click", closeScreen);
   // Wire docked content exactly once after replacing the markup; duplicate wiring double-runs purchases.
   wireDockedButtons(panels.docked);
@@ -1687,6 +1793,7 @@ function renderScreenContent(screen) {
   if (screen === "reputation") return renderReputationScreen();
   if (screen === "captainLog") return renderCaptainLogScreen();
   if (screen === "settings") return renderSettingsScreen();
+  if (screen === "captainSetup") return renderCaptainSetupScreen();
   if (screen === "launch") return renderLaunchScreen();
   if (screen === "adminPanel") return renderAdminPanelScreen();
   return "";
@@ -1725,8 +1832,9 @@ function renderShipPanel() {
   panels.ship.innerHTML = `
     <h2 id="shipHeading">Ship Status</h2>
     <div class="stat-grid compact-stat-grid">
-      ${stat("Pilot", p.pilotName)}${stat("Rank", currentRank())}${stat("Ship", p.shipName)}${stat("Credits", p.credits)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Turns", `${p.turns}/${p.maxTurns}`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Sector", p.currentSector)}${stat("Cargo", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Hazard Resist", ship.hazardResist + Math.max(0, p.upgrades.shield - 1))}${stat("Warp", game.ui?.warpDestination ? `Sector ${game.ui.warpDestination}` : "None")}
+      ${stat("Captain", captainDisplayName(captainProfile()))}${stat("Specialty", captainProfile().specialty)}${stat("Rank", currentRank())}${stat("Ship", p.shipName)}${stat("Credits", p.credits)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Turns", `${p.turns}/${p.maxTurns}`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Sector", p.currentSector)}${stat("Cargo", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Hazard Resist", ship.hazardResist + Math.max(0, p.upgrades.shield - 1))}${stat("Warp", game.ui?.warpDestination ? `Sector ${game.ui.warpDestination}` : "None")}
     </div>
+    <p class="help-text"><strong>Specialty Bonus:</strong> ${captainSpecialtyBonusText()}</p>
     <details class="compact-section cockpit-extra"><summary>Reputation and alignment</summary><div class="stat-grid compact-stat-grid">${stat("Reputation", `${p.reputation} · ${reputationTitle(p.reputation)}`)}${stat("Combat Rank", combatRankTitle())}${stat("Alignment", p.alignmentStatus || reputationTitle(p.reputation))}</div></details>
     <p class="help-text">${ship.description}</p>
     ${p.cargo[SMUGGLED_RESOURCE] > 0 ? `<p class="help-text"><strong>${SMUGGLED_DISPLAY_NAME}:</strong> ${p.cargo[SMUGGLED_RESOURCE]} · ${SMUGGLED_DESCRIPTION}</p>` : ""}
@@ -3044,7 +3152,7 @@ function safePresenceRecord(record = {}) {
 }
 
 function currentPresencePayload(status = "online") {
-  return { captainName: game.player.pilotName, displayName: game.player.pilotName, sectorNumber: game.player.currentSector, shipName: game.player.shipName || currentShip().name, status, prototypeVersion: STORAGE_KEY };
+  return { captainName: captainDisplayName(captainProfile()), displayName: captainDisplayName(captainProfile()), sectorNumber: game.player.currentSector, shipName: game.player.shipName || currentShip().name, status, prototypeVersion: STORAGE_KEY };
 }
 
 function updatePresenceStatus(status = "online", options = {}) {
@@ -3332,7 +3440,7 @@ async function handleCloudBackupLoad() {
 function renderSettingsScreen() {
   const recoveryNotice = sessionRecoveryMessages.length ? `<p class="turn-warning">${sessionRecoveryMessages[0]}</p>` : `<p class="help-text">No save repair was needed this session.</p>`;
   const storageNote = localStorageAvailable ? localSaveStatus : `${localSaveStatus}${lastLocalSaveError ? ` (${lastLocalSaveError})` : ""}`;
-  return `<div class="screen-grid"><section class="mini-card"><h3>Local Save</h3><p class="help-text">Sector Drift saves automatically to localStorage on this device. Active docked screens are not restored on load; pilots return to the cockpit.</p>${stat("Local save status", storageNote)}${stat("Local prototype mode", launchGate.mode === "localPrototype" ? "active" : "available from launch screen")}${stat("Presence", presenceStatusLabel())}${stat("Live sector traffic", sectorTrafficState.listening ? "listening" : sectorTrafficState.status || "unavailable")}${recoveryNotice}<div class="button-row"><button type="button" data-action="saveNow">Save Now</button><button type="button" data-action="normalizeSave">Repair / Normalize Save</button><button type="button" class="danger-button" data-action="resetLocal">Clear Local Save / Reset Prototype</button></div></section>${renderCloudLoginPanel()}<section class="mini-card"><h3>Export / Import</h3><p class="help-text">Manual export/import uses this browser save only. Firebase backup/load does not add multiplayer.</p><div class="button-row"><button type="button" data-action="exportSaveJson">Export Save JSON</button><button type="button" data-action="importSaveJson">Import Save JSON</button></div></section></div>`;
+  return `<div class="screen-grid"><section class="mini-card"><h3>Captain Identity</h3><div class="stats-grid">${stat("Captain", captainDisplayName(captainProfile()))}${stat("Specialty", captainProfile().specialty)}${stat("Bonus", captainSpecialtyBonusText())}</div><details class="compact-section"><summary>Edit Captain Profile</summary>${renderCaptainProfileForm({ compact: true })}<p class="turn-warning">Specialties can be changed freely because bonuses are intentionally tiny.</p></details></section><section class="mini-card"><h3>Local Save</h3><p class="help-text">Sector Drift saves automatically to localStorage on this device. Active docked screens are not restored on load; pilots return to the cockpit.</p>${stat("Local save status", storageNote)}${stat("Local prototype mode", launchGate.mode === "localPrototype" ? "active" : "available from launch screen")}${stat("Presence", presenceStatusLabel())}${stat("Live sector traffic", sectorTrafficState.listening ? "listening" : sectorTrafficState.status || "unavailable")}${recoveryNotice}<div class="button-row"><button type="button" data-action="saveNow">Save Now</button><button type="button" data-action="normalizeSave">Repair / Normalize Save</button><button type="button" class="danger-button" data-action="resetLocal">Clear Local Save / Reset Prototype</button></div></section>${renderCloudLoginPanel()}<section class="mini-card"><h3>Export / Import</h3><p class="help-text">Manual export/import uses this browser save only. Firebase backup/load does not add multiplayer.</p><div class="button-row"><button type="button" data-action="exportSaveJson">Export Save JSON</button><button type="button" data-action="importSaveJson">Import Save JSON</button></div></section></div>`;
 }
 
 function wireDockedButtons(scope = document) {
@@ -3351,7 +3459,8 @@ function wireDockedButtons(scope = document) {
   }));
   scope.querySelector("[data-action='readRumor']")?.addEventListener("click", () => runGameAction(readRumorBoard));
   scope.querySelector("[data-action='saveNow']")?.addEventListener("click", manualSaveNow);
-  scope.querySelector("[data-action='resetLocal']")?.addEventListener("click", () => { try { if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY); } catch (error) { lastLocalSaveError = error?.message || "localStorage reset was blocked."; } sectorMap = createSectorMap(); game = defaultGameState(); addLog("Prototype reset. Welcome back, Cadet."); saveGame(); render(); });
+  scope.querySelector("[data-action='saveCaptainProfile']")?.addEventListener("click", () => applyCaptainProfile(readCaptainProfileForm(scope)));
+  scope.querySelector("[data-action='resetLocal']")?.addEventListener("click", () => { try { if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY); } catch (error) { lastLocalSaveError = error?.message || "localStorage reset was blocked."; } sectorMap = createSectorMap(); game = defaultGameState(); addLog("Prototype reset. Create your captain profile to launch."); saveGame(); render(); });
   scope.querySelector("[data-action='firebaseSignIn']")?.addEventListener("click", handleFirebaseSignIn);
   scope.querySelector("[data-action='firebaseSignOut']")?.addEventListener("click", handleFirebaseSignOut);
   scope.querySelector("[data-action='cloudBackupSave']")?.addEventListener("click", handleCloudBackupSave);
@@ -3517,7 +3626,8 @@ function renderRefuelPanel() {
 function renderRepairPanel(sector) {
   const baseCost = repairCost(sector);
   const discount = Math.min(baseCost, stationActivitiesState().repairDiscount || 0);
-  const cost = Math.max(0, baseCost - discount);
+  const engineerDiscount = captainSpecialtyKey() === "Engineer" ? Math.floor(baseCost * 0.05) : 0;
+  const cost = Math.max(0, baseCost - discount - engineerDiscount);
   return `<h3>Repair Service</h3><div class="mini-card">${stat("Hull", `${game.player.hull}/${game.player.maxHull}`)}${stat("Full Repair", `${cost} credits`)}${discount ? stat("Assist Discount", `${discount} credits`) : ""}<button data-action="repair" ${baseCost <= 0 || game.player.credits < cost ? "disabled" : ""}>Repair Hull</button></div>`;
 }
 
@@ -3888,16 +3998,19 @@ function fillBalancedCargo() {
 
 function sellResource(resource, amount) {
   if (game.player.cargo[resource] < amount) return addAndRender(`Not enough ${resource} to sell ${amount}.`);
-  const price = sectorMap[game.player.currentSector].portPrices[resource].sell * amount;
-  const tradeProfit = updateCargoCostOnSell(resource, amount, sectorMap[game.player.currentSector].portPrices[resource].sell);
+  const unitSellPrice = sectorMap[game.player.currentSector].portPrices[resource].sell;
+  const basePrice = unitSellPrice * amount;
+  const traderBonus = captainSpecialtyKey() === "Trader" ? Math.floor(basePrice * 0.02) : 0;
+  const price = basePrice + traderBonus;
+  const tradeProfit = updateCargoCostOnSell(resource, amount, unitSellPrice) + traderBonus;
   game.player.cargo[resource] -= amount;
   game.player.credits += price;
   recordDockingCredits(price, "trade", tradeProfit);
   game.stats.creditsEarnedFromTrade += price;
   game.stats.resourcesSold += amount;
   if (resource === "Tech") game.stats.techSold += amount;
-  setSectorActionResult("Cargo Sold", `Sold ${amount} ${resource} for ${price} credits.`, { type: "positive", gained: [`+${price} credits`], lost: [`-${amount} ${resource}`] });
-  addLog(`Sold ${amount} ${resource} for ${price} credits.`);
+  setSectorActionResult("Cargo Sold", `Sold ${amount} ${resource} for ${price} credits${traderBonus ? ` including ${traderBonus} Trader bonus` : ""}.`, { type: "positive", gained: [`+${price} credits`], lost: [`-${amount} ${resource}`] });
+  addLog(`Sold ${amount} ${resource} for ${price} credits${traderBonus ? ` with Trader specialty bonus` : ""}.`);
   completeTutorialStep("sell");
   saveGame();
   render();
@@ -4036,7 +4149,8 @@ function mineAsteroids() {
   const beforeHull = game.player.hull;
   if (!spendTurn("mine")) return;
   game.player.fuel -= 1;
-  const amount = Math.min(cargoSpaceLeft(), 1 + Math.floor(Math.random() * (3 + game.player.upgrades.scanner)));
+  const minerBonus = captainSpecialtyKey() === "Miner" ? 1 : 0;
+  const amount = Math.min(cargoSpaceLeft(), 1 + Math.floor(Math.random() * (3 + game.player.upgrades.scanner)) + minerBonus);
   game.player.cargo.Ore += amount;
   game.stats.resourcesMined += amount;
   game.stats.oreMined += amount;
@@ -4049,7 +4163,8 @@ function mineAsteroids() {
   completeTutorialStep("mine");
   resolveSectorDanger(game.player.currentSector);
   const hullLost = Math.max(0, beforeHull - game.player.hull);
-  const message = `Mining Complete: +${amount} Ore, -1 turn, -1 fuel${hullLost ? `, -${hullLost} hull` : ""}.`;
+  const specialtyNote = minerBonus ? " Miner specialty added +1 Ore." : "";
+  const message = `Mining Complete: +${amount} Ore, -1 turn, -1 fuel${hullLost ? `, -${hullLost} hull` : ""}.${specialtyNote}`;
   setSectorActionResult("Mining Complete", message, { type: amount > 0 ? "positive" : "neutral", gained: amount > 0 ? [`+${amount} Ore`] : [], lost: [`-1 turn`, `-1 fuel`, ...(hullLost ? [`-${hullLost} hull`] : [])] });
   addLog(message);
   saveGame();
@@ -4060,7 +4175,8 @@ function scanAnomaly() {
   const before = { fuel: game.player.fuel, credits: game.player.credits, tech: game.player.cargo.Tech, hull: game.player.hull };
   if (!spendTurn("scan")) return;
   const scanner = game.player.upgrades.scanner;
-  const roll = Math.random() + scanner * 0.05;
+  const explorerBonus = captainSpecialtyKey() === "Explorer" ? 0.02 : 0;
+  const roll = Math.random() + scanner * 0.05 + explorerBonus;
   const discoveries = [];
   game.stats.anomaliesScanned += 1;
   completeTutorialStep("scan");
@@ -4126,14 +4242,15 @@ function repairHull() {
   const sector = sectorMap[game.player.currentSector];
   const baseCost = repairCost(sector);
   const discount = Math.min(baseCost, stationActivitiesState().repairDiscount || 0);
-  const cost = Math.max(0, baseCost - discount);
+  const engineerDiscount = captainSpecialtyKey() === "Engineer" ? Math.floor(baseCost * 0.05) : 0;
+  const cost = Math.max(0, baseCost - discount - engineerDiscount);
   if (baseCost <= 0) return addAndRender("Hull is already fully repaired.");
   if (game.player.credits < cost) return addAndRender("Not enough credits for full repairs.");
   game.player.credits -= cost;
   recordDockingCredits(-cost, "service");
   stationActivitiesState().repairDiscount = Math.max(0, (stationActivitiesState().repairDiscount || 0) - discount);
   game.player.hull = game.player.maxHull;
-  addLog(`Repair service restored hull for ${cost} credits${discount ? ` after a ${discount} credit repair bay discount` : ""}.`);
+  addLog(`Repair service restored hull for ${cost} credits${discount ? ` after a ${discount} credit repair bay discount` : ""}${engineerDiscount ? ` and a ${engineerDiscount} credit Engineer specialty discount` : ""}.`);
   saveGame();
   render();
 }
@@ -4613,7 +4730,8 @@ function getPlayerCombatPower() {
   const hullRatio = Math.max(0.25, game.player.hull / Math.max(1, game.player.maxHull));
   const shield = Math.max(0, (game.player.upgrades.shield || 1) - 1) * 2.5;
   const scanner = Math.max(0, (game.player.upgrades.scanner || 1) - 1) * 0.8;
-  return Math.round((ship.basePower + game.player.fighters * 1.15 + shield + scanner) * hullRatio);
+  const marshalBonus = captainSpecialtyKey() === "Marshal" ? 2 : 0;
+  return Math.round((ship.basePower + game.player.fighters * 1.15 + shield + scanner + marshalBonus) * hullRatio);
 }
 
 function getPirateCombatPower(pirate) {
@@ -4763,7 +4881,8 @@ function defeatPirate(pirate, verb = "defeated", report = {}) {
   pirate.hull = 0;
   const strongholdBonus = pirate.isStronghold ? Math.round(bounty * 0.35) : 0;
   const totalBounty = bounty + strongholdBonus;
-  const totalReputation = reputationGain + (pirate.isStronghold ? 8 : 0);
+  const marshalReputationBonus = captainSpecialtyKey() === "Marshal" ? 1 : 0;
+  const totalReputation = reputationGain + (pirate.isStronghold ? 8 : 0) + marshalReputationBonus;
   pirate.cleared = Boolean(pirate.isStronghold);
   game.player.credits += totalBounty;
   game.player.bountiesEarned = (game.player.bountiesEarned || 0) + totalBounty;
@@ -5028,7 +5147,7 @@ function resolveSectorDanger(number = game.player.currentSector) {
   const sector = sectorMap[number];
   if (!sector || sector.dangerLevel <= 0) return false;
   const hazard = HAZARD_TYPES[sector.hazardType];
-  const resist = currentShip().hazardResist + Math.max(0, game.player.upgrades.shield - 1);
+  const resist = currentShip().hazardResist + Math.max(0, game.player.upgrades.shield - 1) + (captainSpecialtyKey() === "Engineer" ? 1 : 0);
   const severity = Math.max(0, sector.dangerLevel - resist);
   if (severity <= 0) {
     addLog(`Hazard avoided in Sector ${number}: ${hazard.label}; ${hazard.note}.`);

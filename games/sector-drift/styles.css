@@ -1767,3 +1767,47 @@ button.button-admin {
   padding: 0.18rem 0.5rem;
   text-transform: uppercase;
 }
+
+.captain-setup-screen {
+  display: grid;
+  place-items: center;
+}
+
+.captain-profile-card .form-row {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.75rem 0;
+}
+
+.captain-profile-card input,
+.captain-profile-card select {
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 0.7rem;
+  padding: 0.65rem 0.75rem;
+  background: rgba(15, 23, 42, 0.85);
+  color: #f8fafc;
+}
+
+.specialty-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  margin: 0.9rem 0;
+}
+
+.specialty-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.5rem;
+  align-items: start;
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  border-radius: 0.85rem;
+  padding: 0.7rem;
+  background: rgba(30, 41, 59, 0.7);
+}
+
+.specialty-option span {
+  grid-column: 2;
+  color: #cbd5e1;
+  font-size: 0.88rem;
+}
