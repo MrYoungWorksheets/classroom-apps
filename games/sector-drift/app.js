@@ -27,6 +27,9 @@ const ESCAPE_POD_CASH_PENALTY = 0;
 const PIRATE_MIN_SECTORS_FROM_START = 3;
 const SHIP_TRADE_IN_RATE = 0.45;
 const PROTECTED_SPACE_DEPTH = 2;
+const LAMONT_PRIME_SECTOR = 1;
+const LAMONT_PRIME_NAME = "Lamont Prime";
+const BEGINNER_SAFE_ZONE_COPY = "Sector 1 is protected space. Use this sector to refuel, trade, repair, accept missions, and learn systems. Hostile actions are disabled here.";
 const SMUGGLED_RESOURCE = "Smuggled";
 const SMUGGLED_DISPLAY_NAME = "Smuggled Inventory";
 const SMUGGLED_DESCRIPTION = "Unregistered cargo that local authorities would rather not find.";
@@ -430,6 +433,10 @@ function createSectorMap() {
     if ([1, 5, 8, 45].includes(number)) sector.hasShipyard = true;
     if ([1, 5, 8, 45].includes(number)) sector.portType = number === 1 ? "Core Port" : number === 45 ? "Frontier Starbase" : "Major Station";
     if (type === "planet") sector.planet = createPlanetState(number, planetNames[number % planetNames.length], routeRole, dangerLevel);
+    if (number === LAMONT_PRIME_SECTOR) {
+      sector.homeworld = createLamontPrimeState();
+      sector.objects = Array.from(new Set([...(sector.objects || []), LAMONT_PRIME_NAME, "Alliance Starship patrol", "restricted landing clearance", "safe classroom launch zone"]));
+    }
   }
 
   function localSectorDistance(a, b) {
@@ -556,6 +563,57 @@ function getPlanetTypeProfile(type) {
   return PLANET_TYPE_DATA[type] || PLANET_TYPE_DATA.Rocky;
 }
 
+function createLamontPrimeState() {
+  return normalizePlanetState({
+    id: "lamont-prime",
+    name: LAMONT_PRIME_NAME,
+    owner: "Alliance Protected",
+    productionLevel: 1,
+    stored: { Ore: 0, Food: 0, Tech: 0, Fighters: 0 },
+    type: "Water",
+    sectorNumber: LAMONT_PRIME_SECTOR,
+    protectedHomeworld: true,
+    claimLocked: true,
+    attackLocked: true,
+    defenseRatingOverride: 9999,
+    typeDescription: "Alliance-protected civilian homeworld and tutorial safe zone.",
+  }, LAMONT_PRIME_SECTOR, "core", 0);
+}
+
+function isLamontPrimeSector(sectorNumber) {
+  return Number(sectorNumber) === LAMONT_PRIME_SECTOR;
+}
+
+function isProtectedHomeworld(planet) {
+  return Boolean(planet?.protectedHomeworld) || planet?.id === "lamont-prime" || planet?.name === LAMONT_PRIME_NAME;
+}
+
+function lamontPrimeStatusText() {
+  return "Lamont Prime is Alliance protected, impossible for normal players to attack or claim, and guarded by overwhelming Alliance defense.";
+}
+
+function lamontPrimeSafetyText() {
+  return `${BEGINNER_SAFE_ZONE_COPY} Massive fighter defense and Alliance Starship patrols keep civilian/tutorial traffic safe; landing clearance is restricted to classroom launch operations.`;
+}
+
+function homeworldScannerDetail(sector) {
+  if (!sector?.homeworld) return "";
+  const scanner = game?.player?.upgrades?.scanner || 1;
+  const visited = game?.visitedSectors?.includes(sector.number) || sector.number === game?.player?.currentSector;
+  if (scanner <= 1 && !visited) return `${LAMONT_PRIME_NAME}: protected homeworld beacon`;
+  if (scanner <= 2 && !visited) return `${LAMONT_PRIME_NAME}: Alliance protected civilian/tutorial safe zone`;
+  if (scanner <= 3 && !visited) return `${LAMONT_PRIME_NAME}: protected homeworld · hostile actions disabled`;
+  return `${LAMONT_PRIME_NAME}: restricted landing clearance · overwhelming Alliance fighter defense · cannot be claimed or attacked`;
+}
+
+function canClaimPlanetInSector(sector, planet) {
+  if (!sector || !planet) return false;
+  if (isProtectedHomeworld(planet) || sector.homeworld?.id === planet.id) return false;
+  if (planet.owner) return false;
+  if (isProtectedSpace(sector.number)) return false;
+  return sector.type === "planet";
+}
+
 function createPlanetState(sectorNumber, name, routeRole, dangerLevel) {
   const type = choosePlanetType(sectorNumber, routeRole, dangerLevel);
   return normalizePlanetState({
@@ -629,6 +687,7 @@ function getPlanetProductionPreview(planet, track) {
 
 function getPlanetDefenseRating(planet) {
   const normalized = normalizePlanetState(planet);
+  if (isProtectedHomeworld(normalized)) return normalized.defenseRatingOverride || 9999;
   const data = getPlanetTypeProfile(normalized.type);
   const storedFighters = normalized.stored.Fighters || 0;
   const futureTechBonus = (normalized.tech.unlocked || []).length * 3;
@@ -699,7 +758,7 @@ function sectorIdentityBrief(sector, options = {}) {
   const visited = options.force || activeGame?.visitedSectors?.includes(sector.number) || sector.number === activeGame?.player?.currentSector;
   const identity = sectorIdentityType(sector);
   const base = {
-    port: `${stationDisplayName(sector)} keeps docks, market calls, and ${sector.hasShipyard ? "shipyard traffic" : "repair crews"} close together.`,
+    port: sector.homeworld ? `${stationDisplayName(sector)} orbits ${LAMONT_PRIME_NAME}, a protected classroom launch zone with Alliance patrol cover.` : `${stationDisplayName(sector)} keeps docks, market calls, and ${sector.hasShipyard ? "shipyard traffic" : "repair crews"} close together.`,
     asteroid: `${sector.signals?.oreRichness || "Ore"} field; broken rocks make slow mining passes worthwhile.`,
     anomaly: `${sector.signals?.anomalyInstability || "Shifting"} signal; scan carefully before trusting the instruments.`,
     planet: `${sector.planet?.name || "Survey world"} anchors colony opportunity and orbital route markers.`,
@@ -767,6 +826,7 @@ function sectorSignalTags(sector, options = {}) {
   if (sector.dangerLevel > 0 && (visited || scanner >= 3)) tags.push("Hazardous");
   if (sector.pirateActivity && (visited || scanner >= 3)) tags.push("Pirate Signal");
   if (sector.protectedSpace) tags.push("Protected");
+  if (sector.homeworld) tags.push("Lamont Prime");
   if (sector.protectedSpace && (visited || scanner >= 3)) tags.push("Heavy Patrol");
   if ((identity === "tradeCorridor" || sector.routeRole === "crossroad" || sector.type === "port") && (visited || scanner >= 4)) tags.push("Trade Route");
   if (sector.routeRole === "crossroad" && (visited || scanner >= 4)) tags.push("Crossroad");
@@ -809,10 +869,12 @@ function scannerIntelDetails(sector) {
     else if (sector.dangerLevel > 0) lines.push(`threat estimate ${sector.dangerLevel}`);
     if (sector.type === "anomaly") lines.push(`instability ${sector.signals?.anomalyInstability || "unknown"}`);
     if (sector.type === "planet") lines.push(sector.planet ? `${sector.planet.type} world` : "planet opportunity");
+    if (sector.homeworld) lines.push(homeworldScannerDetail(sector));
   }
   if (scanner >= 4 || visited) {
     lines.push(`route role ${titleCase(sector.routeRole)}`);
     if (sector.signals?.traffic) lines.push(`traffic ${sector.signals.traffic}`);
+    if (sector.homeworld && !lines.includes(homeworldScannerDetail(sector))) lines.push(homeworldScannerDetail(sector));
     if (sector.signals?.salvage) lines.push("salvage traces");
     if (sector.signals?.hiddenBonus) lines.push("deep-scan warning logged");
   }
@@ -1636,13 +1698,13 @@ function renderActionPanel() {
   const gateOpen = canUseGameActions();
   const sector = sectorMap[game.player.currentSector];
   const ownedPlanetCount = Object.values(game.planets || {}).filter((planet) => planet.owner === game.player.pilotName).length;
-  const planetHere = sector.type === "planet";
+  const planetHere = sector.type === "planet" || Boolean(sector.homeworld);
   const pirateHere = Boolean(currentPirateEncounter());
   const actions = [
     { screen: "starbase", label: "Dock at Starbase", enabled: sector.type === "port", reason: sector.type === "port" ? `${sector.portType} available` : "No port in this sector" },
     { screen: "shipyard", label: "Enter Shipyard", enabled: Boolean(sector.hasShipyard), reason: sector.hasShipyard ? "Shipyard available" : "No shipyard here" },
     { screen: "specialMissions", label: "Open Mission Terminal", enabled: true, reason: "Mission terminal available" },
-    { screen: "planets", label: "Manage Planet", enabled: planetHere || ownedPlanetCount > 0, reason: planetHere ? "Planet in sector" : ownedPlanetCount ? `${ownedPlanetCount} owned planet${ownedPlanetCount === 1 ? "" : "s"}` : "No local or owned planets" },
+    { screen: "planets", label: "Manage Planet", enabled: planetHere || ownedPlanetCount > 0, reason: sector.homeworld ? "Protected homeworld present" : planetHere ? "Planet in sector" : ownedPlanetCount ? `${ownedPlanetCount} owned planet${ownedPlanetCount === 1 ? "" : "s"}` : "No local or owned planets" },
     { screen: "combat", label: "Engage Pirate", enabled: pirateHere || Object.values(game.pirates || {}).some((pirate) => !pirate.defeated), reason: pirateHere ? "Pirate detected" : "Known NPC bounty ledger" },
     { screen: "achievements", label: "Achievements", enabled: true, reason: `${game.achievements.length} unlocked` },
     { screen: "stats", label: "Stats", enabled: true, reason: `${(game.stats.visitedSectors || []).length} sectors · ${game.stats.missionsClaimed || 0} contracts` },
@@ -1651,7 +1713,7 @@ function renderActionPanel() {
     { screen: "settings", label: "Settings / Save", enabled: true, reason: "Cloud login and local save controls" },
   ];
   if (isTeacher()) actions.push({ screen: "adminPanel", label: "Admin Panel", enabled: true, reason: "Teacher-only classroom tools" });
-  panels.action.innerHTML = `<h2 id="actionHeading">Cockpit Actions</h2><p class="help-text">${gateOpen ? "Compact summaries only: choose a location, then the cockpit gets out of the way." : authGateMessage()}</p><div class="cockpit-availability"><p>${sector.type === "port" ? "Starbase available" : "No starbase here"}</p><p>${sector.hasShipyard ? "Shipyard available" : "No shipyard here"}</p><p>${pirateHere ? "Pirate detected" : "No pirate in sector"}</p><p>${planetHere ? "Planet in sector" : ownedPlanetCount ? "Owned planets available" : "No planet in sector"}</p><p>Mission terminal available</p></div><div class="action-menu">${actions.map((action) => `<button type="button" class="${action.screen === "adminPanel" ? "button-admin" : action.enabled ? "button-secondary" : ""}" data-screen="${action.screen}" ${action.enabled && (gateOpen || action.screen === "settings") ? "" : "disabled"}><strong>${action.label}</strong><span>${gateOpen || action.screen === "settings" ? action.reason : "Launch required"}</span></button>`).join("")}</div>${gateOpen ? renderEmergencyWarpControl() : ""}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 5).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
+  panels.action.innerHTML = `<h2 id="actionHeading">Cockpit Actions</h2><p class="help-text">${gateOpen ? "Compact summaries only: choose a location, then the cockpit gets out of the way." : authGateMessage()}</p><div class="cockpit-availability"><p>${sector.type === "port" ? "Starbase available" : "No starbase here"}</p><p>${sector.hasShipyard ? "Shipyard available" : "No shipyard here"}</p><p>${pirateHere ? "Pirate detected" : "No pirate in sector"}</p><p>${sector.homeworld ? "Lamont Prime protected" : planetHere ? "Planet in sector" : ownedPlanetCount ? "Owned planets available" : "No planet in sector"}</p><p>Mission terminal available</p></div><div class="action-menu">${actions.map((action) => `<button type="button" class="${action.screen === "adminPanel" ? "button-admin" : action.enabled ? "button-secondary" : ""}" data-screen="${action.screen}" ${action.enabled && (gateOpen || action.screen === "settings") ? "" : "disabled"}><strong>${action.label}</strong><span>${gateOpen || action.screen === "settings" ? action.reason : "Launch required"}</span></button>`).join("")}</div>${gateOpen ? renderEmergencyWarpControl() : ""}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 5).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
   panels.action.querySelectorAll("[data-screen]").forEach((button) => button.addEventListener("click", () => openScreen(button.dataset.screen)));
   panels.action.querySelector("[data-action='emergencyWarp']")?.addEventListener("click", emergencyWarp);
 }
@@ -2000,6 +2062,7 @@ function marketSummary(sector) {
 
 function planetSituationStatus(planet, sector) {
   if (!planet) return "No planet record available.";
+  if (isProtectedHomeworld(planet)) return lamontPrimeStatusText();
   if (planet.owner === game.player.pilotName) return `Owned by you · production preview ${formatProduction(getPlanetProduction(planet))}.`;
   if (isProtectedSpace(sector.number)) return "Unclaimed survey world inside Alliance protected space.";
   if (sector.dangerLevel > 0) return "Unclaimed frontier world; secure the route before building.";
@@ -2060,11 +2123,12 @@ function renderSituationCard() {
       ],
     };
   } else if (current.type === "port") {
+    const homeworldMeta = current.homeworld ? [stat("Protected Homeworld", `${current.homeworld.name} · Alliance protected · cannot be claimed or attacked`), stat("Beginner Safety", BEGINNER_SAFE_ZONE_COPY)] : [];
     card = {
       type: current.hasShipyard ? "shipyard port" : "port",
-      title: "Safe Port / Starbase",
-      summary: `${stationDisplayName(current)} is a safe place to trade, repair, and choose missions before launching again.`,
-      meta: [stat("Station Type", current.portType), stat("Patrol Zone", protectedSpaceLabel(current.number)), stat("Market", marketSummary(current)), stat("Shipyard", current.hasShipyard ? "Available" : "Not in this station"), stat("Mission Terminal", "Available")],
+      title: current.homeworld ? `${LAMONT_PRIME_NAME} Safe Home Base` : "Safe Port / Starbase",
+      summary: current.homeworld ? `${stationDisplayName(current)} orbits ${LAMONT_PRIME_NAME}. ${BEGINNER_SAFE_ZONE_COPY}` : `${stationDisplayName(current)} is a safe place to trade, repair, and choose missions before launching again.`,
+      meta: [stat("Station Type", current.portType), stat("Patrol Zone", protectedSpaceLabel(current.number)), ...homeworldMeta, stat("Market", marketSummary(current)), stat("Shipyard", current.hasShipyard ? "Available" : "Not in this station"), stat("Mission Terminal", "Available")],
       actions: [
         situationActionButton("Dock at Starbase", { screen: "starbase", primary: true, note: "Trade and services" }),
         situationActionButton("Open Mission Terminal", { screen: "specialMissions", note: "Math and delivery" }),
@@ -2209,8 +2273,8 @@ function renderNavigationIntel() {
   const hint = game.ui?.mapHint ? `<p class="action-hint">${game.ui.mapHint}</p>` : "";
   return `<aside class="nav-intel main-viewer priority-card" aria-live="polite"><p class="eyebrow">Main Viewer</p><div class="viewer-title-row"><h3>Selected Sector Intel</h3>${actionButton}</div><div class="intel-grid">
     ${stat("Sector", selected.number)}${stat("Status", status)}${stat("System Type", visible ? sectorIdentityLabel(sectorIdentityType(selected)) : "Unknown")}${stat("Route Role", canSeeRouteRole(selected.number) ? titleCase(selected.routeRole) : "Scan level 2")}
-    ${stat("Danger", danger)}${stat("Patrol Zone", protectedSpaceLabel(selected.number))}${stat("Route / Travel", routeStatus)}${stat("Scanner Detail", scannerIntelDetails(selected))}${stat("Suggested Action", suggested)}
-  </div>${tags}<p class="known-features"><strong>Sector brief:</strong> ${sectorIdentityBrief(selected)}</p><p class="known-features"><strong>Known features:</strong> ${features}</p>${missionIntel ? renderMissionTargetIntel(missionIntel) : ""}<p class="strategic-note">${canSeeRouteRole(selected.number) ? selected.strategicNote : "Upgrade scanners to reveal route roles."}</p><p class="recommendation">${navigationRecommendation(selected.number)}</p>${hint}</aside>`;
+    ${stat("Danger", danger)}${stat("Patrol Zone", protectedSpaceLabel(selected.number))}${selected.homeworld ? stat("Protected Homeworld", `${selected.homeworld.name} · Alliance safe zone`) : ""}${stat("Route / Travel", routeStatus)}${stat("Scanner Detail", scannerIntelDetails(selected))}${stat("Suggested Action", suggested)}
+  </div>${tags}<p class="known-features"><strong>Sector brief:</strong> ${sectorIdentityBrief(selected)}</p>${selected.homeworld ? `<p class="known-features"><strong>Homeworld:</strong> ${homeworldScannerDetail(selected)}. ${BEGINNER_SAFE_ZONE_COPY}</p>` : ""}<p class="known-features"><strong>Known features:</strong> ${features}</p>${missionIntel ? renderMissionTargetIntel(missionIntel) : ""}<p class="strategic-note">${canSeeRouteRole(selected.number) ? selected.strategicNote : "Upgrade scanners to reveal route roles."}</p><p class="recommendation">${navigationRecommendation(selected.number)}</p>${hint}</aside>`;
 }
 
 function renderArrivalReport() {
@@ -2406,7 +2470,7 @@ function initialArrivalReport(number = 1) {
   const sector = sectorMap[number];
   if (!sector) return "Arrival telemetry unavailable.";
   const features = (sector.objects || []).filter((feature) => feature && feature !== "Empty space");
-  return [`Arrived in Sector ${number}.`, `${sectorIdentityLabel(sectorIdentityType(sector))} detected.`, sectorIdentityBrief(sector, { force: true }), sectorArrivalFlavor(sector), features.length ? `Signals: ${features.join(", ")}.` : "", isProtectedSpace(number) ? "Alliance protected space." : ""].filter(Boolean).join(" ");
+  return [`Arrived in Sector ${number}.`, `${sectorIdentityLabel(sectorIdentityType(sector))} detected.`, sectorIdentityBrief(sector, { force: true }), sectorArrivalFlavor(sector), features.length ? `Signals: ${features.join(", ")}.` : "", isProtectedSpace(number) ? (isLamontPrimeSector(number) ? `${BEGINNER_SAFE_ZONE_COPY} ${LAMONT_PRIME_NAME} is Alliance protected with restricted landing clearance.` : "Alliance protected space.") : ""].filter(Boolean).join(" ");
 }
 
 function buildArrivalReport(number = game.player.currentSector, extras = []) {
@@ -2419,7 +2483,7 @@ function buildArrivalReport(number = game.player.currentSector, extras = []) {
   const tags = sectorSignalTags(sector).slice(0, 3);
   if (tags.length) parts.push(`Tags: ${tags.join(", ")}.`);
   if (sector.hasShipyard) parts.push("Shipyard available.");
-  if (isProtectedSpace(number)) parts.push("Alliance protected space.");
+  if (isProtectedSpace(number)) parts.push(isLamontPrimeSector(number) ? `${BEGINNER_SAFE_ZONE_COPY} ${LAMONT_PRIME_NAME} remains under overwhelming Alliance defense.` : "Alliance protected space.");
   const pirate = game.pirates?.[number];
   if (pirate && !pirate.defeated) parts.push(`Warning: pirate patrol signature detected (${pirate.name}).`);
   const missionIntel = missionTargetIntel(number);
@@ -2821,7 +2885,7 @@ function renderTutorialContent() {
 
 function renderPlanetsScreen() {
   const sector = sectorMap[game.player.currentSector];
-  const local = sector.type === "planet" ? renderPlanet(sector) : `<section class="planet-panel mini-card"><h3>No local planet</h3><p class="empty-note">No planet is present in Sector ${sector.number}. Owned planets remain listed below.</p></section>`;
+  const local = sector.homeworld ? renderProtectedHomeworld(sector) : sector.type === "planet" ? renderPlanet(sector) : `<section class="planet-panel mini-card"><h3>No local planet</h3><p class="empty-note">No planet is present in Sector ${sector.number}. Owned planets remain listed below.</p></section>`;
   const owned = Object.values(game.planets || {}).filter((planet) => planet.owner === game.player.pilotName);
   const ownedCards = owned.map((planet) => {
     const profile = getPlanetTypeProfile(planet.type);
@@ -3549,12 +3613,18 @@ function renderPlanetCargoDepositRow(resource, planet) {
   return `<div class="mini-card planet-cargo-row"><h4>${resource}</h4>${stat("Ship", amount)}${stat("Planet", planet.stored[resource] || 0)}<p class="help-text">${status}</p><div class="button-row"><button data-action="deposit" data-resource="${resource}" data-amount="1" ${disabled}>Deposit 1</button><button data-action="deposit" data-resource="${resource}" data-amount="10" ${disabled}>Deposit 10</button><button data-action="deposit" data-resource="${resource}" data-amount="max" ${disabled}>Deposit All</button></div></div>`;
 }
 
+function renderProtectedHomeworld(sector) {
+  const homeworld = normalizePlanetState(sector.homeworld || createLamontPrimeState(), LAMONT_PRIME_SECTOR, "core", 0);
+  return `<section class="planet-panel protected-homeworld-panel"><h3>${homeworld.name}</h3><p><span class="planet-type-badge">Protected Homeworld</span> <span class="defense-badge">Defense Rating: ${getPlanetDefenseRating(homeworld)}</span></p><p class="help-text">${lamontPrimeSafetyText()}</p><div class="planet-grid">${stat("Owner", "Alliance Protected")}${stat("Claim Status", "Locked for normal players")}${stat("Attack Status", "Disabled in Sector 1")}${stat("Landing", "Restricted classroom clearance")}</div><p class="help-text"><strong>Why it cannot be claimed:</strong> ${homeworld.name} is a civilian/tutorial safe zone. Alliance charter protection prevents player claims, attacks, and hostile actions here.</p><button data-action="claim" disabled>Claim Planet</button></section>`;
+}
+
 function renderPlanet(sector) {
   const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
   const profile = getPlanetTypeProfile(planet.type);
   const preview = getPlanetProduction(planet);
   const capStats = PLANET_UPGRADE_TRACKS.map((track) => stat(planetUpgradeLabel(track), `${planet.upgrades[track]}/${planet.upgradeCaps[track]}`)).join("");
   const techList = (planet.tech.available || profile.tech).map((tech) => `<li>${tech}</li>`).join("");
+  if (isProtectedHomeworld(planet)) return renderProtectedHomeworld({ ...sector, homeworld: planet });
   if (!planet.owner) {
     const protectedClaim = isProtectedSpace(sector.number);
     const claimDisabled = protectedClaim ? "disabled" : "";
@@ -3835,9 +3905,11 @@ function sellResource(resource, amount) {
 
 function claimPlanet() {
   const sector = sectorMap[game.player.currentSector];
+  if (sector?.homeworld) return addAndRender(`${LAMONT_PRIME_NAME} cannot be claimed or attacked. ${BEGINNER_SAFE_ZONE_COPY}`);
+  if (!sector || sector.type !== "planet") return addAndRender("No claimable planet is available in this sector.");
   const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
   if (planet.owner) return addAndRender(planet.owner === game.player.pilotName ? `${planet.name} is already owned by you.` : `${planet.name} is already owned by ${planet.owner}.`);
-  if (isProtectedSpace(sector.number)) return addAndRender("Protected Alliance territory. Planet claiming is restricted in this sector.");
+  if (isProtectedSpace(sector.number)) return addAndRender("Protected Alliance territory. Planet claiming is restricted in this sector. Hostile actions are disabled here.");
   planet.owner = game.player.pilotName;
   game.planets[planet.id] = planet;
   game.stats.planetsClaimed += 1;
@@ -5130,6 +5202,7 @@ function recordSectorDiscovery(number, wasFirstVisit = false) {
     messages.push(`${sector.signals?.anomalyInstability || "Unusual"} anomaly signature cataloged.`);
   }
   if (sector.type === "planet") messages.push("Planetary opportunity registered.");
+  if (sector.homeworld) messages.push(`${LAMONT_PRIME_NAME} protected homeworld logged.`);
   if (sector.pirateActivity || game.pirates?.[number]) {
     game.stats.survivedPirateSectors = Array.isArray(game.stats.survivedPirateSectors) ? game.stats.survivedPirateSectors : [];
     if (!game.stats.survivedPirateSectors.includes(number)) game.stats.survivedPirateSectors.push(number);
