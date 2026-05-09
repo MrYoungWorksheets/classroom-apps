@@ -1715,7 +1715,7 @@ function renderSituationCard() {
       meta: [stat("Threat", `${risk.label} · Level ${pirate.threatLevel}`), stat("Your Hull", `${game.player.hull}/${game.player.maxHull}`), stat("Your Fighters", `${game.player.fighters}/${game.player.fighterCapacity}`), stat("Patrol Zone", protectedSpaceLabel(current.number))],
       actions: [
         situationActionButton("Engage Pirate", { screen: "combat", primary: true, note: "Open combat screen" }),
-        situationActionButton("Attempt Escape / Flee", { action: "pirateCombat", mode: "retreat", note: "Use existing retreat" }),
+        situationActionButton("Disengage Temporarily", { action: "pirateCombat", mode: "retreat", note: "Pirate still blocks travel" }),
         situationActionButton("Pay Off Pirates", { disabled: true, note: "Coming later" }),
       ],
     };
@@ -1765,7 +1765,7 @@ function renderSituationCard() {
       actions: [
         situationActionButton("Manage Planet", { screen: "planets", primary: planet.owner === game.player.pilotName, note: "Open planet screen" }),
         situationActionButton("View / Scan Planet", { action: "scanPlanet", note: "Survey details" }),
-        situationActionButton("Claim Planet", { disabled: planet.owner === game.player.pilotName || isProtectedSpace(current.number), note: planet.owner === game.player.pilotName ? "Already owned" : isProtectedSpace(current.number) ? "Protected space" : "Use Planets screen" }),
+        situationActionButton("Claim Planet", { disabled: planet.owner === game.player.pilotName || isProtectedSpace(current.number), note: planet.owner === game.player.pilotName ? "Already owned" : isProtectedSpace(current.number) ? "Protected Alliance territory" : "Use Planets screen" }),
         situationActionButton("Continue Route", { action: "continueRoute", sector: current.number, note: "Return to map" }),
       ],
     };
@@ -1851,7 +1851,7 @@ function renderWarpControls() {
   const routeDetail = target ? (route ? `${scout ? "Scout route" : "Route"}: ${route.join(" → ")}` : "No visible route plotted.") : "Plot a destination only when you need route automation.";
   return `<details class="warp-panel collapsible-system compact-section" ${target ? "open" : ""}>
     <summary><span>Warp / Autopilot</span><strong>${routeText}</strong></summary>
-    <p class="help-text">Known-lane route travel is preferred. Scout routes may enter visible unexplored sectors only one adjacent jump at a time; danger is not bypassed.</p>
+    <p class="help-text">Known-lane route travel is preferred. Autopilot advances one adjacent jump per step; scout routes may enter visible unexplored sectors, but fuel, turns, hazards, and active pirates still apply.</p>
     <label for="warpDestination">Set Warp Destination</label>
     <input id="warpDestination" type="number" min="1" max="${MAX_SECTOR}" value="${target}" placeholder="Sector number">
     <div class="button-row compact-button-row"><button type="button" data-action="plotWarp">Plot Route</button><button type="button" data-action="warpStep" ${target ? "" : "disabled"}>Engage Autopilot / Warp Step</button><button type="button" data-action="clearWarp" ${target ? "" : "disabled"}>Clear Destination</button></div>
@@ -1887,7 +1887,7 @@ function renderNavigationIntel() {
   return `<aside class="nav-intel main-viewer priority-card" aria-live="polite"><p class="eyebrow">Main Viewer</p><div class="viewer-title-row"><h3>Selected Sector Intel</h3>${actionButton}</div><div class="intel-grid">
     ${stat("Sector", selected.number)}${stat("Status", status)}${stat("System Type", visible ? titleCase(selected.type) : "Unknown")}${stat("Route Role", canSeeRouteRole(selected.number) ? titleCase(selected.routeRole) : "Scan level 4")}
     ${stat("Danger", danger)}${stat("Patrol Zone", protectedSpaceLabel(selected.number))}${stat("Route / Travel", routeStatus)}${stat("Suggested Action", suggested)}
-  </div><p class="known-features"><strong>Known features:</strong> ${features}</p>${missionIntel ? renderMissionTargetIntel(missionIntel) : ""}<p class="strategic-note">${canSeeRouteRole(selected.number) ? selected.strategicNote : "Upgrade scanners to reveal route roles."}</p><p class="recommendation">${navigationRecommendation(selected.number)}</p>${renderActionResult()}${hint}</aside>`;
+  </div><p class="known-features"><strong>Known features:</strong> ${features}</p>${missionIntel ? renderMissionTargetIntel(missionIntel) : ""}<p class="strategic-note">${canSeeRouteRole(selected.number) ? selected.strategicNote : "Upgrade scanners to reveal route roles."}</p><p class="recommendation">${navigationRecommendation(selected.number)}</p>${hint}</aside>`;
 }
 
 function renderArrivalReport() {
@@ -2459,7 +2459,7 @@ function renderCombatScreen() {
   const risk = pirate ? estimateCombatRisk(pirate) : null;
   const current = renderPirateEncounterPanel() || `<section class="pirate-panel mini-card"><h3>No active pirate encounter</h3><p class="empty-note">No active pirate encounter is unresolved in Sector ${game.player.currentSector}. You may safely use Exit / Return to Ship.</p></section>`;
   const known = Object.values(game.pirates || {}).filter((knownPirate) => !knownPirate.defeated).map((knownPirate) => `<div class="mini-card"><h3>${knownPirate.name}</h3>${stat("Sector", knownPirate.sector)}${stat("Threat", knownPirate.threatLevel)}${stat("Bounty", knownPirate.bounty)}${stat("Protected Space", isProtectedSpace(knownPirate.sector) ? "Blocked" : "No")}</div>`).join("");
-  return `<section class="location-intro combat-intro mini-card"><p class="eyebrow">Focused tactical display</p><h3>${pirate ? `${pirate.name} Contact` : "Pirate Intel"}</h3><p class="help-text">Fight, cautious attack, retreat, payoff/avoidance, and boarding controls stay in this combat screen. ${pirate ? "The encounter remains unresolved until you choose an action." : "No active threat blocks returning to the cockpit."}</p><div class="intel-grid">${stat("Current Sector", game.player.currentSector)}${stat("Combat State", pirate ? "Unresolved encounter" : "Safe to return")} ${pirate ? stat("Risk Estimate", risk.label) : ""}</div></section>${current}<h3>Known NPC Pirate Ledger</h3><div class="trade-grid">${known || `<p class="empty-note">No active pirate signatures.</p>`}</div>`;
+  return `<section class="location-intro combat-intro mini-card"><p class="eyebrow">Focused tactical display</p><h3>${pirate ? `${pirate.name} Contact` : "Pirate Intel"}</h3><p class="help-text">Fight, cautious attack, temporary disengage, payoff/avoidance, and boarding controls stay in this combat screen. ${pirate ? "The encounter remains unresolved until the pirate is defeated, boarded, or otherwise resolved." : "No active threat blocks returning to the cockpit."}</p><div class="intel-grid">${stat("Current Sector", game.player.currentSector)}${stat("Combat State", pirate ? "Unresolved encounter" : "Safe to return")} ${pirate ? stat("Risk Estimate", risk.label) : ""}</div></section>${current}<h3>Known NPC Pirate Ledger</h3><div class="trade-grid">${known || `<p class="empty-note">No active pirate signatures.</p>`}</div>`;
 }
 
 function renderAchievementsContent() {
@@ -2672,7 +2672,7 @@ function applyPresenceRecords(records = []) {
 
 function renderSectorTraffic() {
   if (launchGate.mode === "localPrototype" || sectorTrafficState.status === "unavailable" || sectorTrafficState.status === "local mode") {
-    return `<section class="sector-traffic"><h3>Sector Traffic</h3><p class="empty-note">Sector traffic unavailable. Local prototype mode active.</p></section>`;
+    return `<section class="sector-traffic"><h3>Sector Traffic</h3><p class="empty-note">Display-only sector traffic is unavailable in local prototype mode.</p></section>`;
   }
   if (!cloudUiState.user) return `<section class="sector-traffic"><h3>Sector Traffic</h3><p class="empty-note">Sign in to see display-only nearby captains.</p></section>`;
   const occupants = sectorTrafficState.currentSectorOccupants || [];
@@ -3113,7 +3113,7 @@ function renderPirateEncounterPanel() {
   const risk = estimateCombatRisk(pirate);
   const boardingReady = canBoardPirate(pirate);
   const outmatched = risk.score < 0.72;
-  return `<section class="pirate-panel"><h3>Pirate Encounter</h3><p><span class="threat-badge threat-${pirate.threatLevel}">${pirate.name}</span></p><div class="intel-grid">${stat("Threat Level", pirate.threatLevel)}${stat("Pirate Fighters", pirate.fighters)}${stat("Pirate Hull", `${pirate.hull}/${pirate.maxHull}`)}${stat("Pirate Base Power", pirate.basePower)}${stat("Bounty", `${pirate.bounty} credits`)}${stat("Reputation Reward", `+${pirate.reputationReward}`)}${stat("Scanner Estimate", risk.label)}${stat("Boarding Chance", boardingChanceCategory(pirate))}${pirate.isStronghold ? stat("Stronghold", "Yes") : ""}${stat("Your Power", risk.playerPower)}</div>${outmatched ? `<p class="turn-warning">Warning: your ship is badly outmatched. Retreat is available and combat is optional.</p>` : ""}${game.player.fighters <= 0 && currentShip().basePower < pirate.basePower ? `<p class="turn-warning">Your ship is lightly armed. Buy fighters at a shipyard before challenging strong pirates.</p>` : ""}<div class="button-row"><button class="combat-button" data-action="pirateCombat" data-mode="engage">Engage Pirates</button><button data-action="pirateCombat" data-mode="cautious">Cautious Attack</button><button data-action="pirateCombat" data-mode="retreat">Retreat / Avoid for now</button>${boardingReady ? `<button class="boarding-button" data-action="boardPirate">Board Pirate Ship</button>` : ""}</div><p class="help-text">NPC pirate combat only. Real player targeting and player ship capture are not active.</p></section>`;
+  return `<section class="pirate-panel"><h3>Pirate Encounter</h3><p><span class="threat-badge threat-${pirate.threatLevel}">${pirate.name}</span></p><div class="intel-grid">${stat("Threat Level", pirate.threatLevel)}${stat("Pirate Fighters", pirate.fighters)}${stat("Pirate Hull", `${pirate.hull}/${pirate.maxHull}`)}${stat("Pirate Base Power", pirate.basePower)}${stat("Bounty", `${pirate.bounty} credits`)}${stat("Reputation Reward", `+${pirate.reputationReward}`)}${stat("Scanner Estimate", risk.label)}${stat("Boarding Chance", boardingChanceCategory(pirate))}${pirate.isStronghold ? stat("Stronghold", "Yes") : ""}${stat("Your Power", risk.playerPower)}</div>${outmatched ? `<p class="turn-warning">Warning: your ship is badly outmatched. Disengaging is available, but the pirate remains active and travel stays blocked until combat is resolved.</p>` : ""}${game.player.fighters <= 0 && currentShip().basePower < pirate.basePower ? `<p class="turn-warning">Your ship is lightly armed. Buy fighters at a shipyard before challenging strong pirates.</p>` : ""}<div class="button-row"><button class="combat-button" data-action="pirateCombat" data-mode="engage">Engage Pirates</button><button data-action="pirateCombat" data-mode="cautious">Cautious Attack</button><button data-action="pirateCombat" data-mode="retreat">Disengage Temporarily</button>${boardingReady ? `<button class="boarding-button" data-action="boardPirate">Board Pirate Ship</button>` : ""}</div><p class="help-text">NPC pirate combat only. Disengaging backs off this round; the pirate remains active in the sector and travel is still blocked until combat is resolved. Real player targeting and player ship capture are not active.</p></section>`;
 }
 
 function currentPirateEncounter() {
@@ -3163,7 +3163,10 @@ function renderPlanet(sector) {
   const capStats = PLANET_UPGRADE_TRACKS.map((track) => stat(planetUpgradeLabel(track), `${planet.upgrades[track]}/${planet.upgradeCaps[track]}`)).join("");
   const techList = (planet.tech.available || profile.tech).map((tech) => `<li>${tech}</li>`).join("");
   if (!planet.owner) {
-    return `<section class="planet-panel"><h3>${planet.name}</h3><p><span class="planet-type-badge">${planet.type}</span></p><p class="help-text">${planet.typeDescription}</p><div class="production-preview"><strong>Production Strengths:</strong> ${profile.profile.strengths}<br><strong>Current preview:</strong> ${formatProduction(preview)}</div><details class="compact-section"><summary>Scanner upgrade cap preview</summary><div class="planet-grid">${capStats}</div></details><details class="compact-section future-tech"><summary>Future Tech Potential</summary><p class="help-text">Descriptive scaffolding only; functional tech trees arrive in a later update.</p><ul>${techList}</ul></details><button data-action="claim">Claim Planet</button></section>`;
+    const protectedClaim = isProtectedSpace(sector.number);
+    const claimDisabled = protectedClaim ? "disabled" : "";
+    const claimReason = protectedClaim ? "Protected Alliance territory. Planet claiming is restricted in this sector." : "Frontier world available for a classroom-safe colony claim.";
+    return `<section class="planet-panel"><h3>${planet.name}</h3><p><span class="planet-type-badge">${planet.type}</span></p><p class="help-text">${planet.typeDescription}</p><div class="production-preview"><strong>Production Strengths:</strong> ${profile.profile.strengths}<br><strong>Current preview:</strong> ${formatProduction(preview)}</div><details class="compact-section"><summary>Scanner upgrade cap preview</summary><div class="planet-grid">${capStats}</div></details><details class="compact-section future-tech"><summary>Future Tech Potential</summary><p class="help-text">Descriptive scaffolding only; functional tech trees arrive in a later update.</p><ul>${techList}</ul></details><p class="help-text">${claimReason}</p><button data-action="claim" ${claimDisabled}>Claim Planet</button></section>`;
   }
   return `<section class="planet-panel"><h3>${planet.name}</h3><p><span class="planet-type-badge">${planet.type}</span> <span class="defense-badge">Defense Rating: ${getPlanetDefenseRating(planet)}</span></p><p class="help-text">${planet.typeDescription}</p>
   <div class="planet-grid">${stat("Owner", planet.owner)}${stat("Stored Ore", planet.stored.Ore)}${stat("Stored Food", planet.stored.Food)}${stat("Stored Tech", planet.stored.Tech)}${stat("Stored Fighters", planet.stored.Fighters)}</div>
@@ -3321,7 +3324,7 @@ function renderLogPanel() {
 function travelToSector(number) {
   const current = sectorMap[game.player.currentSector];
   if (!current.adjacent.includes(number)) return addAndRender("That sector is not adjacent from here. Select an adjacent node or plot a known route.");
-  if (currentPirateEncounter()) return addAndRender("Pirate encounter blocks travel. Defeat, board, or retreat before leaving this sector.");
+  if (currentPirateEncounter()) return addAndRender("Pirate encounter blocks travel. Defeat, board, or disengage temporarily before making another combat decision; travel stays blocked until the pirate is resolved.");
   if (!spendTurn("travel")) return;
   game.player.fuel -= 1;
   game.player.currentSector = number;
@@ -3433,10 +3436,12 @@ function sellResource(resource, amount) {
 function claimPlanet() {
   const sector = sectorMap[game.player.currentSector];
   const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
-  if (planet.owner) return;
+  if (planet.owner) return addAndRender(planet.owner === game.player.pilotName ? `${planet.name} is already owned by you.` : `${planet.name} is already owned by ${planet.owner}.`);
+  if (isProtectedSpace(sector.number)) return addAndRender("Protected Alliance territory. Planet claiming is restricted in this sector.");
   planet.owner = game.player.pilotName;
   game.planets[planet.id] = planet;
   game.stats.planetsClaimed += 1;
+  setSectorActionResult("Planet Claimed", `Claimed ${planet.type} planet ${planet.name}.`, { type: "positive", gained: [planet.name] });
   addLog(`Claimed ${planet.type} planet ${planet.name}.`);
   completeTutorialStep("claim");
   saveGame();
@@ -4150,11 +4155,14 @@ function resolvePirateCombat(mode = "engage") {
   const pirate = currentPirateEncounter();
   if (!pirate) return addAndRender("No active NPC pirate encounter in this sector.");
   if (mode === "retreat") {
+    const baseMessage = `${pirate.name} remains active in the sector. Travel is still blocked until combat is resolved.`;
     if (Math.random() < RETREAT_DAMAGE_RISK && pirate.fighters > game.player.fighters + 10) {
       applyCombatDamage(0, 2, "retreat");
-      addLog(`Retreated from ${pirate.name}; evasive maneuvers cost 2 hull.`);
+      setSectorActionResult("Disengaged Temporarily", `Backed off this round; evasive maneuvers cost 2 hull. ${baseMessage}`, { type: "negative", lost: ["-2 hull"] });
+      addLog(`Disengaged temporarily from ${pirate.name}; evasive maneuvers cost 2 hull. Pirate remains active and travel is still blocked.`);
     } else {
-      addLog(`Retreated from ${pirate.name}. You can return when ready.`);
+      setSectorActionResult("Disengaged Temporarily", `Backed off this round. ${baseMessage}`, { type: "neutral" });
+      addLog(`Disengaged temporarily from ${pirate.name}. Pirate remains active and travel is still blocked.`);
     }
     saveGame();
     render();
@@ -4301,7 +4309,7 @@ function loseCombatToPirates(pirate, cautious = false) {
   const damageReport = applyCombatDamage(fighterLoss, hullDamage, "loss");
   game.player.combatLosses += 1;
   syncCombatStats(game);
-  const message = `Combat Defeat: ${pirate.name} routed your attack. Lost ${damageReport.fightersLost} fighters and took ${damageReport.hullDamage} hull damage. Repair, buy fighters, or retreat to safer lanes.`;
+  const message = `Combat Defeat: ${pirate.name} routed your attack. Lost ${damageReport.fightersLost} fighters and took ${damageReport.hullDamage} hull damage. Repair, buy fighters, or disengage temporarily before making another combat decision.`;
   setSectorActionResult("Combat Defeat", message, { type: "negative", lost: [`-${damageReport.fightersLost} fighters`, `-${damageReport.hullDamage} hull`] });
   addLog(message);
 }

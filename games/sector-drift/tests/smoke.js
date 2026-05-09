@@ -306,6 +306,23 @@ vm.runInContext(`
   resolvePirateCombat('engage');
   assert(game.player.combatLosses === 1 && game.player.hull < hullBeforeStrong, 'weak player attacking strong pirate should take hull damage and lose');
   assert(game.player.fighters === 0, 'fighters should be lost before major hull damage');
+
+  game = defaultGameState();
+  game.player.currentSector = 13;
+  game.player.fuel = 10;
+  game.player.turns = 10;
+  resolvePirateCombat('retreat');
+  assert(!game.pirates[13].defeated && currentPirateEncounter(), 'disengage should leave the pirate encounter active');
+  assert(game.ui.lastSectorActionResult?.title === 'Disengaged Temporarily', 'disengage action result uses non-escape wording');
+  assert(game.ui.lastSectorActionResult.message.includes('remains active in the sector') && game.ui.lastSectorActionResult.message.includes('Travel is still blocked'), 'disengage result explains travel remains blocked');
+  assert(liveEvents[0]?.title === 'Disengaged Temporarily' && liveEvents[0].message.includes('Travel is still blocked'), 'disengage live event matches unresolved combat behavior');
+  assert(game.log.some((entry) => entry.includes('Pirate remains active') && entry.includes('travel is still blocked')), 'Captain Log records unresolved pirate disengage');
+  const sectorBeforeBlockedTravel = game.player.currentSector;
+  const blockedAdjacentSector = sectorMap[sectorBeforeBlockedTravel].adjacent[0];
+  handleMapNodeSelect(blockedAdjacentSector);
+  handleMapNodeSelect(blockedAdjacentSector);
+  assert(game.player.currentSector === sectorBeforeBlockedTravel && game.ui.lastSectorActionResult.message.includes('Pirate encounter blocks travel') && game.ui.lastSectorActionResult.message.includes('travel stays blocked'), 'disengage does not imply travel freedom while pirate remains');
+
   game.player.hull = 1;
   applyCombatDamage(0, 99, 'test destruction');
   assert(game.player.currentSector === 1 && game.player.hull === SHIPS.rustyComet.maxHull, 'hull <= 0 should trigger escape pod reset');
@@ -388,9 +405,30 @@ vm.runInContext(`
   assert(getPlanetProduction(jungle).Food > getPlanetProduction(fire).Food, 'Jungle produces more Food than Fire');
 
   game = defaultGameState();
-  const planetSector = Object.values(sectorMap).find((sector) => sector.type === 'planet');
+  const planetSector = Object.values(sectorMap).find((sector) => sector.type === 'planet' && !isProtectedSpace(sector.number));
+  const protectedTestSector = sectorMap[2];
+  const originalProtectedType = protectedTestSector.type;
+  const originalProtectedPlanet = protectedTestSector.planet;
+  protectedTestSector.type = 'planet';
+  protectedTestSector.planet = { ...JSON.parse(JSON.stringify(planetSector.planet)), id: 'planet-2', name: 'Alliance Survey World', owner: null };
+  game.player.currentSector = protectedTestSector.number;
+  panels.docked.innerHTML = renderScreenContent('planets');
+  assert(panels.docked.innerHTML.includes('Protected Alliance territory') && panels.docked.innerHTML.includes('Planet claiming is restricted in this sector') && panels.docked.innerHTML.includes('data-action="claim" disabled'), 'Planets screen disables and explains protected-space claims');
+  claimPlanet();
+  assert(!game.planets[protectedTestSector.planet.id], 'claimPlanet directly blocks protected-space planet claims');
+  assert(game.ui.lastSectorActionResult?.message.includes('Planet claiming is restricted in this sector'), 'protected-space claim block explains the sector rule');
+  protectedTestSector.type = originalProtectedType;
+  protectedTestSector.planet = originalProtectedPlanet;
+
+  game = defaultGameState();
   game.player.currentSector = planetSector.number;
   claimPlanet();
+  assert(game.planets[planetSector.planet.id]?.owner === game.player.pilotName, 'legal non-protected planet claim still assigns ownership');
+  assert(game.ui.lastSectorActionResult?.title === 'Planet Claimed' && liveEvents[0]?.title === 'Planet Claimed', 'legal planet claim reports through action result and live event');
+  assert(game.log.some((entry) => entry.includes('Claimed') && entry.includes('planet')), 'Captain Log still records planet claims');
+  const claimCountAfterLegalClaim = game.stats.planetsClaimed;
+  claimPlanet();
+  assert(game.stats.planetsClaimed === claimCountAfterLegalClaim && game.ui.lastSectorActionResult.message.includes('already owned by you'), 'already-owned planets still block duplicate claims');
   game.lastProductionAt = 0;
   const claimed = game.planets[planetSector.planet.id];
   claimed.upgrades.fighterBays = claimed.upgradeCaps.fighterBays > 0 ? 1 : 0;
@@ -598,6 +636,7 @@ vm.runInContext(`
   assert(sectorMap[1].adjacent.flatMap((sector) => sectorMap[sector].adjacent).every((sector) => isProtectedSpace(sector)), 'sectors two lane steps from 1 should be protected');
   assert(!Object.keys(game.pirates).some((sector) => isProtectedSpace(Number(sector))), 'pirates should not spawn in protected space');
   game.player.currentSector = 1;
+  selectedSectorNumber = 1;
   renderSectorPanel();
   assert(panels.sector.innerHTML.includes('Alliance Protected Space'), 'protected label should appear in sector intel');
   resolveAllianceSearch(true);
@@ -655,7 +694,13 @@ vm.runInContext(`
   maybeTravelEvent = function () { return false; };
   resolveSectorDanger = function () { return false; };
   renderSectorPanel();
+  setSectorActionResult('Smoke Result', 'Only the current situation should render this cockpit action result.', { skipLiveEvent: true });
+  renderSectorPanel();
+  const actionResultBlockCount = (panels.sector.innerHTML.match(/class="action-result /g) || []).length;
+  assert(actionResultBlockCount === 1, 'cockpit render contains only one active action-result block');
   assert(panels.sector.innerHTML.includes('Selected Sector Intel') && panels.sector.innerHTML.includes('Arrival Report'), 'selected sector intel and arrival report render in the main viewer');
+  const selectedIntelHtml = panels.sector.innerHTML.slice(panels.sector.innerHTML.indexOf('Selected Sector Intel'));
+  assert(!selectedIntelHtml.includes('Only the current situation should render this cockpit action result.'), 'selected sector intel omits duplicate action-result copy');
   assert(panels.sector.innerHTML.includes('data-situation-type="shipyard port"') && panels.sector.innerHTML.includes('Safe Port / Starbase'), 'situation card renders on Sector 1 port');
   assert(panels.sector.innerHTML.includes('Dock at Starbase') && panels.sector.innerHTML.includes('Open Mission Terminal'), 'situation card exposes starbase and mission terminal buttons');
   assert(panels.sector.innerHTML.includes('Enter Shipyard'), 'situation card shows shipyard button when shipyard exists');
@@ -868,7 +913,7 @@ vm.runInContext(`
   game.visitedSectors.push(13);
   game.revealedSectors.push(13);
   renderSectorPanel();
-  assert(panels.sector.innerHTML.includes('Pirate Encounter: Scrap Raider') && panels.sector.innerHTML.includes('Attempt Escape / Flee') && panels.sector.innerHTML.includes('Pay Off Pirates'), 'pirate card renders when active pirate exists');
+  assert(panels.sector.innerHTML.includes('Pirate Encounter: Scrap Raider') && panels.sector.innerHTML.includes('Disengage Temporarily') && panels.sector.innerHTML.includes('Pay Off Pirates'), 'pirate card renders when active pirate exists');
   game.player.cargoCapacity = 20;
   defeatPirate(game.pirates[13], 'defeated', { fightersLost: 1, hullDamage: 2 });
   assert(game.ui.lastSectorActionResult?.title === 'Pirates Defeated' && game.ui.lastSectorActionResult.message.includes('Salvage') && game.ui.lastSectorActionResult.gained.some((item) => item.includes('credits')), 'pirate victory shows prominent reward and salvage result');
@@ -1010,7 +1055,7 @@ vm.runInContext(`
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
   renderSectorPanel();
-  assert(panels.sector.innerHTML.includes('Sector traffic unavailable. Local prototype mode active.'), 'sector traffic renders local unavailable state');
+  assert(panels.sector.innerHTML.includes('Display-only sector traffic is unavailable in local prototype mode.'), 'sector traffic renders local unavailable state');
   assert(panels.sector.innerHTML.includes('Live Events') && panels.sector.innerHTML.includes('Immediate Cockpit Feed'), 'live event box renders in cockpit');
   const liveTokenBefore = liveEventPulseToken;
   pushLiveEvent({ type: 'test', title: 'Test Event', message: 'Smoke test event visible.', tone: 'positive', sectorNumber: 1 });
