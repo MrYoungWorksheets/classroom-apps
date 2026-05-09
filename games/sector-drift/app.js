@@ -1164,8 +1164,19 @@ function captainSpecialtyBonusText(key = captainSpecialtyKey()) {
   return `${specialty.label}: ${specialty.bonus}`;
 }
 
-function needsCaptainSetup() {
-  return !game?.player?.captainProfile?.setupComplete;
+function hasCompletedCaptainProfile(state = game) {
+  const profile = state?.player?.captainProfile;
+  if (!profile || typeof profile !== "object") return false;
+  return Boolean(
+    safePlainText(profile.name, "").trim() &&
+    CAPTAIN_TITLES.includes(profile.title) &&
+    CAPTAIN_SPECIALTIES[profile.specialty] &&
+    profile.setupComplete === true
+  );
+}
+
+function needsCaptainSetup(state = game) {
+  return !hasCompletedCaptainProfile(state);
 }
 
 function applyCaptainProfile({ name, title, specialty } = {}) {
@@ -1514,8 +1525,7 @@ function migrateGameState(saved = {}) {
 
     const merged = { ...fresh, ...safeObject(saved) };
     merged.player = { ...fresh.player, ...savedPlayer };
-    const hadCaptainProfile = Boolean(savedPlayer.captainProfile && typeof savedPlayer.captainProfile === "object");
-    merged.player.captainProfile = normalizeCaptainProfile(savedPlayer.captainProfile, savedPlayer.pilotName || fresh.player.pilotName, !saved.player ? false : !hadCaptainProfile);
+    merged.player.captainProfile = normalizeCaptainProfile(savedPlayer.captainProfile, savedPlayer.pilotName || fresh.player.pilotName, false);
     merged.player.pilotName = captainDisplayName(merged.player.captainProfile);
     const originalSector = merged.player.currentSector;
     merged.player.currentSector = normalizeSectorNumber(merged.player.currentSector, 1);
@@ -1830,21 +1840,31 @@ function renderActionPanel() {
   const ownedPlanetCount = Object.values(game.planets || {}).filter((planet) => planet.owner === game.player.pilotName).length;
   const planetHere = sector.type === "planet" || Boolean(sector.homeworld);
   const pirateHere = Boolean(currentPirateEncounter());
+  const knownBounties = Object.values(game.pirates || {}).some((pirate) => !pirate.defeated);
   const actions = [
-    { screen: "starbase", label: "Dock at Starbase", enabled: sector.type === "port", reason: sector.type === "port" ? `${sector.portType} available` : "No port in this sector" },
-    { screen: "shipyard", label: "Enter Shipyard", enabled: Boolean(sector.hasShipyard), reason: sector.hasShipyard ? "Shipyard available" : "No shipyard here" },
-    { screen: "specialMissions", label: "Open Mission Terminal", enabled: true, reason: "Mission terminal available" },
-    { screen: "planets", label: "Manage Planet", enabled: planetHere || ownedPlanetCount > 0, reason: sector.homeworld ? "Protected homeworld present" : planetHere ? "Planet in sector" : ownedPlanetCount ? `${ownedPlanetCount} owned planet${ownedPlanetCount === 1 ? "" : "s"}` : "No local or owned planets" },
-    { screen: "combat", label: "Engage Pirate", enabled: pirateHere || Object.values(game.pirates || {}).some((pirate) => !pirate.defeated), reason: pirateHere ? "Pirate detected" : "Known NPC bounty ledger" },
-    { screen: "achievements", label: "Achievements", enabled: true, reason: `${game.achievements.length} unlocked` },
-    { screen: "stats", label: "Stats", enabled: true, reason: `${(game.stats.visitedSectors || []).length} sectors · ${game.stats.missionsClaimed || 0} contracts` },
-    { screen: "reputation", label: "Reputation", enabled: true, reason: `${reputationTitle(game.player.reputation)} · ${combatRankTitle()}` },
+    { screen: "starbase", label: "Dock at Starbase", enabled: sector.type === "port", reason: sector.type === "port" ? `${sector.portType} services available` : "No starbase in this sector" },
+    { screen: "shipyard", label: "Enter Shipyard", enabled: Boolean(sector.hasShipyard), reason: sector.hasShipyard ? "Ships, fighters, and upgrades" : "No shipyard in this sector" },
+    { screen: "planets", label: "Manage Planet", enabled: planetHere || ownedPlanetCount > 0, reason: sector.homeworld ? "Protected homeworld details" : planetHere ? "Planet management available" : ownedPlanetCount ? `${ownedPlanetCount} owned planet${ownedPlanetCount === 1 ? "" : "s"}` : "No planet management target" },
+    { screen: "combat", label: pirateHere ? "Engage Pirate" : "Pirate Intel / Bounties", enabled: pirateHere || knownBounties, reason: pirateHere ? "Pirate detected in this sector" : "Known NPC bounty ledger" },
+    { screen: "specialMissions", label: "Open Mission Terminal", enabled: true, reason: "Remote mission relay available" },
     { screen: "competitive", label: "Competitive", enabled: true, reason: cloudUiState.user ? "Leaderboards and shared activity" : "Google sign-in required" },
     { screen: "captainLog", label: "Captain's Log", enabled: true, reason: "Recent events" },
     { screen: "settings", label: "Settings / Save", enabled: true, reason: "Cloud login and local save controls" },
+    { screen: "achievements", label: "Achievements", enabled: true, reason: `${game.achievements.length} unlocked`, secondary: true },
+    { screen: "stats", label: "Stats", enabled: true, reason: `${(game.stats.visitedSectors || []).length} sectors · ${game.stats.missionsClaimed || 0} contracts`, secondary: true },
+    { screen: "reputation", label: "Reputation", enabled: true, reason: `${reputationTitle(game.player.reputation)} · ${combatRankTitle()}`, secondary: true },
   ];
   if (isTeacher()) actions.push({ screen: "adminPanel", label: "Admin Panel", enabled: true, reason: "Teacher-only classroom tools" });
-  panels.action.innerHTML = `${renderConnectionStatusStrip()}<h2 id="actionHeading">Cockpit Actions</h2><p class="help-text">${gateOpen ? "Choose one clear action. Disabled buttons explain why they are unavailable." : authGateMessage()}</p><div class="cockpit-availability"><p>${sector.type === "port" ? "Starbase available" : "No starbase here"}</p><p>${sector.hasShipyard ? "Shipyard available" : "No shipyard here"}</p><p>${pirateHere ? "Pirate detected" : "No pirate in sector"}</p><p>${sector.homeworld ? "Lamont Prime protected" : planetHere ? "Planet in sector" : ownedPlanetCount ? "Owned planets available" : "No planet in sector"}</p><p>Mission terminal available</p></div><div class="action-menu">${actions.map((action) => { const enabled = action.enabled && (gateOpen || action.screen === "settings"); const reason = gateOpen || action.screen === "settings" ? action.reason : "Launch required"; return `<button type="button" class="${action.screen === "adminPanel" ? "button-admin" : enabled ? "button-secondary" : "button-disabled-explained"}" data-screen="${action.screen}" title="${safeDisplayText(reason)}" ${enabled ? "" : "disabled"}><strong>${action.label}</strong><span>${safeDisplayText(reason)}</span></button>`; }).join("")}</div>${gateOpen ? renderEmergencyWarpControl() : ""}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 5).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
+  const available = actions.filter((action) => (action.enabled && gateOpen) || action.screen === "settings" || action.screen === "adminPanel");
+  const unavailable = actions.filter((action) => !available.includes(action) && !action.secondary);
+  const buttonHtml = available.map((action) => {
+    const enabled = gateOpen || action.screen === "settings";
+    const reason = enabled ? action.reason : "Launch required";
+    const className = action.screen === "adminPanel" ? "button-admin" : action.secondary ? "button-secondary action-secondary" : "button-secondary action-primary";
+    return `<button type="button" class="${className}" data-screen="${action.screen}" title="${safeDisplayText(reason)}" ${enabled ? "" : "disabled"}><strong>${action.label}</strong><span>${safeDisplayText(reason)}</span></button>`;
+  }).join("");
+  const unavailableHtml = unavailable.length && gateOpen ? `<details class="unavailable-actions compact-section"><summary>Unavailable here</summary><div>${unavailable.map((action) => `<p><strong>${safeDisplayText(action.label)}</strong><span>${safeDisplayText(action.reason)}</span></p>`).join("")}</div></details>` : "";
+  panels.action.innerHTML = `<h2 id="actionHeading">Available Actions</h2><p class="help-text">${gateOpen ? "Only useful cockpit actions are shown as full buttons. Local status lives in the footer ribbon." : authGateMessage()}</p><div class="action-menu action-menu-polished">${buttonHtml}</div>${unavailableHtml}${gateOpen ? renderEmergencyWarpControl() : ""}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 4).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
   panels.action.querySelectorAll("[data-screen]").forEach((button) => button.addEventListener("click", () => openScreen(button.dataset.screen)));
   panels.action.querySelector("[data-action='emergencyWarp']")?.addEventListener("click", emergencyWarp);
 }
@@ -1879,25 +1899,25 @@ function renderSectorPanel() {
   const danger = canSeeDanger(sector.number) && sector.dangerLevel > 0 ? `${HAZARD_TYPES[sector.hazardType].icon} Danger ${sector.dangerLevel}: ${HAZARD_TYPES[sector.hazardType].label}` : "Danger unknown";
   panels.sector.innerHTML = `
     <h2 id="sectorHeading">Tactical Cockpit</h2>
-    ${renderConnectionStatusStrip()}
-    ${renderLiveEventBox()}
-    ${renderCurrentSituation(sector, danger)}
-    ${renderNavigationIntel()}
-    ${renderContextualHelper()}
-    ${renderSectorTraffic()}
-    <section class="viewer-map" aria-label="Interactive sector map">
+    <section class="viewer-map cockpit-map-priority" aria-label="Interactive sector map">
       <div class="viewer-map-heading"><h3>Lane Map</h3><p class="help-text">Tap a node once to scan. Tap an adjacent selected node again to travel.</p></div>
       ${renderMinimap()}
     </section>
     ${renderWarpControls()}
-    <details class="manual-travel fallback-controls compact-section">
-      <summary>Manual travel controls</summary>
+    <section class="manual-travel fallback-controls compact-section" aria-label="Manual travel controls">
+      <div class="manual-travel-heading"><h3>Manual Travel</h3><span>Adjacent lanes</span></div>
       <p class="help-text">Fallback buttons for adjacent sectors. The map above is the primary navigation control.</p>
       <div class="travel-grid compact-travel-grid">
         ${sector.adjacent.map((number) => `<button type="button" ${cannotTravel ? "disabled" : ""} data-action="travel" data-sector="${number}">${scannerTravelLabel(number)}</button>`).join("")}
       </div>
       ${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty. Complete math missions for fuel or trade when you reach a port.</p>` : `<p class="help-text">Travel costs 1 turn and 1 fuel. Sector events may occur after arrival.</p>`}
-    </details>`;
+    </section>
+    ${renderNavigationIntel()}
+    ${renderCurrentSituation(sector, danger)}
+    ${renderContextualHelper()}
+    ${renderLiveEventBox()}
+    ${renderSectorTraffic()}
+    ${renderConnectionStatusStrip()}`;
   panels.sector.querySelectorAll("[data-action='travel']").forEach((button) => button.addEventListener("click", () => travelToSector(Number(button.dataset.sector))));
   wireSituationCardButtons(panels.sector);
   wireWarpControls(panels.sector);
@@ -2181,7 +2201,7 @@ function situationActionButton(label, options = {}) {
   const { screen = "", action = "", mode = "", sector = "", disabled = false, primary = false, note = "" } = options;
   const attrs = ["type=\"button\""];
   if (screen) attrs.push(`data-screen="${screen}"`);
-  if (action) attrs.push(`data-action="${action}"`);
+  if (action && !disabled) attrs.push(`data-action="${action}"`);
   if (mode) attrs.push(`data-mode="${mode}"`);
   if (sector) attrs.push(`data-sector="${sector}"`);
   if (disabled) attrs.push("disabled");
@@ -2285,7 +2305,7 @@ function renderSituationCard() {
       actions: [
         situationActionButton("Manage Planet", { screen: "planets", primary: planet.owner === game.player.pilotName, note: "Open planet screen" }),
         situationActionButton("View / Scan Planet", { action: "scanPlanet", note: "Survey details" }),
-        situationActionButton("Claim Planet", { disabled: planet.owner === game.player.pilotName || isProtectedSpace(current.number), note: planet.owner === game.player.pilotName ? "Already owned" : isProtectedSpace(current.number) ? "Protected Alliance territory" : "Use Planets screen" }),
+        situationActionButton("Claim Planet", { action: "claimPlanet", primary: planet.owner !== game.player.pilotName && !isProtectedSpace(current.number), disabled: planet.owner === game.player.pilotName || isProtectedSpace(current.number), note: planet.owner === game.player.pilotName ? "Already owned" : isProtectedSpace(current.number) ? "Protected Alliance territory" : "Claim from cockpit" }),
         situationActionButton("Continue Route", { action: "continueRoute", sector: current.number, note: "Return to map" }),
       ],
     };
@@ -2347,6 +2367,7 @@ function wireSituationCardButtons(scope = panels.sector) {
   scope.querySelectorAll("[data-action='mine']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(mineAsteroids); }));
   scope.querySelectorAll("[data-action='scan']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(scanAnomaly); }));
   scope.querySelectorAll("[data-action='scanPlanet']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(scanPlanet); }));
+  scope.querySelectorAll("[data-action='claimPlanet']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(claimPlanet); }));
   scope.querySelectorAll("[data-action='continueRoute']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); focusRouteFromSituation(button.dataset.sector); }));
 }
 
@@ -2372,8 +2393,13 @@ function renderWarpControls() {
   const routeDetail = target ? (route ? `${scout ? "Scout route" : "Route"}: ${route.join(" → ")}` : "No visible route plotted.") : "Plot a destination only when you need route automation.";
   const hyperdriveOwned = (game.player.upgrades?.hyperdrive || 0) >= 1;
   const hyperdriveText = hyperdriveOwned ? (target && route ? "Rapid jumps. Costs double fuel. Stops for danger." : "Plot a route first.") : "Hyperdrive locked: buy the one-time Shipyard upgrade for rapid route jumps.";
-  return `<details class="warp-panel collapsible-system compact-section" ${target ? "open" : ""}>
+  const nextJump = target && route?.[1] ? `Sector ${route[1]}` : "None";
+  const fuelEstimate = target && route ? `${(route.length - 1) * (hyperdriveOwned ? HYPERDRIVE_FUEL_MULTIPLIER : 1)} fuel${hyperdriveOwned ? " hyperdrive / " + (route.length - 1) + " normal" : ""}` : "—";
+  return `<details class="warp-panel collapsible-system compact-section" open>
     <summary><span>Warp / Autopilot</span><strong>${routeText}</strong></summary>
+    <div class="warp-readout intel-grid">
+      ${stat("Destination", target ? `Sector ${target}` : "No active destination.")}${stat("Next Jump", nextJump)}${stat("Route Type", target && route ? (scout ? "Scout route" : "Known lane route") : "No route plotted")}${stat("Fuel Estimate", fuelEstimate)}
+    </div>
     <p class="help-text">Known-lane route travel is preferred. Autopilot advances one adjacent jump per step; scout routes may enter visible unexplored sectors, but fuel, turns, hazards, and active pirates still apply.</p>
     <label for="warpDestination">Set Warp Destination</label>
     <input id="warpDestination" type="number" min="1" max="${MAX_SECTOR}" value="${target}" placeholder="Sector number">
@@ -3073,7 +3099,7 @@ function applyLoadedSavePayload(saveData) {
       return { ok: false, error: "Cloud save could not be normalized safely. Local save was not changed." };
     }
     game = migrated;
-    game.ui = { ...(game.ui || {}), activeScreen: "settings" };
+    game.ui = { ...(game.ui || {}), activeScreen: needsCaptainSetup(game) ? "captainSetup" : "settings" };
     selectedSectorNumber = game.player.currentSector;
     saveGame();
     addLog("Cloud backup loaded into this browser after confirmation.");
