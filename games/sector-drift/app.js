@@ -710,6 +710,76 @@ function getPlanetDefenseRating(planet) {
   return Math.round(data.profile.defense + normalized.upgrades.defense * 8 + normalized.upgrades.fighterBays * 3 + Math.sqrt(storedFighters) * 2 + futureTechBonus);
 }
 
+function planetAccessStatus(planet, sector) {
+  const normalized = normalizePlanetState(planet, sector?.number, sector?.routeRole, sector?.dangerLevel);
+  if (isProtectedHomeworld(normalized) || sector?.homeworld?.id === normalized.id) {
+    return { allowed: false, blocked: true, protected: true, label: "Alliance protected", reason: "Overwhelming Alliance defense blocks claims, landings, storage access, and hostile interference." };
+  }
+  if (!normalized.owner) return { allowed: true, blocked: false, label: "Unowned", reason: "Claim rules apply before storage or upgrades are available." };
+  if (normalized.owner === game.player.pilotName) return { allowed: true, blocked: false, label: "Owner access", reason: "You own this planet and may manage storage, production, upgrades, and Fighters." };
+  const fighters = Math.max(0, Math.floor(Number(normalized.stored?.Fighters) || 0));
+  return {
+    allowed: false,
+    blocked: true,
+    defended: fighters > 0,
+    label: fighters > 0 ? "Planet Defended" : "Foreign owned",
+    reason: fighters > 0 ? "Stored fighters will attack non-owners." : "Non-owners cannot manage or use planet storage.",
+  };
+}
+
+function planetDefensePreviewText(planet, sector) {
+  const status = planetAccessStatus(planet, sector);
+  if (status.protected) return "Overwhelming Alliance defense blocks hostile interference.";
+  if (status.defended) return "Planet Defended — Stored fighters will attack non-owners.";
+  return status.reason;
+}
+
+function resolvePlanetDefenseAttempt(actionLabel = "planet access") {
+  const sector = sectorMap[game.player.currentSector];
+  if (!sector || (sector.type !== "planet" && !sector.homeworld)) return { allowed: true };
+  const planet = normalizePlanetState(sector.homeworld || getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
+  const status = planetAccessStatus(planet, sector);
+  if (status.allowed) return { allowed: true, planet, status };
+  if (status.protected) {
+    const message = `${planet.name} is protected by overwhelming Alliance defense. ${actionLabel} denied; this world cannot be claimed, attacked, conquered, landed on, or used for storage by normal players. It cannot be claimed or attacked.`;
+    setSectorActionResult("Planet Defended", message, { type: "negative", lost: ["Access denied"], eventType: "defense", sector: sector.number });
+    addLog(message);
+    saveGame();
+    render();
+    return { allowed: false, planet, status };
+  }
+  const defending = Math.max(0, Math.floor(Number(planet.stored?.Fighters) || 0));
+  if (defending <= 0) {
+    const message = `${planet.name} is owned by ${planet.owner}. ${actionLabel} denied: non-owners cannot manage planets, land for storage, deposit, withdraw, upgrade, or interfere.`;
+    setSectorActionResult("Access Denied", message, { type: "negative", lost: ["Access denied"], sector: sector.number });
+    addLog(message);
+    saveGame();
+    render();
+    return { allowed: false, planet, status };
+  }
+  const playerFightersBefore = Math.max(0, Math.floor(Number(game.player.fighters) || 0));
+  const requestedFighterLoss = Math.max(1, Math.ceil(defending / 3));
+  const requestedHullDamage = playerFightersBefore > 0 ? 0 : Math.max(1, Math.ceil(defending / 6));
+  const damage = applyCombatDamage(requestedFighterLoss, requestedHullDamage, "planet defense");
+  const planetFightersLost = Math.min(defending, playerFightersBefore > 0 ? Math.max(1, Math.floor(playerFightersBefore / 4)) : 0);
+  planet.stored.Fighters = Math.max(0, defending - planetFightersLost);
+  game.planets[planet.id] = normalizePlanetState(planet, sector.number, sector.routeRole, sector.dangerLevel);
+  game.stats.planetDefenseEngagements = (game.stats.planetDefenseEngagements || 0) + 1;
+  game.stats.planetDefenseFightersLost = (game.stats.planetDefenseFightersLost || 0) + planetFightersLost;
+  const forcedOff = game.player.currentSector !== sector.number || game.player.hull <= 0;
+  const losses = [];
+  if (damage.fightersLost) losses.push(`Lost ${damage.fightersLost} fighter${damage.fightersLost === 1 ? "" : "s"}`);
+  if (damage.hullDamage) losses.push(`Took ${damage.hullDamage} hull damage`);
+  if (planetFightersLost) losses.push(`${planetFightersLost} defending fighter${planetFightersLost === 1 ? "" : "s"} destroyed`);
+  losses.push("Access denied");
+  const message = `Planet defense engaged: ${defending} defending fighters intercepted your ship. ${damage.fightersLost ? `Lost ${damage.fightersLost} fighter${damage.fightersLost === 1 ? "" : "s"}. ` : ""}${damage.hullDamage ? `Took ${damage.hullDamage} hull damage. ` : ""}${planetFightersLost ? `${planetFightersLost} defending fighter${planetFightersLost === 1 ? " was" : "s were"} destroyed. ` : ""}${forcedOff ? "Your ship was forced off. " : ""}Access denied.`;
+  setSectorActionResult("Planet Defended", message, { type: "negative", lost: losses, eventType: "defense", sector: sector.number });
+  addLog(message);
+  saveGame();
+  render();
+  return { allowed: false, planet, status, damage, planetFightersLost, forcedOff };
+}
+
 function getPlanetUpgradeCost(planet, track) {
   const normalized = normalizePlanetState(planet);
   const level = normalized.upgrades[track] || 0;
@@ -1755,6 +1825,12 @@ function openScreen(screenName) {
     return addAndRender(authGateMessage());
   }
   const nextScreen = screenNames().includes(screenName) ? screenName : "cockpit";
+  if (nextScreen === "planets") {
+    const sector = sectorMap[game.player.currentSector];
+    const localPlanet = sector?.homeworld || (sector?.type === "planet" ? getPlanetState(sector) : null);
+    const localAccess = localPlanet ? planetAccessStatus(localPlanet, sector) : null;
+    if (localPlanet && localAccess?.blocked && !localAccess.protected) return resolvePlanetDefenseAttempt("Planet management access");
+  }
   if (nextScreen === "starbase" && sectorMap[game.player.currentSector]?.type === "port" && game.ui.activeScreen !== "starbase") beginDockingSession();
   game.ui.activeScreen = nextScreen;
   updatePresenceStatus(nextScreen === "combat" ? "combat" : isDockedMode(nextScreen) ? "docked" : "online");
@@ -2252,6 +2328,7 @@ function planetSituationStatus(planet, sector) {
   if (!planet) return "No planet record available.";
   if (isProtectedHomeworld(planet)) return lamontPrimeStatusText();
   if (planet.owner === game.player.pilotName) return `Owned by you · production preview ${formatProduction(getPlanetProduction(planet))}.`;
+  if (planet.owner) return `${planetAccessStatus(planet, sector).label}: owned by ${planet.owner}. ${planetDefensePreviewText(planet, sector)}`;
   if (isProtectedSpace(sector.number)) return "Unclaimed survey world inside Alliance protected space.";
   if (sector.dangerLevel > 0) return "Unclaimed frontier world; secure the route before building.";
   return "Unclaimed planet ready for a classroom-safe colony claim from Planet Management.";
@@ -2326,15 +2403,19 @@ function renderSituationCard() {
     };
   } else if (current.type === "planet") {
     const planet = getPlanetState(current);
+    const access = planetAccessStatus(planet, current);
+    const manageAction = access.blocked
+      ? situationActionButton("Manage Planet", { action: "planetAccess", primary: false, note: access.reason })
+      : situationActionButton("Manage Planet", { screen: "planets", primary: planet.owner === game.player.pilotName, note: "Open planet screen" });
     card = {
       type: "planet",
-      title: "Planet Detected",
-      summary: `${planet.name} is a ${planet.type} world with colony management available from the Planets screen.`,
-      meta: [stat("Planet", planet.name), stat("Type", planet.type), stat("Status", planetSituationStatus(planet, current)), stat("Patrol Zone", protectedSpaceLabel(current.number))],
+      title: access.defended ? "Planet Defended" : "Planet Detected",
+      summary: access.defended ? `${planet.name} is defended by stored fighters. Stored fighters will attack non-owners.` : `${planet.name} is a ${planet.type} world with colony management available from the Planets screen.`,
+      meta: [stat("Planet", planet.name), stat("Type", planet.type), stat("Owner", planet.owner || "Unowned"), stat("Defense Fighters", planet.stored.Fighters || 0), stat("Access", access.allowed ? "Allowed" : "Denied"), stat("Status", planetSituationStatus(planet, current)), stat("Patrol Zone", protectedSpaceLabel(current.number))],
       actions: [
-        situationActionButton("Manage Planet", { screen: "planets", primary: planet.owner === game.player.pilotName, note: "Open planet screen" }),
+        manageAction,
         situationActionButton("View / Scan Planet", { action: "scanPlanet", note: "Survey details" }),
-        situationActionButton("Claim Planet", { action: "claimPlanet", primary: planet.owner !== game.player.pilotName && !isProtectedSpace(current.number), disabled: planet.owner === game.player.pilotName || isProtectedSpace(current.number), note: planet.owner === game.player.pilotName ? "Already owned" : isProtectedSpace(current.number) ? "Protected Alliance territory" : "Claim from cockpit" }),
+        situationActionButton("Claim Planet", { action: "claimPlanet", primary: !access.blocked && planet.owner !== game.player.pilotName && !isProtectedSpace(current.number), disabled: planet.owner === game.player.pilotName || isProtectedSpace(current.number), note: planet.owner === game.player.pilotName ? "Already owned" : access.blocked ? access.reason : isProtectedSpace(current.number) ? "Protected Alliance territory" : "Claim from cockpit" }),
         situationActionButton("Continue Route", { action: "continueRoute", sector: current.number, note: "Return to map" }),
       ],
     };
@@ -2397,6 +2478,7 @@ function wireSituationCardButtons(scope = panels.sector) {
   scope.querySelectorAll("[data-action='scan']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(scanAnomaly); }));
   scope.querySelectorAll("[data-action='scanPlanet']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(scanPlanet); }));
   scope.querySelectorAll("[data-action='claimPlanet']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(claimPlanet); }));
+  scope.querySelectorAll("[data-action='planetAccess']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(() => resolvePlanetDefenseAttempt("Planet management access")); }));
   scope.querySelectorAll("[data-action='continueRoute']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); focusRouteFromSituation(button.dataset.sector); }));
 }
 
@@ -4116,10 +4198,14 @@ function renderPlanet(sector) {
     const protectedClaim = isProtectedSpace(sector.number);
     const claimDisabled = protectedClaim ? "disabled" : "";
     const claimReason = protectedClaim ? "Protected Alliance territory. Planet claiming is restricted in this sector." : "Frontier world available for a classroom-safe colony claim.";
-    return `<section class="planet-panel"><h3>${planet.name}</h3><p><span class="planet-type-badge">${planet.type}</span></p><p class="help-text">${planet.typeDescription}</p><div class="production-preview"><strong>Production Strengths:</strong> ${profile.profile.strengths}<br><strong>Current preview:</strong> ${formatProduction(preview)}</div><details class="compact-section"><summary>Scanner upgrade cap preview</summary><div class="planet-grid">${capStats}</div></details><details class="compact-section future-tech"><summary>Future Tech Potential</summary><p class="help-text">Descriptive scaffolding only; functional tech trees arrive in a later update.</p><ul>${techList}</ul></details><p class="help-text">${claimReason}</p><button data-action="claim" ${claimDisabled}>Claim Planet</button></section>`;
+    return `<section class="planet-panel"><h3>${planet.name}</h3><p><span class="planet-type-badge">${planet.type}</span></p><p class="help-text">${planet.typeDescription}</p><div class="planet-grid">${stat("Owner Status", "Unowned")}${stat("Defense Fighters", planet.stored.Fighters)}${stat("Access Allowed", protectedClaim ? "Claim blocked in protected space" : "Claim available")}</div><div class="production-preview"><strong>Production Strengths:</strong> ${profile.profile.strengths}<br><strong>Current preview:</strong> ${formatProduction(preview)}</div><details class="compact-section"><summary>Scanner upgrade cap preview</summary><div class="planet-grid">${capStats}</div></details><details class="compact-section future-tech"><summary>Future Tech Potential</summary><p class="help-text">Descriptive scaffolding only; functional tech trees arrive in a later update.</p><ul>${techList}</ul></details><p class="help-text">${claimReason}</p><button data-action="claim" ${claimDisabled}>Claim Planet</button></section>`;
+  }
+  const access = planetAccessStatus(planet, sector);
+  if (!access.allowed) {
+    return `<section class="planet-panel"><h3>${planet.name}</h3><p><span class="planet-type-badge">${planet.type}</span> <span class="defense-badge">Defense Rating: ${getPlanetDefenseRating(planet)}</span></p><p class="help-text">${planet.typeDescription}</p><div class="planet-grid">${stat("Owner Status", `Owned by ${planet.owner}`)}${stat("Defense Fighters", planet.stored.Fighters)}${stat("Access Allowed", "No")}${stat("Defense Rule", access.reason)}</div><p class="turn-warning"><strong>${access.label}:</strong> ${access.reason} Claiming, landing for storage, depositing, withdrawing, upgrades, and planet actions are blocked for non-owners.</p><div class="button-row"><button data-action="planetAccess">Request / Attempt Access</button><button data-action="claim">Claim Planet</button></div></section>`;
   }
   return `<section class="planet-panel"><h3>${planet.name}</h3><p><span class="planet-type-badge">${planet.type}</span> <span class="defense-badge">Defense Rating: ${getPlanetDefenseRating(planet)}</span></p><p class="help-text">${planet.typeDescription}</p>
-  <div class="planet-grid">${stat("Owner", planet.owner)}${stat("Stored Ore", planet.stored.Ore)}${stat("Stored Food", planet.stored.Food)}${stat("Stored Tech", planet.stored.Tech)}${stat("Stored Fighters", planet.stored.Fighters)}</div>
+  <div class="planet-grid">${stat("Owner Status", `Owned by ${planet.owner}`)}${stat("Access Allowed", "Yes")}${stat("Stored Ore", planet.stored.Ore)}${stat("Stored Food", planet.stored.Food)}${stat("Stored Tech", planet.stored.Tech)}${stat("Defense Fighters", planet.stored.Fighters)}</div>
   <div class="production-preview"><strong>Current Collection:</strong> ${formatProduction(preview)}</div>
   <h3>Planet Upgrade Tracks</h3><div class="planet-grid">${capStats}</div>
   <div class="planet-upgrade-grid">${PLANET_UPGRADE_TRACKS.map((track) => renderPlanetUpgradeCard(planet, track)).join("")}</div>
@@ -4180,7 +4266,8 @@ function wireLocationButtons(scope = panels.location) {
   scope.querySelector("[data-action='fillBalanced']")?.addEventListener("click", (event) => { pulseActionButton(event.currentTarget); runGameAction(fillBalancedCargo); });
   wirePlotSelectedRouteButtons(scope);
   scope.querySelectorAll("[data-action='sell']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(() => sellResource(button.dataset.resource, Number(button.dataset.amount))); }));
-  scope.querySelector("[data-action='claim']")?.addEventListener("click", () => runGameAction(claimPlanet));
+  scope.querySelectorAll("[data-action='claim']").forEach((button) => button.addEventListener("click", () => runGameAction(claimPlanet)));
+  scope.querySelectorAll("[data-action='planetAccess']").forEach((button) => button.addEventListener("click", () => runGameAction(() => resolvePlanetDefenseAttempt("Planet management access"))));
   scope.querySelectorAll("[data-action='deposit']").forEach((button) => button.addEventListener("click", () => runGameAction(() => depositToPlanet(button.dataset.resource, button.dataset.amount || 1))));
   scope.querySelectorAll("[data-action='upgradePlanet']").forEach((button) => button.addEventListener("click", () => runGameAction(() => upgradePlanet(button.dataset.track || "production"))));
   scope.querySelector("[data-action='collectProduction']")?.addEventListener("click", () => runGameAction(collectPlanetProduction));
@@ -4400,10 +4487,13 @@ function sellResource(resource, amount) {
 
 function claimPlanet() {
   const sector = sectorMap[game.player.currentSector];
-  if (sector?.homeworld) return addAndRender(`${LAMONT_PRIME_NAME} cannot be claimed or attacked. ${BEGINNER_SAFE_ZONE_COPY}`);
+  if (sector?.homeworld) return resolvePlanetDefenseAttempt("Claim attempt");
   if (!sector || sector.type !== "planet") return addAndRender("No claimable planet is available in this sector.");
   const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
-  if (planet.owner) return addAndRender(planet.owner === game.player.pilotName ? `${planet.name} is already owned by you.` : `${planet.name} is already owned by ${planet.owner}.`);
+  if (planet.owner) {
+    if (planet.owner === game.player.pilotName) return addAndRender(`${planet.name} is already owned by you.`);
+    return resolvePlanetDefenseAttempt("Claim attempt");
+  }
   if (isProtectedSpace(sector.number)) return addAndRender("Protected Alliance territory. Planet claiming is restricted in this sector. Hostile actions are disabled here.");
   planet.owner = game.player.pilotName;
   game.planets[planet.id] = planet;
@@ -4420,6 +4510,7 @@ function depositToPlanet(resource, amountValue = 1) {
   if (!sector || sector.type !== "planet") return addAndRender("No owned planet in this sector.");
   if (!RESOURCES.includes(resource)) return addAndRender("Planet storage unavailable.");
   const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
+  if (planet?.owner && planet.owner !== game.player.pilotName) return resolvePlanetDefenseAttempt("Cargo deposit access");
   if (!planet || !planet.stored || planet.owner !== game.player.pilotName) return addAndRender(planet?.owner ? "Cannot deposit cargo here." : "No owned planet in this sector.");
   const aboard = Math.max(0, Math.floor(Number(game.player.cargo?.[resource]) || 0));
   if (aboard <= 0) return addAndRender(`No ${resource} aboard.`);
@@ -4441,6 +4532,7 @@ function depositToPlanet(resource, amountValue = 1) {
 function upgradePlanet(track = "production") {
   const sector = sectorMap[game.player.currentSector];
   const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
+  if (planet.owner && planet.owner !== game.player.pilotName) return resolvePlanetDefenseAttempt("Planet upgrade access");
   if (!planet.owner || planet.owner !== game.player.pilotName) return addAndRender("Only your owned planets can be upgraded.");
   if (!PLANET_UPGRADE_TRACKS.includes(track)) return addAndRender("Unknown planet upgrade track.");
   const label = planetUpgradeLabel(track);
@@ -4495,6 +4587,7 @@ function collectPlanetProduction() {
 function transferPlanetFighters(direction, amountValue) {
   const sector = sectorMap[game.player.currentSector];
   const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
+  if (planet.owner && planet.owner !== game.player.pilotName) return resolvePlanetDefenseAttempt("Fighter storage access");
   if (planet.owner !== game.player.pilotName) return addAndRender("Only owned planets can transfer Fighters.");
   const shipSpace = Math.max(0, game.player.fighterCapacity - game.player.fighters);
   const max = direction === "load" ? Math.min(planet.stored.Fighters, shipSpace) : game.player.fighters;
