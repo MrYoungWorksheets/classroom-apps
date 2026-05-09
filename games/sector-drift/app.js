@@ -1185,7 +1185,7 @@ function migrateGameState(saved = {}) {
     merged.currentMission = rehydrateMission(safeObject(saved.currentMission));
     merged.missionFeedbackClass = typeof saved.missionFeedbackClass === "string" ? saved.missionFeedbackClass : "";
     merged.ui = { ...fresh.ui, ...savedUi };
-    if (!["cockpit", "starbase", "shipyard", "specialMissions", "planets", "combat", "achievements", "reputation", "captainLog", "settings", "launch", "adminPanel"].includes(merged.ui.activeScreen)) repairs.push("invalid screen restored to the cockpit");
+    if (!["cockpit", "starbase", "shipyard", "specialMissions", "planets", "combat", "achievements", "stats", "reputation", "captainLog", "settings", "launch", "adminPanel"].includes(merged.ui.activeScreen)) repairs.push("invalid screen restored to the cockpit");
     merged.ui.activeScreen = "cockpit";
     merged.ui.mapZoom = clampMapZoom(merged.ui.mapZoom);
     merged.ui.warpDestination = sectorMap[Number(merged.ui.warpDestination)] ? Number(merged.ui.warpDestination) : null;
@@ -1246,6 +1246,10 @@ function render() {
   const refreshed = refreshDailyTurns();
   const synced = syncProgressSystems();
   if (refreshed || synced) saveGame();
+  // ACTIVE RENDER FLOW: renderActiveScreen() is the single current entry point.
+  // Cockpit mode shows ship, tactical sector/map, and action panels.
+  // Docked mode hides the cockpit shell and renders one full-screen location/system panel.
+  // Legacy location renderers below are retained only when marked; do not wire new features to them.
   renderActiveScreen();
 }
 
@@ -1257,6 +1261,7 @@ const SCREEN_TITLES = {
   planets: ["Planets", "Claim, upgrade, store resources, and transfer planet fighters."],
   combat: ["Combat / Pirate Intel", "NPC pirate encounters, bounty data, and safe combat controls."],
   achievements: ["Achievements", "Unlocked milestones and progress notes."],
+  stats: ["Stats", "Compact career totals for exploration, trade, missions, and upgrades."],
   reputation: ["Reputation", "Alignment, combat rank, bounty record, and future reputation shop."],
   captainLog: ["Captain's Log", "Newest entries first with full recent history."],
   settings: ["Settings / Save", "Local save controls and prototype safety notes."],
@@ -1267,7 +1272,7 @@ const SCREEN_TITLES = {
 function screenNames() { return Object.keys(SCREEN_TITLES); }
 
 const COCKPIT_SCREEN = "cockpit";
-const LOCATION_MODE_SCREENS = ["starbase", "shipyard", "specialMissions", "planets", "combat", "achievements", "reputation", "captainLog", "settings", "adminPanel"];
+const LOCATION_MODE_SCREENS = ["starbase", "shipyard", "specialMissions", "planets", "combat", "achievements", "stats", "reputation", "captainLog", "settings", "adminPanel"];
 
 function isDockedMode(screen = activeScreenName()) {
   return LOCATION_MODE_SCREENS.includes(screen);
@@ -1307,6 +1312,10 @@ function activeScreenName() {
 }
 
 function renderActiveScreen() {
+  // CURRENT ACTIVE SCREENS:
+  // - cockpit: renderShipPanel(), renderSectorPanel(), renderActionPanel(), renderCockpit().
+  // - docked: renderDockedScreen() + renderScreenContent() for starbase, shipyard, missions,
+  //   planets, combat, achievements, stats, reputation, captain log, settings, and admin.
   updateLaunchGateFromAuth();
   const screen = activeScreenName();
   const cockpit = document.getElementById("cockpitDashboard");
@@ -1354,6 +1363,7 @@ function renderScreenContent(screen) {
   if (screen === "planets") return renderPlanetsScreen();
   if (screen === "combat") return renderCombatScreen();
   if (screen === "achievements") return renderAchievementsContent();
+  if (screen === "stats") return renderStatsPanel();
   if (screen === "reputation") return renderReputationScreen();
   if (screen === "captainLog") return renderCaptainLogScreen();
   if (screen === "settings") return renderSettingsScreen();
@@ -1377,6 +1387,7 @@ function renderActionPanel() {
     { screen: "planets", label: "Manage Planet", enabled: planetHere || ownedPlanetCount > 0, reason: planetHere ? "Planet in sector" : ownedPlanetCount ? `${ownedPlanetCount} owned planet${ownedPlanetCount === 1 ? "" : "s"}` : "No local or owned planets" },
     { screen: "combat", label: "Engage Pirate", enabled: pirateHere || Object.values(game.pirates || {}).some((pirate) => !pirate.defeated), reason: pirateHere ? "Pirate detected" : "Known NPC bounty ledger" },
     { screen: "achievements", label: "Achievements", enabled: true, reason: `${game.achievements.length} unlocked` },
+    { screen: "stats", label: "Stats", enabled: true, reason: `${(game.stats.visitedSectors || []).length} sectors · ${game.stats.missionsClaimed || 0} contracts` },
     { screen: "reputation", label: "Reputation", enabled: true, reason: `${reputationTitle(game.player.reputation)} · ${combatRankTitle()}` },
     { screen: "captainLog", label: "Captain's Log", enabled: true, reason: "Recent events" },
     { screen: "settings", label: "Settings / Save", enabled: true, reason: "Cloud login and local save controls" },
@@ -3030,6 +3041,12 @@ function renderAdminPanelScreen() {
   return `<div class="admin-panel-grid"><section class="mini-card admin-card"><h3>Teacher Identity</h3>${stat("Account", user.email || user.displayName || "unknown")}${stat("Role", cloudUiState.role)}${stat("UID", user.uid || "unknown")}<p class="reward-text">Teacher access confirmed.</p></section><section class="mini-card admin-card"><h3>Cloud Save / Recovery Tools</h3><div class="button-row"><button type="button" data-action="cloudBackupSave">Save Current Browser State to Cloud</button><button type="button" data-action="cloudBackupLoad">Load Cloud Save to Browser</button><button type="button" data-action="normalizeSave">Repair / Normalize Current Save</button><button type="button" data-action="exportSaveJson">Export Save JSON</button><button type="button" data-action="importSaveJson">Import Save JSON</button><button type="button" data-action="softResetSave">Soft Reset Current Browser Save</button><button type="button" class="danger-button" data-action="fullResetSave">Full Reset Current Browser Save</button></div></section><section class="mini-card admin-card"><h3>Classroom / Account Tools</h3><div class="button-row"><button type="button" data-action="viewAccount">View Current Account Record</button><button type="button" data-action="refreshRole">Refresh Role / Auth Status</button><button type="button" data-action="showUid">Show Firebase UID</button>${placeholderButton("Open Student / Teacher Help")}${placeholderButton("List Future Classroom Features")}</div></section><section class="mini-card admin-card"><h3>Admin Gameplay Tools</h3><div class="button-row"><button type="button" data-admin-grant="credits">Give Credits</button><button type="button" data-admin-grant="fuel">Give Fuel</button><button type="button" data-admin-grant="turns">Give Turns</button><button type="button" data-admin-grant="hull">Repair Hull</button><button type="button" data-admin-grant="fighters">Fill Fighters</button><button type="button" data-admin-grant="resources">Add Test Resources</button>${["Reveal Current Sector", "Reveal All Sectors", "Clear Current Pirate", "Clear Warp Destination", "Return to Sector 1", "Add Smuggled Inventory", "Remove Smuggled Inventory"].map(placeholderButton).join("")}</div></section><section class="mini-card admin-card"><h3>Classroom Controls Placeholder</h3><p class="help-text">Future multiplayer/classroom tools - not active yet</p><div class="button-row">${["Student Roster", "Reset Student Save", "Restore Student Save", "Freeze PvP", "Enable / Disable Combat", "Enable / Disable Smuggled Inventory Events", "Enable / Disable Local Prototype Mode", "Start New Season", "End Current Season"].map(placeholderButton).join("")}</div></section><section class="mini-card admin-card diagnostics-card"><h3>Diagnostics</h3><div class="stats-grid">${diagnostics}</div><div class="button-row">${placeholderButton("Copy Diagnostics")}</div></section></div>`;
 }
 
+// LEGACY RENDERERS:
+// renderLocationPanel(), renderPort(), renderShipyardPanel(), renderAsteroid(), and renderAnomaly()
+// are older location-panel paths from the pre-docked-screen UI. The active cockpit flow now uses
+// renderSituationCard() for asteroid/anomaly actions, renderStarbaseScreen() for ports, and
+// renderShipyardScreen() for shipyards. These are retained temporarily as unsafe-to-remove
+// fallback/reference renderers because their helpers still share active button wiring and services.
 function renderLocationPanel() {
   const sector = sectorMap[game.player.currentSector];
   let html = `<h2 id="locationHeading">Location Actions</h2>`;
@@ -3043,6 +3060,7 @@ function renderLocationPanel() {
   wireLocationButtons();
 }
 
+// LEGACY RENDERER: older port panel; active ports use renderStarbaseScreen().
 function renderPort(sector) {
   return `<p><span class="badge">${sector.portType}</span>${sector.hasShipyard ? ` <span class="badge soft-badge">Shipyard</span>` : ""}</p><p class="help-text">${sector.marketNote}</p><p class="help-text"><strong>Trade tip:</strong> ${sector.tradeTip}</p><div class="trade-grid">${RESOURCES.map((resource) => {
     const price = sector.portPrices[resource];
@@ -3072,6 +3090,7 @@ function renderRepairPanel(sector) {
   return `<h3>Repair Service</h3><div class="mini-card">${stat("Hull", `${game.player.hull}/${game.player.maxHull}`)}${stat("Full Repair", `${cost} credits`)}${discount ? stat("Assist Discount", `${discount} credits`) : ""}<button data-action="repair" ${baseCost <= 0 || game.player.credits < cost ? "disabled" : ""}>Repair Hull</button></div>`;
 }
 
+// LEGACY RENDERER: older embedded shipyard; active shipyards use renderShipyardScreen().
 function renderShipyardPanel() {
   return `<details class="compact-section shipyard-section" open><summary>Shipyard Services</summary>${renderFighterPurchasePanel()}<h3>Shipyard Ships</h3><div class="trade-grid">${Object.values(SHIPS).map((ship) => {
     const owned = game.player.ownedShips.includes(ship.id);
@@ -3198,12 +3217,14 @@ function renderPlanetFighterTransfer(planet) {
   return `<div class="fighter-transfer mini-card"><h3>Fighter Transfer</h3>${stat("Ship Fighters", `${game.player.fighters}/${game.player.fighterCapacity}`)}${stat("Planet Fighters", planet.stored.Fighters)}<p class="help-text">Planet Fighters do not use cargo space. Transfers respect ship fighter capacity.</p><div class="button-row"><button data-action="loadPlanetFighters" data-amount="1" ${canLoad ? "" : "disabled"}>Load 1 Fighter to Ship</button><button data-action="loadPlanetFighters" data-amount="10" ${canLoad ? "" : "disabled"}>Load 10 Fighters to Ship</button><button data-action="loadPlanetFighters" data-amount="max" ${canLoad ? "" : "disabled"}>Load Max Fighters to Ship</button><button data-action="unloadPlanetFighters" data-amount="1" ${canUnload ? "" : "disabled"}>Unload 1 Fighter</button><button data-action="unloadPlanetFighters" data-amount="10" ${canUnload ? "" : "disabled"}>Unload 10 Fighters</button><button data-action="unloadPlanetFighters" data-amount="max" ${canUnload ? "" : "disabled"}>Unload Max Fighters</button></div></div>`;
 }
 
+// LEGACY RENDERER: older asteroid markup; active mining is reached from renderSituationCard().
 function renderAsteroid() {
   const disabled = game.player.fuel <= 0 || game.player.turns <= 0 || cargoSpaceLeft() <= 0;
   const sector = sectorMap[game.player.currentSector];
   return `<h3>Asteroid Field</h3><p>Spend 1 turn and 1 fuel to mine Ore. Scanner upgrades improve results.${sector.dangerLevel > 0 ? " Dangerous sectors may damage hull after mining." : ""}</p><button data-action="mine" ${disabled ? "disabled" : ""}>Mine Asteroids</button>${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : game.player.fuel <= 0 ? `<p class="cooldown">Fuel is empty.</p>` : cargoSpaceLeft() <= 0 ? `<p class="cooldown">Cargo is full.</p>` : ""}`;
 }
 
+// LEGACY RENDERER: older anomaly markup; active scans are reached from renderSituationCard().
 function renderAnomaly() {
   return `<h3>Mysterious Anomaly</h3><p>Spend 1 turn to scan carefully. Better scanners improve your chance of helpful discoveries.</p><button data-action="scan" ${game.player.turns <= 0 ? "disabled" : ""}>Scan Anomaly</button>${game.player.turns <= 0 ? `<p class="cooldown">Out of turns. Complete math missions for bonus turns or wait for the next daily turn grant.</p>` : ""}`;
 }
@@ -3311,10 +3332,11 @@ function renderAchievementsPanel() {
 }
 
 function renderStatsPanel() {
-  const s = game.stats;
-  panels.stats.innerHTML = `<h2 id="statsHeading">Career Stats</h2><details class="compact-section"><summary>Show career stats</summary><div class="stats-grid">
-    ${stat("Rank", currentRank())}${stat("Reputation", game.player.reputation)}${stat("Reputation Title", reputationTitle(game.player.reputation))}${stat("Combat Rank", combatRankTitle())}${stat("Next Combat Rank", nextCombatRankProgress())}${stat("Pirates Defeated", game.player.piratesDefeated)}${stat("Combat Wins", game.player.combatWins)}${stat("Combat Losses", game.player.combatLosses)}${stat("Ships Captured", game.player.shipsCaptured)}${stat("Fighters Lost", game.player.fightersLost || 0)}${stat("Fighters Destroyed", game.player.fightersDestroyed || 0)}${stat("Hull Damage Taken", game.player.playerHullDamageTaken || 0)}${stat("Pirate Hull Damaged", game.player.pirateHullDamageDealt || 0)}${stat("Fighters Bought", game.player.fightersBought || 0)}${stat("Fighters Sold", game.player.fightersSold || 0)}${stat("Bounties Earned", game.player.bountiesEarned || 0)}${stat("Strongholds Cleared", game.player.strongholdsCleared || 0)}${stat("Visited Sectors", s.visitedSectors.length)}${stat("Trade Credits", s.creditsEarnedFromTrade)}${stat("Resources Mined", s.resourcesMined)}${stat("Ore Mined", s.oreMined)}${stat("Math Missions", s.mathMissionsCompleted)}${stat("Basic Missions", s.basicMissionsCompleted || 0)}${stat("Standard Missions", s.standardMissionsCompleted || 0)}${stat("Advanced Missions", s.advancedMissionsCompleted || 0)}${stat("Expert Missions", s.expertMissionsCompleted || 0)}${stat("Elite Missions", s.eliteMissionsCompleted || 0)}${stat("Planets Claimed", s.planetsClaimed)}${stat("Anomalies Scanned", s.anomaliesScanned)}${stat("Resources Deposited", s.resourcesDeposited)}${stat("Planet Upgrades", s.planetUpgrades)}${stat("Planet Collections", s.planetProductionCollected || 0)}${stat("Planet Ore Produced", s.planetOreProduced || 0)}${stat("Planet Food Produced", s.planetFoodProduced || 0)}${stat("Planet Tech Produced", s.planetTechProduced || 0)}${stat("Planet Fighters Produced", s.planetFightersProduced || 0)}${stat("Highest Planet Production", s.highestPlanetProductionLevel || 1)}${stat("Highest Planet Defense", s.highestPlanetDefenseRating || 0)}${stat("Tech Sold", s.techSold)}${stat("Board Missions", s.missionsClaimed)}${stat("Resources Sold", s.resourcesSold)}
-  </div></details>`;
+  const s = game.stats || {};
+  const cargoMoved = RESOURCES.reduce((total, resource) => total + (game.player.cargo[resource] || 0), 0) + (s.resourcesSold || 0) + (s.resourcesDeposited || 0);
+  const upgradesPurchased = Object.values(game.player.upgrades || {}).reduce((total, level) => total + Math.max(0, (level || 1) - 1), 0) + (s.planetUpgrades || 0);
+  const missionsCompleted = (s.mathMissionsCompleted || 0) + (s.missionsClaimed || 0);
+  return `<section class="mini-card stats-intro"><p class="eyebrow">Active Stats Screen</p><h3>Career Stats</h3><p class="help-text">Lightweight classroom-friendly totals pulled from the current save. This is now an active docked screen, not the old orphaned stats panel.</p></section><div class="screen-grid stats-screen-grid"><section class="mini-card"><h3>Progress</h3><div class="stats-grid">${stat("Sectors Explored", (s.visitedSectors || game.visitedSectors || []).length)}${stat("Reputation", game.player.reputation)}${stat("Rank", currentRank())}${stat("Combat Rank", combatRankTitle())}${stat("Missions Completed", missionsCompleted)}${stat("Math Missions", s.mathMissionsCompleted || 0)}${stat("Board Missions", s.missionsClaimed || 0)}</div></section><section class="mini-card"><h3>Trade and Cargo</h3><div class="stats-grid">${stat("Credits Earned", (s.creditsEarnedFromTrade || 0) + (game.player.bountiesEarned || 0))}${stat("Trades Completed", s.resourcesSold || 0)}${stat("Cargo Moved", cargoMoved)}${stat("Resources Sold", s.resourcesSold || 0)}${stat("Resources Deposited", s.resourcesDeposited || 0)}</div></section><section class="mini-card"><h3>Exploration and Combat</h3><div class="stats-grid">${stat("Mining Total", s.resourcesMined || 0)}${stat("Ore Mined", s.oreMined || 0)}${stat("Anomaly Scans", s.anomaliesScanned || 0)}${stat("Pirates Defeated", game.player.piratesDefeated || 0)}${stat("Bounties Earned", game.player.bountiesEarned || 0)}</div></section><section class="mini-card"><h3>Growth</h3><div class="stats-grid">${stat("Planets Claimed", s.planetsClaimed || 0)}${stat("Ship Upgrades Purchased", upgradesPurchased)}${stat("Planet Upgrades", s.planetUpgrades || 0)}${stat("Fighters Bought", game.player.fightersBought || 0)}${stat("Ships Captured", game.player.shipsCaptured || 0)}</div></section></div>`;
 }
 
 function renderLogPanel() {

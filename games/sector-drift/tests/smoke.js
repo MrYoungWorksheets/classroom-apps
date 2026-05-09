@@ -868,6 +868,11 @@ vm.runInContext(`
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
   game.player.currentSector = 1;
+  renderActionPanel();
+  assert(panels.action.innerHTML.includes('data-screen="stats"') && panels.action.innerHTML.includes('<strong>Stats</strong>'), 'cockpit action menu exposes active Stats screen');
+  openScreen('stats');
+  assert(game.ui.activeScreen === 'stats' && panels.docked.innerHTML.includes('Active Stats Screen') && panels.docked.innerHTML.includes('Sectors Explored'), 'Stats screen renders as an active docked screen');
+  closeScreen();
   openScreen('starbase');
   assert(panels.docked.innerHTML.includes('Docking Ledger'), 'starbase docking ledger starts when docking');
   const oreBuy = sectorMap[1].portPrices.Ore.buy;
@@ -935,6 +940,8 @@ vm.runInContext(`
   assert(source.includes('const REQUIRE_FIREBASE_LOGIN = true'), 'app.js should define login-first requirement');
   assert(source.includes('function renderLaunchScreen()'), 'launch/login screen renderer should exist');
   assert(source.includes('function renderAdminPanelScreen()'), 'teacher Admin Panel renderer should exist');
+  assert(source.includes('LEGACY RENDERERS') && source.includes('renderStarbaseScreen()') && source.includes('renderShipyardScreen()'), 'legacy renderers are labeled separately from active docked screens');
+  assert(screenNames().includes('stats') && LOCATION_MODE_SCREENS.includes('stats'), 'Stats is registered as an active docked screen');
   const firebaseClientSource = fs.readFileSync('games/sector-drift/firebase-client.js', 'utf8');
   assert(firebaseClientSource.includes('ensureUserProfile'), 'firebase-client should keep user profile helper');
   assert(firebaseClientSource.includes('role: "student"'), 'firebase-client should create first sign-in users as students');
