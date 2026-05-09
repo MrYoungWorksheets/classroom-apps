@@ -4329,42 +4329,33 @@ function submitMissionAnswer() {
 function handleDevCode(input) {
   const code = String(input).trim();
   if (code === "9999") {
-    game.player.turns = game.player.maxTurns;
-    game.player.fuel = game.player.maxFuel;
-    game.player.credits += 2000;
-    game.player.hull = game.player.maxHull;
-    game.missionFeedback = "Dev code accepted. Testing resources granted.";
+    const message = "Dev credits granted: +30,000 credits.";
+    game.player.credits += 30000;
+    game.missionFeedback = message;
     game.missionFeedbackClass = "correct";
-    addLog("Dev code 9999 applied: turns, fuel, credits, and hull restored for testing.");
+    setSectorActionResult("Dev Credits Granted", message, { type: "positive", gained: ["+30,000 credits"], eventType: "dev-code" });
+    addLog(message);
     saveGame();
     render();
     return true;
   }
   if (code === "6767") {
-    const added = { Ore: 10, Food: 10, Tech: 10 };
-    RESOURCES.forEach((resource) => { game.player.cargo[resource] += added[resource]; });
-    let overflow = Math.max(0, cargoUsed() - game.player.cargoCapacity);
-    let jettisoned = 0;
-    let newlyAddedJettisoned = 0;
+    const message = "Dev cargo loaded: balanced Ore/Food/Tech added at no cost.";
+    const remainingSpace = Math.max(0, cargoSpaceLeft());
+    const added = RESOURCES.reduce((totals, resource) => { totals[resource] = 0; return totals; }, {});
+    for (let index = 0; index < remainingSpace; index += 1) {
+      const resource = RESOURCES[index % RESOURCES.length];
+      added[resource] += 1;
+    }
     RESOURCES.forEach((resource) => {
-      if (overflow <= 0) return;
-      const removed = Math.min(game.player.cargo[resource], added[resource], overflow);
-      game.player.cargo[resource] -= removed;
-      overflow -= removed;
-      jettisoned += removed;
-      newlyAddedJettisoned += removed;
+      if (added[resource] <= 0) return;
+      game.player.cargo[resource] += added[resource];
+      updateCargoCostOnBuy(resource, added[resource], 0);
     });
-    RESOURCES.forEach((resource) => {
-      if (overflow <= 0) return;
-      const removed = Math.min(game.player.cargo[resource], overflow);
-      game.player.cargo[resource] -= removed;
-      overflow -= removed;
-      jettisoned += removed;
-    });
-    const kept = Math.max(0, 30 - newlyAddedJettisoned);
-    game.missionFeedback = jettisoned > 0 ? "Dev code accepted. Added test resources; overflow was jettisoned." : "Dev code accepted. Added 10 of each resource.";
+    game.missionFeedback = message;
     game.missionFeedbackClass = "correct";
-    addLog(`Dev code 6767 applied: added test resources. Kept ${kept} unit${kept === 1 ? "" : "s"}; cargo overflow jettisoned ${jettisoned} unit${jettisoned === 1 ? "" : "s"}.`);
+    setSectorActionResult("Dev Cargo Loaded", message, { type: "positive", gained: RESOURCES.filter((resource) => added[resource] > 0).map((resource) => `+${added[resource]} ${resource}`), eventType: "dev-code" });
+    addLog(message);
     saveGame();
     render();
     return true;
@@ -4463,13 +4454,18 @@ function attachMissionChecker(base) {
 
 function applyDevCode(input) {
   if (normalize(input) === "8888") {
-    game.player.fighterCapacity = calculateFighterCapacity(currentShip(), game.player.upgrades);
+    const ship = currentShip();
+    const message = "Combat readiness maximized: fighters, hull, and fuel restored.";
+    game.player.fighterCapacity = calculateFighterCapacity(ship, game.player.upgrades);
+    game.player.maxHull = ship.maxHull + Math.max(0, (game.player.upgrades.shield || 1) - 1) * 4;
+    game.player.maxFuel = calculateFuelCapacity(ship, game.player.upgrades);
     game.player.fighters = game.player.fighterCapacity;
     game.player.hull = game.player.maxHull;
-    game.player.credits += 1000;
-    game.missionFeedback = "Combat testing systems loaded.";
+    game.player.fuel = game.player.maxFuel;
+    game.missionFeedback = message;
     game.missionFeedbackClass = "correct";
-    addLog("Dev code 8888 applied: combat testing systems loaded.");
+    setSectorActionResult("Combat Readiness Maximized", message, { type: "positive", gained: ["fighters restored", "hull repaired", "fuel filled"], eventType: "dev-code" });
+    addLog(message);
     saveGame();
     render();
     return true;
