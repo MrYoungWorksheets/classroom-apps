@@ -40,6 +40,12 @@ let latestPresenceSnapshot = [];
 let latestPublicEventsSnapshot = [];
 let presenceListenError = "";
 let publicEventsListenError = "";
+let lastPublicProfileSignature = "";
+let lastPublicProfileWriteAt = 0;
+let lastPublicEventSignature = "";
+let lastPublicEventWriteAt = 0;
+const PUBLIC_PROFILE_CLIENT_THROTTLE_MS = 30000;
+const PUBLIC_EVENT_CLIENT_THROTTLE_MS = 60000;
 
 function friendlyError(error, fallback = "Firebase is unavailable right now. Local save still works.") {
   if (!error) return fallback;
@@ -263,6 +269,11 @@ async function updatePublicProfile(input = {}) {
     if (!ready.ok) return ready;
     if (!currentUser) return failure("Public profile skipped: signed out. Competitive leaderboards require Google sign-in.");
     const payload = publicProfilePayload(input, currentUser);
+    const signature = JSON.stringify({ ...payload, lastSeenAt: null });
+    const nowMs = Date.now();
+    if (signature === lastPublicProfileSignature && nowMs - lastPublicProfileWriteAt < PUBLIC_PROFILE_CLIENT_THROTTLE_MS) return success({ uid: currentUser.uid, throttled: true, data: payload });
+    lastPublicProfileSignature = signature;
+    lastPublicProfileWriteAt = nowMs;
     await setDoc(doc(db, "sectorDriftPublicProfiles", currentUser.uid), payload, { merge: true });
     return success({ uid: currentUser.uid, path: `sectorDriftPublicProfiles/${currentUser.uid}`, data: payload });
   } catch (error) {
@@ -276,6 +287,11 @@ async function createPublicEvent(input = {}) {
     if (!ready.ok) return ready;
     if (!currentUser) return failure("Public event skipped: signed out. Competitive activity requires Google sign-in.");
     const payload = publicEventPayload(input, currentUser);
+    const signature = JSON.stringify({ eventType: payload.eventType, message: payload.message, sectorNumber: payload.sectorNumber || 0, uid: payload.uid });
+    const nowMs = Date.now();
+    if (signature === lastPublicEventSignature && nowMs - lastPublicEventWriteAt < PUBLIC_EVENT_CLIENT_THROTTLE_MS) return success({ throttled: true, data: payload });
+    lastPublicEventSignature = signature;
+    lastPublicEventWriteAt = nowMs;
     const ref = await addDoc(collection(db, "sectorDriftPublicEvents"), payload);
     return success({ id: ref.id, path: `sectorDriftPublicEvents/${ref.id}`, data: payload });
   } catch (error) {
@@ -390,7 +406,6 @@ function onPublicEventsChange(callback) {
     return () => publicEventListeners.delete(callback);
   } catch (error) {
     publicEventsListenError = friendlyError(error, "Competitive activity feed unavailable. Local play continues.");
-    console.warn("Sector Drift public events callback failed", error);
     return () => {};
   }
 }
@@ -412,7 +427,6 @@ function onPresenceChange(callback) {
     return () => presenceListeners.delete(callback);
   } catch (error) {
     presenceListenError = friendlyError(error, "Live sector traffic unavailable. Local play continues.");
-    console.warn("Sector Drift presence callback failed", error);
     return () => {};
   }
 }
@@ -472,7 +486,7 @@ async function loadCloudBackup() {
 function notifyAuthListeners() {
   const payload = { user: safeUser(currentUser), role: currentRole, roleReason: currentRoleReason, status: getFirebaseStatus() };
   authListeners.forEach((listener) => {
-    try { listener(payload); } catch (error) { console.warn("Sector Drift Firebase listener failed", error); }
+    try { listener(payload); } catch (error) { /* keep classroom clients quiet if one listener fails */ }
   });
 }
 
@@ -483,7 +497,6 @@ function onFirebaseAuthChange(callback) {
     callback({ user: safeUser(currentUser), role: currentRole, roleReason: currentRoleReason, status: getFirebaseStatus() });
     return () => authListeners.delete(callback);
   } catch (error) {
-    console.warn("Sector Drift Firebase auth callback failed", error);
     return () => {};
   }
 }
@@ -535,5 +548,5 @@ window.SectorDriftFirebase = {
 try {
   window.dispatchEvent(new Event("sectorDriftFirebaseReady"));
 } catch (error) {
-  console.warn("Sector Drift Firebase ready event failed", error);
+  // Local play is unaffected if the ready event cannot be dispatched.
 }

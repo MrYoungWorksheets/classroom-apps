@@ -1882,3 +1882,178 @@ button.button-admin {
   gap: 0.1rem;
   padding: 0.45rem 0.55rem;
 }
+
+/* Classroom launch pass: onboarding, status clarity, readability, and competitive polish. */
+.connection-strip {
+  background: rgba(43, 212, 217, 0.07);
+  border: 1px solid rgba(43, 212, 217, 0.28);
+  border-radius: 13px;
+  margin: 0 0 0.75rem;
+  padding: 0.65rem;
+}
+
+.connection-strip-title,
+.connection-pill-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: space-between;
+}
+
+.connection-strip-title span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.connection-pill-row {
+  justify-content: flex-start;
+  margin-top: 0.45rem;
+}
+
+.connection-pill {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  display: inline-grid;
+  gap: 0.05rem;
+  max-width: 100%;
+  padding: 0.24rem 0.6rem;
+}
+
+.connection-pill strong {
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.connection-pill em {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+}
+
+.connection-good { background: rgba(142, 246, 178, 0.1); border-color: rgba(142, 246, 178, 0.42); }
+.connection-warn { background: rgba(255, 184, 107, 0.1); border-color: rgba(255, 184, 107, 0.42); }
+.connection-neutral { background: rgba(255, 255, 255, 0.055); border-color: rgba(255, 255, 255, 0.14); }
+
+.guided-start-host {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  margin: 0 auto;
+  max-width: 1540px;
+  padding: 0 1rem 1rem;
+}
+
+.guided-start {
+  display: grid;
+  margin-top: 0.25rem;
+  place-items: center;
+}
+
+.guided-start-card {
+  background: linear-gradient(135deg, rgba(255, 209, 102, 0.16), rgba(43, 212, 217, 0.1)), rgba(7, 16, 20, 0.96);
+  border: 1px solid rgba(255, 209, 102, 0.48);
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28), 0 0 22px rgba(255, 209, 102, 0.08);
+  max-width: 46rem;
+  padding: 0.9rem;
+  width: 100%;
+}
+
+.guided-start-card h3 {
+  color: var(--text);
+  margin-top: 0;
+}
+
+.guided-start-card p {
+  margin: 0.35rem 0 0;
+}
+
+.cockpit-helper {
+  background: rgba(142, 246, 178, 0.07);
+  border: 1px solid rgba(142, 246, 178, 0.28);
+  border-radius: 14px;
+  padding: 0.75rem;
+}
+
+.cockpit-helper h3 {
+  margin-top: 0;
+}
+
+.cockpit-helper ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
+button:disabled,
+.button-disabled-explained {
+  border-style: dashed;
+}
+
+button:disabled + .disabled-reason,
+.disabled-reason {
+  color: var(--warn);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.action-menu button:hover:not(:disabled),
+.action-menu button:focus-visible:not(:disabled),
+.situation-actions button:hover:not(:disabled),
+.situation-actions button:focus-visible:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.action-menu button:active:not(:disabled),
+.situation-actions button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.competitive-feed li.latest {
+  background: rgba(255, 209, 102, 0.12);
+  border-left-color: var(--accent);
+}
+
+.rank-badge,
+.you-badge {
+  border-radius: 999px;
+  display: inline-block;
+  font-weight: 900;
+  padding: 0.12rem 0.45rem;
+}
+
+.rank-badge {
+  background: rgba(255, 209, 102, 0.14);
+  color: var(--accent);
+}
+
+.you-badge {
+  background: var(--good);
+  color: #06130b;
+  font-size: 0.72rem;
+  margin-left: 0.35rem;
+  text-transform: uppercase;
+}
+
+.leaderboard-table tr.current-player-row {
+  background: rgba(142, 246, 178, 0.1);
+  outline: 1px solid rgba(142, 246, 178, 0.35);
+}
+
+@media (max-width: 720px) {
+  .connection-pill-row,
+  .connection-strip-title {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .connection-pill {
+    border-radius: 12px;
+  }
+}
