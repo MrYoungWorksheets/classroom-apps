@@ -49,7 +49,9 @@ const ALLOW_LOCAL_PROTOTYPE_MODE = true;
 const PRESENCE_ONLINE_WINDOW_MS = 4 * 60 * 1000;
 const LIVE_EVENT_LIMIT = 5;
 const COMPETITIVE_EVENT_LIMIT = 20;
-const COMPETITIVE_PROFILE_WRITE_THROTTLE_MS = 45 * 1000;
+const COMPETITIVE_PROFILE_WRITE_THROTTLE_MS = 60 * 1000;
+const COMPETITIVE_EVENT_THROTTLE_MS = 90 * 1000;
+const CLASSROOM_BUILD_LABEL = "Classroom Launch Pass 2026-05";
 const SHIP_UPGRADE_OPTIONS = [
   { key: "cargoHold", label: "Cargo Hold", description: `Cargo capacity increases by ${CARGO_HOLD_CAPACITY_BONUS} units per level.`, success: "Cargo capacity increased." },
   { key: "engine", label: "Engine", description: "Max fuel, daily turn grant, and turn bank improve.", success: "Fuel capacity and route endurance improved." },
@@ -316,7 +318,7 @@ let presenceUnsubscribe = null;
 let liveEvents = [];
 let liveEventPulseToken = 0;
 const sectorTrafficState = { status: "local mode", message: "Sector traffic unavailable. Local prototype mode active.", records: [], listening: false, initialized: false, knownSectors: new Map(), currentSectorOccupants: [] };
-const competitiveState = { leaderboards: {}, publicEvents: [], eventsStatus: "local mode", eventsMessage: "Competitive leaderboards require Google sign-in.", eventsListening: false, loadingBoards: false, lastProfileWriteAt: 0, lastProfileSignature: "", lastEventSignature: "", lastRefreshAt: 0 };
+const competitiveState = { leaderboards: {}, publicEvents: [], eventsStatus: "local mode", eventsMessage: "Competitive leaderboards require Google sign-in.", eventsListening: false, loadingBoards: false, lastProfileWriteAt: 0, lastProfileSignature: "", lastEventSignature: "", lastEventAt: 0, recentEventSignatures: new Map(), lastRefreshAt: 0 };
 const cloudUiState = { status: "not initialized", message: "Cloud backup unavailable until Firebase finishes loading.", busy: false, user: null, role: "unknown", roleReason: "Waiting for Firebase role lookup.", lastCloudResult: "No cloud action this session." };
 const launchGate = { mode: "checkingAuth", message: "Checking classroom sign-in status...", enteredAt: Date.now() };
 
@@ -1031,7 +1033,7 @@ function defaultGameState() {
     revealedSectors: [1],
     activeMissions: missionTemplates().slice(0, 3).map((mission) => createActiveMission(mission.id)),
     completedMissions: [],
-    tutorial: { completedSteps: [], finished: false },
+    tutorial: { completedSteps: [], finished: false, guidedStartComplete: false, guidedStartStep: 0 },
     achievements: [],
     stats: defaultStats(),
     log: ["Welcome to Sector Drift. Start at Sector 1 and move at your own pace."],
@@ -1392,7 +1394,6 @@ function recordRecovery(message) {
   if (!sessionRecoveryMessages.includes(text)) sessionRecoveryMessages.unshift(text);
   sessionRecoveryMessages = sessionRecoveryMessages.slice(0, 6);
   localSaveStatus = text;
-  try { console.warn(`Sector Drift recovery: ${text}`); } catch (error) { /* console may be unavailable in unusual test shells */ }
 }
 
 function safeObject(value, fallback = {}) {
@@ -1580,6 +1581,8 @@ function migrateGameState(saved = {}) {
     }
     merged.tutorial = { ...fresh.tutorial, ...safeObject(saved.tutorial) };
     if (!Array.isArray(merged.tutorial.completedSteps)) merged.tutorial.completedSteps = [];
+    merged.tutorial.guidedStartComplete = Boolean(merged.tutorial.guidedStartComplete || merged.tutorial.finished);
+    merged.tutorial.guidedStartStep = clampNumber(merged.tutorial.guidedStartStep, 0, 4, 0);
     merged.achievements = safeArray(saved.achievements);
     merged.stats = { ...fresh.stats, ...savedStats };
     Object.keys(fresh.stats).forEach((key) => {
@@ -1604,6 +1607,11 @@ function migrateGameState(saved = {}) {
     merged.ui.mapZoom = clampMapZoom(merged.ui.mapZoom);
     merged.ui.warpDestination = sectorMap[Number(merged.ui.warpDestination)] ? Number(merged.ui.warpDestination) : null;
     merged.ui.exploratoryWarp = Boolean(merged.ui.exploratoryWarp);
+    if (safeObject(savedUi.hyperdriveRecovery, null)) {
+      const target = Number(savedUi.hyperdriveRecovery.target);
+      merged.ui.warpDestination = sectorMap[target] ? target : merged.ui.warpDestination;
+      repairs.push("hyperdrive route recovered after refresh");
+    }
     merged.ui.lastSectorActionResult = normalizeSectorActionResult(savedUi.lastSectorActionResult);
     merged.deliveryQuests = migrateDeliveryQuests(safeArray(saved.deliveryQuests));
     merged.stationActivities = migrateStationActivities(safeObject(saved.stationActivities));
@@ -1774,7 +1782,14 @@ function renderActiveScreen() {
 }
 
 function renderCockpit() {
-  if (panels.docked) panels.docked.innerHTML = "";
+  const overlay = renderGuidedStartOverlay();
+  if (panels.docked) {
+    panels.docked.hidden = !overlay;
+    panels.docked.className = "guided-start-host";
+    panels.docked.innerHTML = overlay;
+  }
+  panels.docked?.querySelector("[data-action='guidedStartNext']")?.addEventListener("click", advanceGuidedStart);
+  panels.docked?.querySelector("[data-action='guidedStartSkip']")?.addEventListener("click", completeGuidedStart);
 }
 
 function renderDockedScreen(title, subtitle, contentHtml) {
@@ -1829,7 +1844,7 @@ function renderActionPanel() {
     { screen: "settings", label: "Settings / Save", enabled: true, reason: "Cloud login and local save controls" },
   ];
   if (isTeacher()) actions.push({ screen: "adminPanel", label: "Admin Panel", enabled: true, reason: "Teacher-only classroom tools" });
-  panels.action.innerHTML = `<h2 id="actionHeading">Cockpit Actions</h2><p class="help-text">${gateOpen ? "Compact summaries only: choose a location, then the cockpit gets out of the way." : authGateMessage()}</p><div class="cockpit-availability"><p>${sector.type === "port" ? "Starbase available" : "No starbase here"}</p><p>${sector.hasShipyard ? "Shipyard available" : "No shipyard here"}</p><p>${pirateHere ? "Pirate detected" : "No pirate in sector"}</p><p>${sector.homeworld ? "Lamont Prime protected" : planetHere ? "Planet in sector" : ownedPlanetCount ? "Owned planets available" : "No planet in sector"}</p><p>Mission terminal available</p></div><div class="action-menu">${actions.map((action) => `<button type="button" class="${action.screen === "adminPanel" ? "button-admin" : action.enabled ? "button-secondary" : ""}" data-screen="${action.screen}" ${action.enabled && (gateOpen || action.screen === "settings") ? "" : "disabled"}><strong>${action.label}</strong><span>${gateOpen || action.screen === "settings" ? action.reason : "Launch required"}</span></button>`).join("")}</div>${gateOpen ? renderEmergencyWarpControl() : ""}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 5).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
+  panels.action.innerHTML = `${renderConnectionStatusStrip()}<h2 id="actionHeading">Cockpit Actions</h2><p class="help-text">${gateOpen ? "Choose one clear action. Disabled buttons explain why they are unavailable." : authGateMessage()}</p><div class="cockpit-availability"><p>${sector.type === "port" ? "Starbase available" : "No starbase here"}</p><p>${sector.hasShipyard ? "Shipyard available" : "No shipyard here"}</p><p>${pirateHere ? "Pirate detected" : "No pirate in sector"}</p><p>${sector.homeworld ? "Lamont Prime protected" : planetHere ? "Planet in sector" : ownedPlanetCount ? "Owned planets available" : "No planet in sector"}</p><p>Mission terminal available</p></div><div class="action-menu">${actions.map((action) => { const enabled = action.enabled && (gateOpen || action.screen === "settings"); const reason = gateOpen || action.screen === "settings" ? action.reason : "Launch required"; return `<button type="button" class="${action.screen === "adminPanel" ? "button-admin" : enabled ? "button-secondary" : "button-disabled-explained"}" data-screen="${action.screen}" title="${safeDisplayText(reason)}" ${enabled ? "" : "disabled"}><strong>${action.label}</strong><span>${safeDisplayText(reason)}</span></button>`; }).join("")}</div>${gateOpen ? renderEmergencyWarpControl() : ""}<section class="cockpit-summary"><h3>Latest Log</h3><ol class="log-list compact-log">${game.log.slice(0, 5).map((entry) => `<li>${entry}</li>`).join("")}</ol></section>`;
   panels.action.querySelectorAll("[data-screen]").forEach((button) => button.addEventListener("click", () => openScreen(button.dataset.screen)));
   panels.action.querySelector("[data-action='emergencyWarp']")?.addEventListener("click", emergencyWarp);
 }
@@ -1864,9 +1879,11 @@ function renderSectorPanel() {
   const danger = canSeeDanger(sector.number) && sector.dangerLevel > 0 ? `${HAZARD_TYPES[sector.hazardType].icon} Danger ${sector.dangerLevel}: ${HAZARD_TYPES[sector.hazardType].label}` : "Danger unknown";
   panels.sector.innerHTML = `
     <h2 id="sectorHeading">Tactical Cockpit</h2>
+    ${renderConnectionStatusStrip()}
     ${renderLiveEventBox()}
     ${renderCurrentSituation(sector, danger)}
     ${renderNavigationIntel()}
+    ${renderContextualHelper()}
     ${renderSectorTraffic()}
     <section class="viewer-map" aria-label="Interactive sector map">
       <div class="viewer-map-heading"><h3>Lane Map</h3><p class="help-text">Tap a node once to scan. Tap an adjacent selected node again to travel.</p></div>
@@ -2121,6 +2138,8 @@ function engageHyperdrive() {
   const target = Number(game.ui?.warpDestination);
   if (!sectorMap[target]) return addAndRender("Hyperdrive unavailable: plot a route first.");
   if (game.player.currentSector === target) return addAndRender(`Hyperdrive already at destination Sector ${target}.`);
+  game.ui = { ...(game.ui || {}), hyperdriveRecovery: { target, startedSector: game.player.currentSector, startedAt: Date.now() } };
+  saveGame();
   let jumps = 0;
   let fuelSpent = 0;
   let stopMessage = "";
@@ -2134,6 +2153,8 @@ function engageHyperdrive() {
     const beforeSector = game.player.currentSector;
     const beforeHull = game.player.hull;
     travelToSector(route[1], { fuelCost: HYPERDRIVE_FUEL_MULTIPLIER, silentRender: true });
+    game.ui.hyperdriveRecovery = { target, startedSector: beforeSector, currentSector: game.player.currentSector, jumps: jumps + 1, fuelSpent: fuelSpent + HYPERDRIVE_FUEL_MULTIPLIER, updatedAt: Date.now() };
+    saveGame();
     if (game.player.currentSector === beforeSector) { stopMessage = `Hyperdrive stopped in Sector ${game.player.currentSector}. Route blocker detected.`; break; }
     jumps += 1;
     fuelSpent += HYPERDRIVE_FUEL_MULTIPLIER;
@@ -2148,6 +2169,7 @@ function engageHyperdrive() {
   } else if (!stopMessage) {
     stopMessage = `Hyperdrive stopped in Sector ${game.player.currentSector}.`;
   }
+  if (game.ui?.hyperdriveRecovery) delete game.ui.hyperdriveRecovery;
   setSectorActionResult(stopTitle, stopMessage, { type: stopTitle.includes("Complete") ? "positive" : "neutral", gained: jumps ? [`${jumps} jump${jumps === 1 ? "" : "s"}`] : [], lost: fuelSpent ? [`${fuelSpent} fuel`] : [] });
   addLog(stopMessage);
   saveGame();
@@ -3207,10 +3229,17 @@ function scheduleCompetitiveProfileUpdate(reason = "progress", options = {}) {
 function publishCompetitiveEvent(eventType, message, options = {}) {
   const client = firebaseClient();
   if (!client?.createPublicEvent || !cloudUiState.user || launchGate.mode === "localPrototype") return Promise.resolve({ ok: false, error: "Competitive activity requires Google sign-in." });
-  const payload = { eventType, message, captainName: safeCompetitiveCaptainName(), sectorNumber: options.sectorNumber ?? game.player.currentSector };
+  const payload = { eventType, message: friendlyCompetitiveEvent({ eventType, message, captainName: safeCompetitiveCaptainName(), sectorNumber: options.sectorNumber ?? game.player.currentSector }), captainName: safeCompetitiveCaptainName(), sectorNumber: options.sectorNumber ?? game.player.currentSector };
   const signature = JSON.stringify(payload);
-  if (!options.force && competitiveState.lastEventSignature === signature) return Promise.resolve({ ok: true, data: { throttled: true } });
+  const now = Date.now();
+  const recentAt = competitiveState.recentEventSignatures?.get(signature) || 0;
+  if (!options.force && (competitiveState.lastEventSignature === signature || now - recentAt < COMPETITIVE_EVENT_THROTTLE_MS)) return Promise.resolve({ ok: true, data: { throttled: true } });
   competitiveState.lastEventSignature = signature;
+  competitiveState.lastEventAt = now;
+  competitiveState.recentEventSignatures?.set(signature, now);
+  if (competitiveState.recentEventSignatures?.size > 30) {
+    [...competitiveState.recentEventSignatures.entries()].sort((a, b) => a[1] - b[1]).slice(0, 10).forEach(([key]) => competitiveState.recentEventSignatures.delete(key));
+  }
   return Promise.resolve(client.createPublicEvent(payload)).catch((error) => ({ ok: false, error: error?.message || "Competitive event skipped safely." }));
 }
 
@@ -3224,15 +3253,63 @@ const LEADERBOARD_DEFINITIONS = [
   { key: "creditsEarned", label: "Credits Earned" },
 ];
 
+function normalizeLeaderboardRow(row = {}, field = "totalScore") {
+  const safe = safeObject(row);
+  const uid = safePlainText(safe.uid || safe.id || "", "");
+  return {
+    uid,
+    captainName: safePlainText(safe.captainName || safe.displayName, "Unnamed Captain"),
+    shipName: safePlainText(safe.shipName, "Unregistered Ship"),
+    specialty: safePlainText(safe.specialty, "Explorer"),
+    score: numericStat(safe[field]),
+    totalScore: numericStat(safe.totalScore),
+    lastSeenAtMs: timestampMillis(safe.lastSeenAt || safe.updatedAt),
+  };
+}
+
 function renderLeaderboardRows(rows = [], field = "totalScore") {
-  if (!rows.length) return `<p class="empty-note">No competitive profiles yet.</p>`;
-  return `<table class="leaderboard-table"><thead><tr><th>Rank</th><th>Captain</th><th>Ship</th><th>Specialty</th><th>Score</th></tr></thead><tbody>${rows.slice(0, 10).map((row, index) => `<tr><td>#${index + 1}</td><td>${safeDisplayText(row.captainName || "Unnamed Captain")}</td><td>${safeDisplayText(row.shipName || "Unregistered Ship")}</td><td>${safeDisplayText(row.specialty || "Explorer")}</td><td>${safeDisplayText(numericStat(row[field]))}</td></tr>`).join("")}</tbody></table>`;
+  const normalized = safeArray(rows).map((row) => normalizeLeaderboardRow(row, field)).filter((row) => row.captainName).sort((a, b) => (b.score - a.score) || (b.totalScore - a.totalScore) || (b.lastSeenAtMs - a.lastSeenAtMs) || a.captainName.localeCompare(b.captainName)).slice(0, 10);
+  if (!normalized.length) return `<p class="empty-note">No competitive profiles yet. The first signed-in captain appears here after a safe profile sync.</p>`;
+  const currentUid = cloudUiState.user?.uid || "";
+  const currentName = safeCompetitiveCaptainName();
+  return `<table class="leaderboard-table"><thead><tr><th>Rank</th><th>Captain</th><th>Ship</th><th>Specialty</th><th>${safeDisplayText(LEADERBOARD_DEFINITIONS.find((board) => board.key === field)?.label || "Score")}</th></tr></thead><tbody>${normalized.map((row, index) => { const current = (currentUid && row.uid === currentUid) || row.captainName === currentName; return `<tr class="${current ? "current-player-row" : ""}"><td><span class="rank-badge">#${index + 1}</span></td><td>${safeDisplayText(row.captainName)}${current ? ` <span class="you-badge">You</span>` : ""}</td><td>${safeDisplayText(row.shipName)}</td><td>${safeDisplayText(row.specialty)}</td><td>${safeDisplayText(row.score)}</td></tr>`; }).join("")}</tbody></table>`;
+}
+
+function friendlyCompetitiveEvent(event = {}) {
+  const type = safePlainText(event.eventType, "activity");
+  const captain = safePlainText(event.captainName, "Unnamed Captain");
+  const sector = event.sectorNumber ? ` in Sector ${numericStat(event.sectorNumber)}` : "";
+  const defaults = {
+    captainLaunched: `${captain} launched into Sector Drift.`,
+    warpedSector: `${captain} traveled${sector}.`,
+    discoveredSector: `${captain} mapped a new trade route or sector lead${sector}.`,
+    defeatedPirate: `${captain} defeated a pirate raider${sector}.`,
+    completedMission: `${captain} completed a mission contract${sector}.`,
+    upgradedShip: `${captain} upgraded ship systems${sector}.`,
+    boughtHyperdrive: `${captain} upgraded to Hyperdrive.`,
+    enteredTopRank: `${captain} reached a Top 5 leaderboard rank.`,
+  };
+  return safePlainText(event.message, defaults[type] || `${captain} logged Sector Drift activity${sector}.`);
+}
+
+function collapseCompetitiveEvents(events = []) {
+  const collapsed = [];
+  const seen = new Set();
+  safeArray(events).forEach((event) => {
+    const safe = safeObject(event);
+    const message = friendlyCompetitiveEvent(safe);
+    const key = `${safePlainText(safe.uid || safe.captainName)}|${safePlainText(safe.eventType)}|${numericStat(safe.sectorNumber)}|${message}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    collapsed.push({ ...safe, message });
+  });
+  return collapsed.slice(0, COMPETITIVE_EVENT_LIMIT);
 }
 
 function renderPublicEventFeed(events = competitiveState.publicEvents) {
-  const safeEvents = (events || []).slice(0, COMPETITIVE_EVENT_LIMIT);
-  if (!safeEvents.length) return `<p class="empty-note">No shared activity yet.</p>`;
-  return `<ol class="competitive-feed">${safeEvents.map((event) => `<li><strong>${safeDisplayText(event.captainName || "Unnamed Captain")}</strong><span>${safeDisplayText(event.message || event.eventType || "Sector Drift activity")}</span>${event.sectorNumber ? `<em>Sector ${safeDisplayText(event.sectorNumber)}</em>` : ""}</li>`).join("")}</ol>`;
+  const safeEvents = collapseCompetitiveEvents(events).slice(0, 20);
+  if (!safeEvents.length) return `<p class="empty-note">No shared activity yet. Signed-in milestone events will appear newest first.</p>`;
+  return `<ol class="competitive-feed">${safeEvents.map((event, index) => `<li class="${index === 0 ? "latest" : ""}"><strong>${safeDisplayText(event.captainName || "Unnamed Captain")}</strong><span>${safeDisplayText(event.message)}</span>${event.sectorNumber ? `<em>Sector ${safeDisplayText(event.sectorNumber)}</em>` : ""}</li>`).join("")}</ol>`;
 }
 
 function renderCompetitiveNotice() {
@@ -3437,6 +3514,89 @@ function canUseGameActions() {
   if (typeof window === "undefined") return true;
   if (!REQUIRE_FIREBASE_LOGIN) return true;
   return launchGate.mode === "signedIn" || launchGate.mode === "localPrototype";
+}
+
+
+function connectionStatusItems() {
+  refreshFirebaseUiState(false);
+  const recoveryActive = sessionRecoveryMessages.length > 0;
+  const signedIn = Boolean(cloudUiState.user);
+  const items = [];
+  if (launchGate.mode === "localPrototype") items.push({ label: "Local Prototype Mode", tone: "warn", detail: "Browser-only save" });
+  else if (signedIn) items.push({ label: "Signed In", tone: "good", detail: cloudUiState.user.displayName || "Google account" });
+  else items.push({ label: "Offline / Retry", tone: "warn", detail: cloudUiState.message || "Local save available" });
+  if (signedIn && cloudUiState.status === "available") items.push({ label: "Cloud Sync Active", tone: "good", detail: "Manual backup ready" });
+  if (signedIn && launchGate.mode !== "localPrototype") items.push({ label: "Competitive Online", tone: sectorTrafficState.status === "listening" ? "good" : "neutral", detail: presenceStatusLabel() });
+  if (recoveryActive) items.push({ label: "Save Recovery Active", tone: "warn", detail: sessionRecoveryMessages[0] });
+  if (!signedIn && launchGate.mode !== "localPrototype") items.push({ label: "Local Save Ready", tone: localStorageAvailable ? "neutral" : "warn", detail: localSaveStatus });
+  return items.slice(0, 5);
+}
+
+function renderConnectionStatusStrip() {
+  const items = connectionStatusItems();
+  return `<section class="connection-strip" aria-label="Connection and save status"><div class="connection-strip-title"><strong>Status</strong><span>${safeDisplayText(CLASSROOM_BUILD_LABEL)}</span></div><div class="connection-pill-row">${items.map((item) => `<span class="connection-pill connection-${item.tone}"><strong>${safeDisplayText(item.label)}</strong><em>${safeDisplayText(item.detail)}</em></span>`).join("")}</div></section>`;
+}
+
+function guidedStartCards() {
+  return [
+    { title: "Move with the map", body: "Click a sector once to scan it. Click an adjacent selected sector again to travel. Sector 1 is protected while you learn." },
+    { title: "Dock and trade", body: "Dock at starbases to refuel, repair, buy cheap cargo, and sell cargo high. Port codes follow Food/Ore/Tech: S = sells cheap, B = buys high." },
+    { title: "Use missions and routes", body: "Open Mission Terminal for jobs. Plot Route and Scout Route help you plan several jumps before spending fuel and turns." },
+    { title: "Upgrade scanners", body: "Shipyard upgrades improve cargo, engines, shields, and scanners. Better scanners reveal more sector details and safer route choices." },
+  ];
+}
+
+function needsGuidedStart() {
+  return canUseGameActions() && !game.tutorial?.guidedStartComplete;
+}
+
+function renderGuidedStartOverlay() {
+  if (!needsGuidedStart()) return "";
+  const cards = guidedStartCards();
+  const step = Math.min(cards.length - 1, Math.max(0, Number(game.tutorial?.guidedStartStep) || 0));
+  const card = cards[step];
+  return `<section class="guided-start" role="dialog" aria-label="Sector Drift quick start"><div class="guided-start-card"><p class="eyebrow">Quick Start ${step + 1}/${cards.length}</p><h3>${safeDisplayText(card.title)}</h3><p>${safeDisplayText(card.body)}</p><div class="button-row"><button type="button" class="button-secondary" data-action="guidedStartSkip">Skip Guide</button><button type="button" class="primary-launch-button" data-action="guidedStartNext">${step >= cards.length - 1 ? "Start Flying" : "Next Tip"}</button></div></div></section>`;
+}
+
+function completeGuidedStart() {
+  game.tutorial = { ...(game.tutorial || {}), guidedStartComplete: true, guidedStartStep: guidedStartCards().length };
+  addLog("Quick Start dismissed. You can review core tips in Mission Terminal tutorials.");
+  saveGame();
+  render();
+}
+
+function advanceGuidedStart() {
+  game.tutorial = { ...(game.tutorial || {}) };
+  const next = (Number(game.tutorial.guidedStartStep) || 0) + 1;
+  if (next >= guidedStartCards().length) return completeGuidedStart();
+  game.tutorial.guidedStartStep = next;
+  saveGame();
+  render();
+}
+
+function contextualSuggestions() {
+  const sector = sectorMap[game.player.currentSector];
+  const suggestions = [];
+  const cargoEmpty = RESOURCES.every((resource) => (game.player.cargo[resource] || 0) === 0) && (game.player.cargo[SMUGGLED_RESOURCE] || 0) === 0;
+  if (cargoEmpty) suggestions.push("Your cargo hold is empty. Dock at a starbase or mine nearby asteroids to start earning credits.");
+  if (sector.type === "asteroid") suggestions.push("Try mining this asteroid field; Miner captains gain a small Ore bonus.");
+  const cheapOrePort = Object.values(sectorMap).find((candidate) => candidate.type === "port" && candidate.portType?.[1] === "S" && sector.adjacent.includes(candidate.number));
+  if (cheapOrePort) suggestions.push(`Nearby ${cheapOrePort.portType} station in Sector ${cheapOrePort.number} may sell Ore cheaply.`);
+  const activeMission = (game.deliveryQuests || []).find((quest) => quest.status === "active" || quest.status === "claimable");
+  if (activeMission) suggestions.push(`Mission active: ${activeMission.title}. Use Plot Route or Scout Route from Mission Terminal if you need the next sector.`);
+  const bounty = Object.values(game.pirates || {}).find((pirate) => !pirate.defeated && pirate.sector !== game.player.currentSector);
+  if (bounty && game.player.reputation >= 4) suggestions.push(`Pirate bounty available in Sector ${bounty.sector}. Open Combat / Pirate Intel to review risk first.`);
+  if ((game.player.upgrades?.scanner || 1) < 2 && game.player.credits >= shipUpgradeCost("scanner")) suggestions.push("Visit a Shipyard to upgrade scanners and reveal clearer nearby sector intel.");
+  if ((game.player.upgrades?.hyperdrive || 0) < 1 && game.player.credits >= HYPERDRIVE_COST) suggestions.push("You have enough credits for Hyperdrive. Buy it at a Shipyard, then use Engage Hyperdrive on plotted routes.");
+  if (game.player.fuel <= 3) suggestions.push("Fuel is low. Dock at a starbase, complete missions, or avoid long routes until refueled.");
+  if (sector.type === "port") suggestions.push("Dock at this starbase to buy/sell cargo, repair, refuel, and check port-code opportunities.");
+  return [...new Set(suggestions)].slice(0, 3);
+}
+
+function renderContextualHelper() {
+  const suggestions = contextualSuggestions();
+  const items = suggestions.length ? suggestions.map((tip) => `<li>${safeDisplayText(tip)}</li>`).join("") : `<li>Choose an adjacent sector, dock at ports, or open Mission Terminal for a job.</li>`;
+  return `<section class="cockpit-helper"><h3>What should I do next?</h3><ul>${items}</ul></section>`;
 }
 
 function isTeacher() {
@@ -4087,8 +4247,8 @@ function travelToSector(number, options = {}) {
   setArrivalReport(number, extras);
   updatePresenceStatus("online");
   scheduleCompetitiveProfileUpdate("travel", { force: wasFirstVisit });
-  publishCompetitiveEvent("warpedSector", `${safeCompetitiveCaptainName()} warped into Sector ${number}.`, { sectorNumber: number });
-  if (wasFirstVisit) publishCompetitiveEvent("discoveredSector", `${safeCompetitiveCaptainName()} discovered Sector ${number}.`, { sectorNumber: number });
+  publishCompetitiveEvent("warpedSector", `${safeCompetitiveCaptainName()} traveled to Sector ${number}.`, { sectorNumber: number });
+  if (wasFirstVisit) publishCompetitiveEvent("discoveredSector", `${safeCompetitiveCaptainName()} mapped a new route in Sector ${number}.`, { sectorNumber: number });
   saveGame();
   if (!options.silentRender) render();
 }
@@ -4708,6 +4868,8 @@ function upgradeShip(key) {
   const message = `${option.label} upgraded to Level ${game.player.upgrades[key]}. ${option.success}`;
   setSectorActionResult("Ship Upgrade Purchased", message, { type: "positive", gained: [`${option.label} Level ${game.player.upgrades[key]}`], lost: [`${cost} credits`], eventType: "ship-upgrade" });
   addLog(message);
+  scheduleCompetitiveProfileUpdate("ship upgrade", { force: key === "hyperdrive" });
+  publishCompetitiveEvent(key === "hyperdrive" ? "boughtHyperdrive" : "upgradedShip", key === "hyperdrive" ? `${safeCompetitiveCaptainName()} upgraded to Hyperdrive.` : `${safeCompetitiveCaptainName()} upgraded ${option.label}.`, { sectorNumber: game.player.currentSector });
   saveGame();
   render();
 }
@@ -5076,7 +5238,7 @@ function defeatPirate(pirate, verb = "defeated", report = {}) {
   addLog(message);
   if (pirate.isStronghold) addLog(`Stronghold cleared in Sector ${pirate.sector}. Trade lanes are safer.`);
   scheduleCompetitiveProfileUpdate("pirate defeated", { force: true });
-  publishCompetitiveEvent("defeatedPirate", `${safeCompetitiveCaptainName()} defeated ${pirate.name} in Sector ${pirate.sector}.`, { sectorNumber: pirate.sector });
+  publishCompetitiveEvent("defeatedPirate", `${safeCompetitiveCaptainName()} defeated a pirate raider in Sector ${pirate.sector}.`, { sectorNumber: pirate.sector });
 }
 
 function loseCombatToPirates(pirate, cautious = false) {

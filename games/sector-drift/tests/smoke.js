@@ -1348,14 +1348,40 @@ vm.runInContext(`
   cloudUiState.user = null;
   launchGate.mode = 'localPrototype';
   game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  game.ui.activeScreen = 'cockpit';
+  assert(needsGuidedStart(), 'fresh saves should need guided start onboarding');
+  const guideHtml = renderGuidedStartOverlay();
+  assert(guideHtml.includes('Quick Start') && guideHtml.includes('Sector 1 is protected') && guidedStartCards().some((card) => card.body.includes('Port codes')), 'guided start explains classroom launch basics');
+  completeGuidedStart();
+  assert(game.tutorial.guidedStartComplete, 'guided start skip/finish persists completion in save state');
+  const migratedTutorial = migrateGameState({ player: { pilotName: 'Guide Tester' }, tutorial: { guidedStartComplete: true, guidedStartStep: 4 } });
+  assert(migratedTutorial.tutorial.guidedStartComplete, 'guided start completion survives migration');
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  game.player.cargo = { Ore: 0, Food: 0, Tech: 0, Smuggled: 0 };
+  const helperHtml = renderContextualHelper();
+  assert(helperHtml.includes('What should I do next?') && helperHtml.includes('cargo hold is empty'), 'contextual helper renders next-step suggestions');
+  const statusHtml = renderConnectionStatusStrip();
+  assert(statusHtml.includes('Local Prototype Mode') && statusHtml.includes(CLASSROOM_BUILD_LABEL), 'connection status strip renders local mode and build label');
+  const buttonHtml = situationActionButton('Plot Route', { action: 'plotSelectedRoute', disabled: true, note: 'Select an adjacent visible sector first.' });
+  assert(buttonHtml.includes('disabled') && buttonHtml.includes('Select an adjacent visible sector first.'), 'disabled action buttons include visible reasons');
+
+  game = defaultGameState();
   game.ui.activeScreen = 'competitive';
   const localCompetitiveHtml = renderCompetitiveScreen();
   assert(localCompetitiveHtml.includes('Competitive leaderboards require Google sign-in.'), 'competitive screen renders local sign-in notice');
   assert(calculateCompetitiveScore({ creditsEarned: 1000, sectorsExplored: 2, piratesDefeated: 1, missionsCompleted: 3, tradeProfit: 50, reputation: 4, achievementsCount: 2 }) === 665, 'competitive score formula works');
-  const mockRows = [{ captainName: 'Vega', shipName: 'Rusty Comet', specialty: 'Explorer', totalScore: 321 }];
-  assert(renderLeaderboardRows(mockRows, 'totalScore').includes('#1') && renderLeaderboardRows(mockRows, 'totalScore').includes('Vega') && renderLeaderboardRows(mockRows, 'totalScore').includes('321'), 'leaderboard rows render from mock data');
-  const mockEvents = [{ captainName: 'Vega', message: 'Captain Vega warped into Sector 12.', sectorNumber: 12 }];
-  assert(renderPublicEventFeed(mockEvents).includes('Captain Vega warped into Sector 12.') && renderPublicEventFeed(mockEvents).includes('Sector 12'), 'shared event feed renders from mock data');
+  cloudUiState.user = { uid: 'student-current', displayName: 'Student Current' };
+  game.player.captainProfile = normalizeCaptainProfile({ name: 'Vega', title: 'Captain', specialty: 'Explorer', setupComplete: true }, 'Vega', true);
+  game.player.pilotName = captainDisplayName(game.player.captainProfile);
+  const mockRows = [{ uid: 'student-current', captainName: 'Captain Vega', shipName: 'Rusty Comet', specialty: 'Explorer', totalScore: 321 }, { captainName: '<bad>', totalScore: 'NaN' }];
+  const leaderboardMockHtml = renderLeaderboardRows(mockRows, 'totalScore');
+  assert(leaderboardMockHtml.includes('#1') && leaderboardMockHtml.includes('Captain Vega') && leaderboardMockHtml.includes('321') && leaderboardMockHtml.includes('current-player-row') && leaderboardMockHtml.includes('You'), 'leaderboard rows render mock data and highlight current player');
+  assert(renderLeaderboardRows([{ captainName: '<script>', totalScore: 'oops' }], 'totalScore').includes('0'), 'malformed competitive profile fallback renders safely');
+  const mockEvents = [{ captainName: 'Vega', eventType: 'discoveredSector', sectorNumber: 12 }, { captainName: 'Vega', eventType: 'discoveredSector', sectorNumber: 12 }];
+  const feedHtml = renderPublicEventFeed(mockEvents);
+  assert(feedHtml.includes('mapped a new trade route') && feedHtml.includes('Sector 12') && (feedHtml.match(/mapped a new trade route/g) || []).length === 1, 'shared event feed renders and collapses duplicate mock events');
   assert((awaitResult(scheduleCompetitiveProfileUpdate('signed out test'))).ok === false, 'profile update helper fails safely when signed out');
   assert((awaitResult(publishCompetitiveEvent('warpedSector', 'signed out test'))).ok === false, 'public event helper fails safely when signed out');
 
@@ -1386,6 +1412,7 @@ vm.runInContext(`
   const presenceFunction = firebaseSource.slice(firebaseSource.indexOf('function presencePayload'), firebaseSource.indexOf('// Presence is display-only'));
   assert(presenceFunction.includes('sectorNumber') && presenceFunction.includes('shipName') && presenceFunction.includes('status'), 'presence data model includes safe display fields');
   assert(!/credits|cargo|saveData|combatWins|combatLosses/.test(presenceFunction), 'presence data model excludes credits, cargo, full save, and combat outcomes');
+  assert(firebaseSource.includes('PUBLIC_PROFILE_CLIENT_THROTTLE_MS') && firebaseSource.includes('PUBLIC_EVENT_CLIENT_THROTTLE_MS'), 'firebase client includes profile and event write throttles');
 
   game = defaultGameState();
   game.player.fuel = 10;
@@ -1446,6 +1473,8 @@ vm.runInContext(`
   game.player.credits = 2468;
   saveGame();
   assert(loadGame().player.credits === 2468, 'localStorage save/load should still work');
+  const recoveredHyper = migrateGameState({ player: { pilotName: 'Hyper', currentSector: 2 }, ui: { hyperdriveRecovery: { target: 5 } } });
+  assert(recoveredHyper.ui.warpDestination === 5, 'hyperdrive refresh recovery restores plotted target safely');
   const legacySave = migrateGameState({ player: { pilotName: 'Legacy Ace', credits: 777 } });
   assert(legacySave.player.captainProfile.setupComplete && legacySave.player.captainProfile.name === 'Legacy Ace', 'existing saves migrate with a default completed captain profile');
   game = defaultGameState();
