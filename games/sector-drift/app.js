@@ -14,6 +14,9 @@ const HYPERDRIVE_COST = 100000;
 const HYPERDRIVE_FUEL_MULTIPLIER = 2;
 const PORT_CODE_RESOURCES = ["Food", "Ore", "Tech"];
 const VALID_PORT_CODES = ["SSS", "SSB", "SBS", "SBB", "BSS", "BSB", "BBS", "BBB"];
+const CARGO_GOBLIN_CAPACITY_THRESHOLD = 400;
+const FIGHTER_SCREEN_THRESHOLD = 125;
+const FREIGHTER_ROLE_CARGO_THRESHOLD = 500;
 const BOARDING_HULL_THRESHOLD = 5;
 const BOARDING_MAX_PIRATE_FIGHTERS = 3;
 const PIRATE_REPUTATION_MULTIPLIER = 1;
@@ -2639,7 +2642,7 @@ function comparisonRow(label, targetValue, baseValue) {
 
 function shipRoleLabel(ship) {
   if (ship.role) return ship.role;
-  if (ship.cargoCapacity >= 50) return "Freighter";
+  if (ship.cargoCapacity >= FREIGHTER_ROLE_CARGO_THRESHOLD) return "Freighter";
   if (ship.basePower >= 35) return "Combat";
   if (ship.maxFuel >= 38 || ship.upgradeCaps.scanner >= 8) return "Explorer";
   if (ship.hazardResist >= 2) return "Hazard";
@@ -4440,12 +4443,12 @@ function achievementDefinitions() {
     { id: "prospector", title: "Prospector", description: "Mine at least 10 Ore total.", check: () => game.stats.oreMined >= 10 },
     { id: "anomaly-whisperer", title: "Anomaly Whisperer", description: "Scan 5 anomalies.", check: () => game.stats.anomaliesScanned >= 5 },
     { id: "mission-runner", title: "Mission Runner", description: "Complete 5 math missions.", check: () => game.stats.mathMissionsCompleted >= 5 },
-    { id: "cargo-goblin", title: "Cargo Goblin", description: "Reach cargo capacity 40 or higher.", check: () => game.player.cargoCapacity >= 40 },
+    { id: "cargo-goblin", title: "Cargo Goblin", description: `Reach cargo capacity ${CARGO_GOBLIN_CAPACITY_THRESHOLD} or higher.`, check: () => game.player.cargoCapacity >= CARGO_GOBLIN_CAPACITY_THRESHOLD },
     { id: "planet-builder", title: "Planet Builder", description: "Upgrade any planet to level 3.", check: () => Object.values(game.planets).some((planet) => normalizePlanetState(planet).upgrades.production >= 3) },
     { id: "credit-climber", title: "Credit Climber", description: "Reach 2000 credits.", check: () => game.player.credits >= 2000 },
     { id: "sector-scout", title: "Sector Scout", description: "Visit 15 unique sectors.", check: () => game.stats.visitedSectors.length >= 15 },
     { id: "first-bounty", title: "First Bounty", description: "Defeat your first NPC pirate.", check: () => game.player.piratesDefeated >= 1 },
-    { id: "fighter-screen", title: "Fighter Screen", description: "Own 25 fighters.", check: () => game.player.fighters >= 25 },
+    { id: "fighter-screen", title: "Fighter Screen", description: `Own ${FIGHTER_SCREEN_THRESHOLD} fighters.`, check: () => game.player.fighters >= FIGHTER_SCREEN_THRESHOLD },
     { id: "pirate-sweeper", title: "Pirate Sweeper", description: "Defeat 5 NPC pirates.", check: () => game.player.piratesDefeated >= 5 },
     { id: "boarding-party", title: "Boarding Party", description: "Successfully board an NPC pirate.", check: () => game.player.shipsCaptured >= 1 },
     { id: "marshal-material", title: "Marshal Material", description: "Reach reputation 40.", check: () => game.player.reputation >= 40 },
