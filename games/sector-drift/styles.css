@@ -2057,3 +2057,86 @@ button:disabled + .disabled-reason,
     border-radius: 12px;
   }
 }
+
+/* Cockpit polish: keep movement and meaningful actions prominent while moving status to the footer. */
+.cockpit-map-priority {
+  border-color: rgba(255, 209, 102, 0.34);
+  box-shadow: inset 0 0 18px rgba(255, 209, 102, 0.045);
+}
+
+.action-menu-polished {
+  gap: 0.5rem;
+}
+
+.action-menu-polished .action-primary {
+  border-color: rgba(43, 212, 217, 0.42);
+  background: linear-gradient(135deg, rgba(43, 212, 217, 0.16), rgba(255, 255, 255, 0.035));
+}
+
+.action-menu-polished .action-secondary {
+  min-height: 2.65rem;
+  opacity: 0.9;
+}
+
+.unavailable-actions {
+  margin-top: 0.65rem;
+  opacity: 0.76;
+}
+
+.unavailable-actions summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.unavailable-actions div {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.unavailable-actions p {
+  align-items: center;
+  border: 1px dashed rgba(168, 196, 204, 0.16);
+  border-radius: 10px;
+  display: flex;
+  gap: 0.35rem;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0.38rem 0.55rem;
+}
+
+.unavailable-actions span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+.warp-readout {
+  margin: 0.55rem 0;
+}
+
+.manual-travel-heading {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.manual-travel-heading h3 {
+  margin: 0;
+}
+
+.manual-travel-heading span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cockpit-dashboard .connection-strip {
+  margin: 0.85rem 0 0;
+  padding: 0.5rem 0.6rem;
+}

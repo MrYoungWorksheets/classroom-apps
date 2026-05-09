@@ -487,7 +487,7 @@ vm.runInContext(`
   assert(getPlanetProduction(jungle).Food > getPlanetProduction(fire).Food, 'Jungle produces more Food than Fire');
 
   game = defaultGameState();
-  const planetSector = Object.values(sectorMap).find((sector) => sector.type === 'planet' && !isProtectedSpace(sector.number));
+  const planetSector = Object.values(sectorMap).find((sector) => sector.type === 'planet' && !isProtectedSpace(sector.number) && !game.pirates[sector.number]);
   const protectedTestSector = sectorMap[2];
   const originalProtectedType = protectedTestSector.type;
   const originalProtectedPlanet = protectedTestSector.planet;
@@ -499,6 +499,27 @@ vm.runInContext(`
   claimPlanet();
   assert(!game.planets[protectedTestSector.planet.id], 'claimPlanet directly blocks protected-space planet claims');
   assert(game.ui.lastSectorActionResult?.message.includes('Planet claiming is restricted in this sector'), 'protected-space claim block explains the sector rule');
+  protectedTestSector.type = originalProtectedType;
+  protectedTestSector.planet = originalProtectedPlanet;
+
+  game = defaultGameState();
+  game.player.currentSector = planetSector.number;
+  selectedSectorNumber = planetSector.number;
+  game.activeMissions = [];
+  renderSectorPanel();
+  const situationClaimButton = panels.sector.querySelectorAll("[data-action='claimPlanet']")[0];
+  assert(situationClaimButton && panels.sector.innerHTML.includes('Claim from cockpit'), 'situation card exposes a live claim planet action when allowed');
+  situationClaimButton.dispatchEvent({ type: 'click' });
+  assert(game.planets[planetSector.planet.id]?.owner === game.player.pilotName, 'claim button from situation card directly claims legal planets');
+
+  game = defaultGameState();
+  protectedTestSector.type = 'planet';
+  protectedTestSector.planet = { ...JSON.parse(JSON.stringify(planetSector.planet)), id: 'planet-2', name: 'Alliance Survey World', owner: null };
+  game.player.currentSector = protectedTestSector.number;
+  selectedSectorNumber = protectedTestSector.number;
+  game.activeMissions = [];
+  renderSectorPanel();
+  assert(panels.sector.innerHTML.includes('Claim Planet') && panels.sector.innerHTML.includes('Protected Alliance territory') && !panels.sector.innerHTML.includes('data-action="claimPlanet"'), 'protected situation claim is blocked with reason and has no dead action');
   protectedTestSector.type = originalProtectedType;
   protectedTestSector.planet = originalProtectedPlanet;
 
@@ -768,7 +789,8 @@ vm.runInContext(`
   closeScreen();
   assert(game.ui.activeScreen === 'cockpit', 'Exit / Return to Ship returns to cockpit without travel');
   renderActionPanel();
-  assert(panels.action.innerHTML.includes('Dock at Starbase') && panels.action.innerHTML.includes('Mission terminal available'), 'cockpit should show compact location summaries and action buttons');
+  assert(panels.action.innerHTML.includes('Available Actions') && panels.action.innerHTML.includes('Dock at Starbase') && panels.action.innerHTML.includes('Remote mission relay available'), 'cockpit should show polished available action buttons');
+  assert(!panels.action.innerHTML.includes('No starbase here') && !panels.action.innerHTML.includes('No shipyard here') && !panels.action.innerHTML.includes('No pirate in sector'), 'cockpit actions omit redundant unavailable status rows');
 
   // Ship trade-in and fighter/cargo guards.
   game = defaultGameState();
@@ -918,7 +940,7 @@ vm.runInContext(`
   const actionResultBlockCount = (panels.sector.innerHTML.match(/class="action-result /g) || []).length;
   assert(actionResultBlockCount === 1, 'cockpit render contains only one active action-result block');
   assert(panels.sector.innerHTML.includes('Selected Sector Intel') && panels.sector.innerHTML.includes('Arrival Report'), 'selected sector intel and arrival report render in the main viewer');
-  const selectedIntelHtml = panels.sector.innerHTML.slice(panels.sector.innerHTML.indexOf('Selected Sector Intel'));
+  const selectedIntelHtml = panels.sector.innerHTML.slice(panels.sector.innerHTML.indexOf('Selected Sector Intel'), panels.sector.innerHTML.indexOf('Arrival Report'));
   assert(!selectedIntelHtml.includes('Only the current situation should render this cockpit action result.'), 'selected sector intel omits duplicate action-result copy');
   assert(panels.sector.innerHTML.includes('data-situation-type="shipyard port"') && (panels.sector.innerHTML.includes('Safe Port / Starbase') || panels.sector.innerHTML.includes('Lamont Prime Safe Home Base')), 'situation card renders on Sector 1 port');
   assert(panels.sector.innerHTML.includes('Dock at Starbase') && panels.sector.innerHTML.includes('Open Mission Terminal'), 'situation card exposes starbase and mission terminal buttons');
@@ -966,15 +988,15 @@ vm.runInContext(`
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
   renderSectorPanel();
-  assert(panels.sector.innerHTML.includes('Tactical Cockpit') && panels.sector.innerHTML.includes('current-situation'), 'center panel prioritizes current situation above secondary controls');
-  assert(panels.sector.innerHTML.includes('<details class="warp-panel collapsible-system compact-section" >'), 'warp/autopilot renders as a collapsed secondary system when no route is active');
-  assert(panels.sector.innerHTML.includes('No active destination'), 'collapsed warp summary explains there is no active destination');
-  assert(panels.sector.innerHTML.includes('<summary>Manual travel controls</summary>'), 'adjacent sector fallback buttons are tucked into manual travel controls');
+  assert(panels.sector.innerHTML.includes('Tactical Cockpit') && panels.sector.innerHTML.indexOf('Lane Map') < panels.sector.innerHTML.indexOf('Live Events'), 'center panel prioritizes lane map before live events');
+  assert(panels.sector.innerHTML.includes('<details class="warp-panel collapsible-system compact-section" open>'), 'warp/autopilot renders open even when no route is active');
+  assert(panels.sector.innerHTML.includes('No active destination.'), 'open warp readout explains there is no active destination');
+  assert(panels.sector.innerHTML.includes('Manual Travel') && panels.sector.innerHTML.includes('data-action="travel"'), 'adjacent sector fallback buttons are visible without expanding details');
   game.revealedSectors = [1, 2];
   setWarpDestination(2);
   assert(game.ui.warpDestination === 2, 'existing warp plotting still stores destination');
   assert(game.ui.activeScreen === 'cockpit', 'route setting from cockpit stays in cockpit');
-  assert(panels.sector.innerHTML.includes('<details class="warp-panel collapsible-system compact-section" open>'), 'warp/autopilot expands automatically when a route is active');
+  assert(panels.sector.innerHTML.includes('<details class="warp-panel collapsible-system compact-section" open>'), 'warp/autopilot remains open when a route is active');
   assert(panels.sector.innerHTML.includes('Sector 2, 1 jump'), 'expanded warp summary shows plotted route distance');
   assert(panels.sector.innerHTML.includes('data-action="warpStep"'), 'expanded warp controls still expose Engage Autopilot / Warp Step');
   performWarpStep();
@@ -1208,17 +1230,22 @@ vm.runInContext(`
   openScreen('starbase');
   assert(game.ui.activeScreen === 'launch', 'signed-out state blocks cockpit/gameplay screens when login is required');
   enterLocalPrototypeMode();
-  assert(game.ui.activeScreen === 'captainSetup' && panels.docked.innerHTML.includes('Name Your Captain'), 'fresh local prototype save shows captain setup before cockpit');
+  assert(game.ui.activeScreen === 'captainSetup' && panels.docked.innerHTML.includes('Create Your Captain'), 'fresh local prototype save shows captain setup before cockpit');
   applyCaptainProfile({ name: 'Jordan', title: 'Commander', specialty: 'Miner' });
   assert(game.ui.activeScreen === 'cockpit' && game.player.captainProfile.setupComplete, 'profile saves correctly and enters cockpit');
   renderShipPanel();
   assert(panels.ship.innerHTML.includes('Commander Jordan') && panels.ship.innerHTML.includes('Miner') && panels.ship.innerHTML.includes('Asteroid mining yields +1 Ore'), 'captain name/title and specialty bonus appear in Ship Status');
 
+  game = defaultGameState();
   launchGate.mode = 'signedIn';
   cloudUiState.status = 'available';
   cloudUiState.user = { uid: 'student-1', email: 'student@example.com', displayName: 'Student One' };
   cloudUiState.role = 'student';
+  window = { SectorDriftFirebase: { getFirebaseStatus: () => ({ ok: true, status: 'available', user: cloudUiState.user, role: 'student' }), getCurrentFirebaseUser: () => ({ ok: true, data: cloudUiState.user }), getCurrentUserRole: () => ({ ok: true, data: 'student' }) } };
   game.ui.activeScreen = 'cockpit';
+  renderActiveScreen();
+  assert(game.ui.activeScreen === 'captainSetup' && panels.docked.innerHTML.includes('Create Your Captain'), 'signed-in incomplete profiles route to captain setup before cockpit');
+  applyCaptainProfile({ name: 'Student', title: 'Captain', specialty: 'Explorer' });
   renderActionPanel();
   assert(!panels.action.innerHTML.includes('Admin Panel'), 'student role does not show Admin Panel');
   openScreen('adminPanel');
@@ -1476,7 +1503,45 @@ vm.runInContext(`
   const recoveredHyper = migrateGameState({ player: { pilotName: 'Hyper', currentSector: 2 }, ui: { hyperdriveRecovery: { target: 5 } } });
   assert(recoveredHyper.ui.warpDestination === 5, 'hyperdrive refresh recovery restores plotted target safely');
   const legacySave = migrateGameState({ player: { pilotName: 'Legacy Ace', credits: 777 } });
-  assert(legacySave.player.captainProfile.setupComplete && legacySave.player.captainProfile.name === 'Legacy Ace', 'existing saves migrate with a default completed captain profile');
+  assert(needsCaptainSetup(legacySave) && legacySave.player.captainProfile.name === 'Legacy Ace', 'existing saves without captain profiles migrate to needs setup without erasing progress');
+  const legacyOwnedSector = Object.values(sectorMap).find((sector) => sector.type === 'planet' && !isProtectedSpace(sector.number) && !game.pirates[sector.number]);
+  const otherOwnedSector = Object.values(sectorMap).find((sector) => sector.type === 'planet' && !isProtectedSpace(sector.number) && sector.number !== legacyOwnedSector.number);
+  game = migrateGameState({
+    player: { pilotName: 'Legacy Owner', currentSector: legacyOwnedSector.number, cargo: { Ore: 0, Food: 5, Tech: 8 } },
+    planets: {
+      [legacyOwnedSector.planet.id]: { ...legacyOwnedSector.planet, owner: 'Legacy Owner', stored: { Ore: 200, Food: 200, Tech: 200, Fighters: 0 } },
+      [otherOwnedSector.planet.id]: { ...otherOwnedSector.planet, owner: 'Rival Captain', stored: { Ore: 200, Food: 200, Tech: 200, Fighters: 0 } },
+    },
+  });
+  assert(needsCaptainSetup(game) && game.player.legacyPlanetOwnerName === 'Legacy Owner', 'legacy saves remember the old owner name while captain setup is pending');
+  applyCaptainProfile({ name: 'New Star', title: 'Commander', specialty: 'Engineer' });
+  assert(game.planets[legacyOwnedSector.planet.id].owner === game.player.pilotName && game.log.some((entry) => entry.includes('Legacy planet ownership updated')), 'captain setup migrates legacy-owned planets to the new captain identity once');
+  assert(game.planets[otherOwnedSector.planet.id].owner === 'Rival Captain', 'captain setup does not migrate planets owned by another name');
+  game.player.currentSector = legacyOwnedSector.number;
+  const legacyMigratedPlanet = game.planets[legacyOwnedSector.planet.id];
+  const storedTechBeforeLegacyDeposit = legacyMigratedPlanet.stored.Tech;
+  depositToPlanet('Tech', 'max');
+  assert(game.planets[legacyMigratedPlanet.id].stored.Tech === storedTechBeforeLegacyDeposit + 8 && !game.ui.lastSectorActionResult?.message.includes('Cannot deposit cargo here'), 'migrated legacy owner can still deposit cargo without being treated as non-owner defense');
+  const productionBeforeLegacyUpgrade = game.planets[legacyMigratedPlanet.id].upgrades.production;
+  upgradePlanet('production');
+  assert(game.planets[legacyMigratedPlanet.id].upgrades.production === productionBeforeLegacyUpgrade + 1, 'migrated legacy owner can still upgrade the previously owned planet');
+  game.player.currentSector = otherOwnedSector.number;
+  game.player.cargo.Food = 5;
+  depositToPlanet('Food', 'max');
+  assert(game.player.cargo.Food === 5 && game.ui.lastSectorActionResult?.message.includes('Cannot deposit cargo here'), 'planets owned by another name remain non-owned and defended');
+  upgradePlanet('production');
+  assert(game.ui.lastSectorActionResult?.message.includes('Only your owned planets can be upgraded'), 'non-owned planet upgrades remain blocked after legacy ownership migration');
+  game.player.currentSector = 1;
+  claimPlanet();
+  assert(game.ui.lastSectorActionResult?.message.includes('cannot be claimed') && !Object.values(game.planets).some((planet) => isProtectedHomeworld(planet) && planet.owner === game.player.pilotName), 'protected worlds remain blocked after legacy ownership migration');
+  const completeSave = migrateGameState({ player: { pilotName: 'Captain Riley', credits: 888, captainProfile: { name: 'Riley', title: 'Captain', specialty: 'Trader', setupComplete: true } } });
+  assert(!needsCaptainSetup(completeSave) && completeSave.player.credits === 888, 'completed captain profiles still migrate directly to cockpit-ready saves');
+  const activeBeforeCloud = game.ui.activeScreen;
+  const cloudIncomplete = applyLoadedSavePayload({ player: { pilotName: 'Cloud Cadet', credits: 999, captainProfile: { name: 'Cloud Cadet', title: 'Cadet', specialty: 'Explorer', setupComplete: false } } });
+  assert(cloudIncomplete.ok && game.ui.activeScreen === 'captainSetup' && game.player.credits === 999, 'cloud-loaded incomplete profile routes to captain setup without erasing progress');
+  const cloudComplete = applyLoadedSavePayload({ player: { pilotName: 'Mx Nova', captainProfile: { name: 'Nova', title: 'Mx.', specialty: 'Engineer', setupComplete: true } } });
+  assert(cloudComplete.ok && game.ui.activeScreen === 'settings' && !needsCaptainSetup(game), 'cloud-loaded completed profile skips setup');
+  game.ui.activeScreen = activeBeforeCloud;
   game = defaultGameState();
   game.player.currentSector = Object.values(sectorMap).find((sector) => sector.type === 'asteroid').number;
   game.player.captainProfile = normalizeCaptainProfile({ name: 'Mina', title: 'Captain', specialty: 'Miner', setupComplete: true }, 'Mina', true);
