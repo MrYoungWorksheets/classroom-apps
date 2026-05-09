@@ -8,10 +8,15 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
 import {
   getFirestore,
+  addDoc,
   collection,
   doc,
   getDoc,
+  getDocs,
+  limit,
   onSnapshot,
+  orderBy,
+  query,
   setDoc,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
@@ -28,9 +33,13 @@ let currentRole = "unknown";
 let currentRoleReason = "No user signed in yet.";
 const authListeners = new Set();
 const presenceListeners = new Set();
+const publicEventListeners = new Set();
 let presenceUnsubscribe = null;
+let publicEventsUnsubscribe = null;
 let latestPresenceSnapshot = [];
+let latestPublicEventsSnapshot = [];
 let presenceListenError = "";
+let publicEventsListenError = "";
 
 function friendlyError(error, fallback = "Firebase is unavailable right now. Local save still works.") {
   if (!error) return fallback;
@@ -170,6 +179,53 @@ function safePresenceText(value, fallback = "") {
   return (text || fallback).slice(0, 80);
 }
 
+function safePublicName(value, fallback = "Unnamed Captain") {
+  return safePresenceText(value, fallback) || fallback;
+}
+
+function safeNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0;
+}
+
+function publicProfilePayload(input = {}, user = currentUser) {
+  const captainName = safePublicName(input.captainName);
+  return {
+    uid: user.uid,
+    captainName,
+    title: safePresenceText(input.title, "Captain"),
+    specialty: safePresenceText(input.specialty, "Explorer"),
+    shipName: safePresenceText(input.shipName, "Unregistered Ship"),
+    currentSector: Math.max(1, Math.floor(Number(input.currentSector) || Number(input.sectorNumber) || 1)),
+    status: normalizePresenceStatus(input.status || "online"),
+    lastSeenAt: serverTimestamp(),
+    totalScore: safeNumber(input.totalScore),
+    sectorsExplored: safeNumber(input.sectorsExplored),
+    piratesDefeated: safeNumber(input.piratesDefeated),
+    missionsCompleted: safeNumber(input.missionsCompleted),
+    tradeProfit: safeNumber(input.tradeProfit),
+    creditsEarned: safeNumber(input.creditsEarned),
+    reputation: safeNumber(input.reputation),
+    achievementsCount: safeNumber(input.achievementsCount)
+  };
+}
+
+function publicEventPayload(input = {}, user = currentUser) {
+  const allowed = new Set(["captainLaunched", "warpedSector", "discoveredSector", "defeatedPirate", "completedMission", "upgradedShip", "achievementReached", "boughtHyperdrive", "enteredTopRank"]);
+  const eventType = allowed.has(input.eventType) ? input.eventType : "captainLaunched";
+  const captainName = safePublicName(input.captainName);
+  const payload = {
+    uid: user.uid,
+    captainName,
+    eventType,
+    message: safePresenceText(input.message, `${captainName} is active in Sector Drift.`).slice(0, 180),
+    createdAt: serverTimestamp(),
+    public: true
+  };
+  if (input.sectorNumber !== undefined) payload.sectorNumber = Math.max(1, Math.floor(Number(input.sectorNumber) || 1));
+  return payload;
+}
+
 function currentPresenceName(user = currentUser, captainName = "") {
   return safePresenceText(captainName) || safePresenceText(user?.displayName) || "Signed-in Captain";
 }
@@ -186,6 +242,7 @@ function presencePayload(input = {}, user = currentUser) {
     captainName: currentPresenceName(user, input.captainName || input.displayName),
     sectorNumber,
     shipName: safePresenceText(input.shipName, "Unregistered Ship"),
+    specialty: safePresenceText(input.specialty, "Explorer"),
     status: normalizePresenceStatus(input.status),
     prototypeVersion: safePresenceText(input.prototypeVersion || input.saveVersion || "sectorDriftSaveV1", "sectorDriftSaveV1"),
     updatedAt: serverTimestamp(),
@@ -196,6 +253,62 @@ function presencePayload(input = {}, user = currentUser) {
 // Presence is display-only. Do not use it as authority for credits, cargo, combat,
 // ship ownership, planet ownership, or any player-to-player effect. Future multiplayer
 // must require Firestore Security Rules and/or server-side validation. PvP is intentionally not implemented.
+// Public profile is display/leaderboard data only. Cloud save remains private in players/{uid}.
+// Client-reported stats are acceptable for early classroom competition, but they are not cheat-proof.
+// Future direct PvP, cargo trading, stealing, or shared economy authority must use server validation
+// or strict Firestore rules; do not trust client-side combat/cargo/credits for PvP.
+async function updatePublicProfile(input = {}) {
+  try {
+    const ready = requireFirebase();
+    if (!ready.ok) return ready;
+    if (!currentUser) return failure("Public profile skipped: signed out. Competitive leaderboards require Google sign-in.");
+    const payload = publicProfilePayload(input, currentUser);
+    await setDoc(doc(db, "sectorDriftPublicProfiles", currentUser.uid), payload, { merge: true });
+    return success({ uid: currentUser.uid, path: `sectorDriftPublicProfiles/${currentUser.uid}`, data: payload });
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+async function createPublicEvent(input = {}) {
+  try {
+    const ready = requireFirebase();
+    if (!ready.ok) return ready;
+    if (!currentUser) return failure("Public event skipped: signed out. Competitive activity requires Google sign-in.");
+    const payload = publicEventPayload(input, currentUser);
+    const ref = await addDoc(collection(db, "sectorDriftPublicEvents"), payload);
+    return success({ id: ref.id, path: `sectorDriftPublicEvents/${ref.id}`, data: payload });
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+async function getPublicLeaderboard(field = "totalScore", maxRows = 10) {
+  try {
+    const ready = requireFirebase();
+    if (!ready.ok) return ready;
+    if (!currentUser) return failure("Competitive leaderboards require Google sign-in.");
+    const allowed = new Set(["totalScore", "sectorsExplored", "piratesDefeated", "tradeProfit", "missionsCompleted", "reputation", "creditsEarned"]);
+    const safeField = allowed.has(field) ? field : "totalScore";
+    const snapshot = await getDocs(query(collection(db, "sectorDriftPublicProfiles"), orderBy(safeField, "desc"), limit(Math.max(1, Math.min(25, Math.floor(Number(maxRows) || 10))))));
+    return success(snapshot.docs.map((entry) => ({ id: entry.id, ...(entry.data() || {}) })));
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+async function getPublicEvents(maxRows = 20) {
+  try {
+    const ready = requireFirebase();
+    if (!ready.ok) return ready;
+    if (!currentUser) return failure("Competitive activity requires Google sign-in.");
+    const snapshot = await getDocs(query(collection(db, "sectorDriftPublicEvents"), orderBy("createdAt", "desc"), limit(Math.max(1, Math.min(30, Math.floor(Number(maxRows) || 20))))));
+    return success(snapshot.docs.map((entry) => ({ id: entry.id, ...(entry.data() || {}) })));
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 async function updatePresence(input = {}) {
   try {
     const ready = requireFirebase();
@@ -238,6 +351,56 @@ function startPresenceListener() {
     presenceListenError = friendlyError(error, "Live sector traffic unavailable. Local play continues.");
     return failure(error);
   }
+}
+
+function notifyPublicEventListeners(payload = latestPublicEventsSnapshot) {
+  const status = getPublicEventsStatus();
+  publicEventListeners.forEach((listener) => {
+    try { listener({ ok: status.ok, records: payload, status }); } catch (error) { console.warn("Sector Drift public event listener failed", error); }
+  });
+}
+
+function startPublicEventsListener() {
+  try {
+    const ready = requireFirebase();
+    if (!ready.ok) return ready;
+    if (publicEventsUnsubscribe) return success({ listening: true });
+    publicEventsUnsubscribe = onSnapshot(query(collection(db, "sectorDriftPublicEvents"), orderBy("createdAt", "desc"), limit(20)), (snapshot) => {
+      publicEventsListenError = "";
+      latestPublicEventsSnapshot = snapshot.docs.map((entry) => ({ id: entry.id, ...(entry.data() || {}) }));
+      notifyPublicEventListeners(latestPublicEventsSnapshot);
+    }, (error) => {
+      publicEventsListenError = friendlyError(error, "Competitive activity feed unavailable. Local play continues.");
+      latestPublicEventsSnapshot = [];
+      notifyPublicEventListeners(latestPublicEventsSnapshot);
+    });
+    return success({ listening: true });
+  } catch (error) {
+    publicEventsListenError = friendlyError(error, "Competitive activity feed unavailable. Local play continues.");
+    return failure(error);
+  }
+}
+
+function onPublicEventsChange(callback) {
+  try {
+    if (typeof callback !== "function") return () => {};
+    const start = startPublicEventsListener();
+    publicEventListeners.add(callback);
+    callback({ ok: start.ok && !publicEventsListenError, records: latestPublicEventsSnapshot, status: getPublicEventsStatus() });
+    return () => publicEventListeners.delete(callback);
+  } catch (error) {
+    publicEventsListenError = friendlyError(error, "Competitive activity feed unavailable. Local play continues.");
+    console.warn("Sector Drift public events callback failed", error);
+    return () => {};
+  }
+}
+
+function getPublicEventsStatus() {
+  const ready = requireFirebase();
+  if (!ready.ok) return { ok: false, status: "unavailable", error: ready.error };
+  if (!currentUser) return { ok: false, status: "signed out", error: "Competitive activity requires Google sign-in." };
+  if (publicEventsListenError) return { ok: false, status: "unavailable", error: publicEventsListenError };
+  return { ok: true, status: publicEventsUnsubscribe ? "listening" : "available", path: "sectorDriftPublicEvents" };
 }
 
 function onPresenceChange(callback) {
@@ -357,6 +520,12 @@ window.SectorDriftFirebase = {
   ensureUserProfile,
   saveCloudBackup,
   loadCloudBackup,
+  updatePublicProfile,
+  createPublicEvent,
+  getPublicLeaderboard,
+  getPublicEvents,
+  onPublicEventsChange,
+  getPublicEventsStatus,
   updatePresence,
   onPresenceChange,
   getPresenceStatus,

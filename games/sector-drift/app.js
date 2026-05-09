@@ -48,6 +48,8 @@ const REQUIRE_FIREBASE_LOGIN = true;
 const ALLOW_LOCAL_PROTOTYPE_MODE = true;
 const PRESENCE_ONLINE_WINDOW_MS = 4 * 60 * 1000;
 const LIVE_EVENT_LIMIT = 5;
+const COMPETITIVE_EVENT_LIMIT = 20;
+const COMPETITIVE_PROFILE_WRITE_THROTTLE_MS = 45 * 1000;
 const SHIP_UPGRADE_OPTIONS = [
   { key: "cargoHold", label: "Cargo Hold", description: `Cargo capacity increases by ${CARGO_HOLD_CAPACITY_BONUS} units per level.`, success: "Cargo capacity increased." },
   { key: "engine", label: "Engine", description: "Max fuel, daily turn grant, and turn bank improve.", success: "Fuel capacity and route endurance improved." },
@@ -314,6 +316,7 @@ let presenceUnsubscribe = null;
 let liveEvents = [];
 let liveEventPulseToken = 0;
 const sectorTrafficState = { status: "local mode", message: "Sector traffic unavailable. Local prototype mode active.", records: [], listening: false, initialized: false, knownSectors: new Map(), currentSectorOccupants: [] };
+const competitiveState = { leaderboards: {}, publicEvents: [], eventsStatus: "local mode", eventsMessage: "Competitive leaderboards require Google sign-in.", eventsListening: false, loadingBoards: false, lastProfileWriteAt: 0, lastProfileSignature: "", lastEventSignature: "", lastRefreshAt: 0 };
 const cloudUiState = { status: "not initialized", message: "Cloud backup unavailable until Firebase finishes loading.", busy: false, user: null, role: "unknown", roleReason: "Waiting for Firebase role lookup.", lastCloudResult: "No cloud action this session." };
 const launchGate = { mode: "checkingAuth", message: "Checking classroom sign-in status...", enteredAt: Date.now() };
 
@@ -1169,6 +1172,8 @@ function applyCaptainProfile({ name, title, specialty } = {}) {
   game.player.pilotName = captainDisplayName(profile);
   addLog(`Captain profile saved: ${game.player.pilotName}, ${profile.specialty}.`);
   updatePresenceStatus("online", { silent: true });
+  scheduleCompetitiveProfileUpdate("captain profile saved", { force: true });
+  publishCompetitiveEvent("captainLaunched", `${game.player.pilotName} launched ${game.player.shipName || currentShip().name}.`, { sectorNumber: game.player.currentSector });
   saveGame();
   game.ui.activeScreen = "cockpit";
   render();
@@ -1322,6 +1327,7 @@ function defaultStats() {
   return {
     visitedSectors: [1],
     creditsEarnedFromTrade: 0,
+    tradeProfit: 0,
     resourcesMined: 0,
     oreMined: 0,
     mathMissionsCompleted: 0,
@@ -1671,6 +1677,7 @@ const SCREEN_TITLES = {
   achievements: ["Achievements", "Unlocked milestones and progress notes."],
   stats: ["Stats", "Compact career totals for exploration, trade, missions, and upgrades."],
   reputation: ["Reputation", "Alignment, combat rank, bounty record, and future reputation shop."],
+  competitive: ["Competitive / Leaderboards", "Public rankings, shared activity, and display-only sector traffic."],
   captainLog: ["Captain's Log", "Newest entries first with full recent history."],
   settings: ["Settings / Save", "Local save controls and prototype safety notes."],
   captainSetup: ["Captain Setup", "Choose a quick captain identity and one tiny specialty bonus."],
@@ -1681,7 +1688,7 @@ const SCREEN_TITLES = {
 function screenNames() { return Object.keys(SCREEN_TITLES); }
 
 const COCKPIT_SCREEN = "cockpit";
-const LOCATION_MODE_SCREENS = ["starbase", "shipyard", "specialMissions", "planets", "combat", "achievements", "stats", "reputation", "captainLog", "settings", "captainSetup", "adminPanel"];
+const LOCATION_MODE_SCREENS = ["starbase", "shipyard", "specialMissions", "planets", "combat", "achievements", "stats", "reputation", "competitive", "captainLog", "settings", "captainSetup", "adminPanel"];
 
 function isDockedMode(screen = activeScreenName()) {
   return LOCATION_MODE_SCREENS.includes(screen);
@@ -1791,6 +1798,7 @@ function renderScreenContent(screen) {
   if (screen === "achievements") return renderAchievementsContent();
   if (screen === "stats") return renderStatsPanel();
   if (screen === "reputation") return renderReputationScreen();
+  if (screen === "competitive") return renderCompetitiveScreen();
   if (screen === "captainLog") return renderCaptainLogScreen();
   if (screen === "settings") return renderSettingsScreen();
   if (screen === "captainSetup") return renderCaptainSetupScreen();
@@ -1816,6 +1824,7 @@ function renderActionPanel() {
     { screen: "achievements", label: "Achievements", enabled: true, reason: `${game.achievements.length} unlocked` },
     { screen: "stats", label: "Stats", enabled: true, reason: `${(game.stats.visitedSectors || []).length} sectors · ${game.stats.missionsClaimed || 0} contracts` },
     { screen: "reputation", label: "Reputation", enabled: true, reason: `${reputationTitle(game.player.reputation)} · ${combatRankTitle()}` },
+    { screen: "competitive", label: "Competitive", enabled: true, reason: cloudUiState.user ? "Leaderboards and shared activity" : "Google sign-in required" },
     { screen: "captainLog", label: "Captain's Log", enabled: true, reason: "Recent events" },
     { screen: "settings", label: "Settings / Save", enabled: true, reason: "Cloud login and local save controls" },
   ];
@@ -3046,6 +3055,7 @@ function applyLoadedSavePayload(saveData) {
     selectedSectorNumber = game.player.currentSector;
     saveGame();
     addLog("Cloud backup loaded into this browser after confirmation.");
+    scheduleCompetitiveProfileUpdate("cloud load", { force: true });
     saveGame();
     return { ok: true };
   } catch (error) {
@@ -3087,7 +3097,12 @@ function refreshFirebaseUiState(allowSubscribe = true) {
         cloudUiState.roleReason = authStatus?.roleReason || (user ? "Role loaded from users/{uid}." : "Sign in to load role.");
         updateLaunchGateFromAuth();
         updatePresenceStatus(user ? "online" : "offline");
+        if (user) {
+          scheduleCompetitiveProfileUpdate("login", { force: true });
+          publishCompetitiveEvent("captainLaunched", `${safeCompetitiveCaptainName()} launched ${game.player.shipName || currentShip().name}.`, { force: true, sectorNumber: game.player.currentSector });
+        }
         subscribeToSectorTraffic();
+        subscribeToCompetitiveEvents();
         if (["settings", "launch", "adminPanel"].includes(activeScreenName())) render();
       });
     }
@@ -3118,6 +3133,152 @@ function safePlainText(value, fallback = "") {
   return String(text || fallback).replace(/[<>]/g, "").trim().slice(0, 80);
 }
 
+
+function safeCompetitiveCaptainName(profile = captainProfile()) {
+  const name = captainDisplayName(profile);
+  return name && name !== "Cadet" ? name : "Unnamed Captain";
+}
+
+function numericStat(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0;
+}
+
+function competitiveStats() {
+  const s = game.stats || {};
+  const sectorsExplored = Math.max(numericStat(s.sectorsExplored), (s.visitedSectors || game.visitedSectors || []).length || 0);
+  const piratesDefeated = Math.max(numericStat(s.piratesDefeated), numericStat(game.player.piratesDefeated));
+  const missionsCompleted = numericStat(s.mathMissionsCompleted) + numericStat(s.missionsClaimed);
+  // Public leaderboard trade profit uses the career stat only. The docking ledger
+  // is a local session display and can overlap with the career stat during a sale.
+  const tradeProfit = numericStat(s.tradeProfit);
+  const creditsEarned = numericStat(s.creditsEarnedFromTrade) + numericStat(game.player.bountiesEarned);
+  const reputation = numericStat(game.player.reputation);
+  const achievementsCount = Array.isArray(game.achievements) ? game.achievements.length : 0;
+  const totalScore = calculateCompetitiveScore({ creditsEarned, sectorsExplored, piratesDefeated, missionsCompleted, tradeProfit, reputation, achievementsCount });
+  return { totalScore, sectorsExplored, piratesDefeated, missionsCompleted, tradeProfit, creditsEarned, reputation, achievementsCount };
+}
+
+function calculateCompetitiveScore(stats = competitiveStats()) {
+  return Math.floor(
+    numericStat(stats.creditsEarned) / 10 +
+    numericStat(stats.sectorsExplored) * 25 +
+    numericStat(stats.piratesDefeated) * 100 +
+    numericStat(stats.missionsCompleted) * 75 +
+    numericStat(stats.tradeProfit) / 5 +
+    numericStat(stats.reputation) * 20 +
+    numericStat(stats.achievementsCount) * 50
+  );
+}
+
+function publicProfilePayloadFromGame(status = "online") {
+  const profile = captainProfile();
+  return {
+    uid: cloudUiState.user?.uid || "",
+    captainName: safeCompetitiveCaptainName(profile),
+    title: profile.title || "Captain",
+    specialty: profile.specialty || "Explorer",
+    shipName: game.player.shipName || currentShip().name,
+    currentSector: game.player.currentSector,
+    status,
+    ...competitiveStats()
+  };
+}
+
+function publicProfileSignature(payload) {
+  const copy = { ...payload };
+  delete copy.lastSeenAt;
+  return JSON.stringify(copy);
+}
+
+function scheduleCompetitiveProfileUpdate(reason = "progress", options = {}) {
+  const client = firebaseClient();
+  if (!client?.updatePublicProfile || !cloudUiState.user || launchGate.mode === "localPrototype") return Promise.resolve({ ok: false, error: "Competitive leaderboards require Google sign-in." });
+  const payload = publicProfilePayloadFromGame(options.status || "online");
+  const signature = publicProfileSignature(payload);
+  const now = Date.now();
+  if (!options.force && signature === competitiveState.lastProfileSignature && now - competitiveState.lastProfileWriteAt < COMPETITIVE_PROFILE_WRITE_THROTTLE_MS) return Promise.resolve({ ok: true, data: { throttled: true, reason } });
+  if (!options.force && now - competitiveState.lastProfileWriteAt < COMPETITIVE_PROFILE_WRITE_THROTTLE_MS) return Promise.resolve({ ok: true, data: { throttled: true, reason } });
+  competitiveState.lastProfileSignature = signature;
+  competitiveState.lastProfileWriteAt = now;
+  return Promise.resolve(client.updatePublicProfile(payload)).catch((error) => ({ ok: false, error: error?.message || "Competitive profile update failed safely." }));
+}
+
+function publishCompetitiveEvent(eventType, message, options = {}) {
+  const client = firebaseClient();
+  if (!client?.createPublicEvent || !cloudUiState.user || launchGate.mode === "localPrototype") return Promise.resolve({ ok: false, error: "Competitive activity requires Google sign-in." });
+  const payload = { eventType, message, captainName: safeCompetitiveCaptainName(), sectorNumber: options.sectorNumber ?? game.player.currentSector };
+  const signature = JSON.stringify(payload);
+  if (!options.force && competitiveState.lastEventSignature === signature) return Promise.resolve({ ok: true, data: { throttled: true } });
+  competitiveState.lastEventSignature = signature;
+  return Promise.resolve(client.createPublicEvent(payload)).catch((error) => ({ ok: false, error: error?.message || "Competitive event skipped safely." }));
+}
+
+const LEADERBOARD_DEFINITIONS = [
+  { key: "totalScore", label: "Overall Score" },
+  { key: "sectorsExplored", label: "Sectors Explored" },
+  { key: "piratesDefeated", label: "Pirates Defeated" },
+  { key: "tradeProfit", label: "Trade Profit" },
+  { key: "missionsCompleted", label: "Missions Completed" },
+  { key: "reputation", label: "Reputation" },
+  { key: "creditsEarned", label: "Credits Earned" },
+];
+
+function renderLeaderboardRows(rows = [], field = "totalScore") {
+  if (!rows.length) return `<p class="empty-note">No competitive profiles yet.</p>`;
+  return `<table class="leaderboard-table"><thead><tr><th>Rank</th><th>Captain</th><th>Ship</th><th>Specialty</th><th>Score</th></tr></thead><tbody>${rows.slice(0, 10).map((row, index) => `<tr><td>#${index + 1}</td><td>${safeDisplayText(row.captainName || "Unnamed Captain")}</td><td>${safeDisplayText(row.shipName || "Unregistered Ship")}</td><td>${safeDisplayText(row.specialty || "Explorer")}</td><td>${safeDisplayText(numericStat(row[field]))}</td></tr>`).join("")}</tbody></table>`;
+}
+
+function renderPublicEventFeed(events = competitiveState.publicEvents) {
+  const safeEvents = (events || []).slice(0, COMPETITIVE_EVENT_LIMIT);
+  if (!safeEvents.length) return `<p class="empty-note">No shared activity yet.</p>`;
+  return `<ol class="competitive-feed">${safeEvents.map((event) => `<li><strong>${safeDisplayText(event.captainName || "Unnamed Captain")}</strong><span>${safeDisplayText(event.message || event.eventType || "Sector Drift activity")}</span>${event.sectorNumber ? `<em>Sector ${safeDisplayText(event.sectorNumber)}</em>` : ""}</li>`).join("")}</ol>`;
+}
+
+function renderCompetitiveNotice() {
+  if (cloudUiState.user && launchGate.mode !== "localPrototype") return "";
+  return `<section class="mini-card competitive-notice"><h3>Sign-in Required</h3><p class="turn-warning">Competitive leaderboards require Google sign-in.</p><p class="help-text">Local prototype mode still works, but public rankings, shared events, and sector traffic stay disabled until sign-in.</p></section>`;
+}
+
+function renderCompetitiveScreen() {
+  if (cloudUiState.user) {
+    scheduleCompetitiveProfileUpdate("competitive screen");
+    refreshCompetitiveData();
+  }
+  const stats = competitiveStats();
+  const boards = LEADERBOARD_DEFINITIONS.map((board) => `<details class="compact-section leaderboard-section" ${board.key === "totalScore" ? "open" : ""}><summary>${board.label}</summary>${renderLeaderboardRows(competitiveState.leaderboards[board.key] || [], board.key)}</details>`).join("");
+  return `<div class="competitive-screen"><section class="mini-card"><p class="eyebrow">Competitive Multiplayer Foundation</p><h3>Shared Universe Status</h3><p class="help-text">Public profile data is only for display and leaderboard rankings. It does not expose email, cargo, cloud saves, dev codes, or private save data.</p><div class="stats-grid">${stat("Your Score", stats.totalScore)}${stat("Sectors", stats.sectorsExplored)}${stat("Pirates", stats.piratesDefeated)}${stat("Missions", stats.missionsCompleted)}${stat("Trade Profit", stats.tradeProfit)}${stat("Presence", presenceStatusLabel())}</div><details class="compact-section"><summary>How score works</summary><p class="help-text">totalScore = creditsEarned / 10 + sectorsExplored × 25 + piratesDefeated × 100 + missionsCompleted × 75 + tradeProfit / 5 + reputation × 20 + achievementsCount × 50.</p></details></section>${renderCompetitiveNotice()}<section class="mini-card"><h3>Leaderboards</h3><p class="help-text">Rankings use safe, client-reported classroom stats. They are competitive, not cheat-proof.</p>${cloudUiState.user ? boards : `<p class="empty-note">Competitive leaderboards require Google sign-in.</p>`}</section><section class="mini-card"><h3>Shared Live Activity</h3><p class="help-text">System-generated events only. No chat, direct PvP attacks, stealing, or player-to-player trading.</p>${cloudUiState.user ? renderPublicEventFeed() : `<p class="empty-note">Competitive leaderboards require Google sign-in.</p>`}</section>${renderSectorTraffic()}</div>`;
+}
+
+function refreshCompetitiveData() {
+  const client = firebaseClient();
+  if (!client || !cloudUiState.user || launchGate.mode === "localPrototype") return;
+  const now = Date.now();
+  if (now - competitiveState.lastRefreshAt < 30000) return;
+  competitiveState.lastRefreshAt = now;
+  if (!competitiveState.loadingBoards && client.getPublicLeaderboard) {
+    competitiveState.loadingBoards = true;
+    Promise.all(LEADERBOARD_DEFINITIONS.map((board) => Promise.resolve(client.getPublicLeaderboard(board.key, 10)).then((result) => [board.key, result])))
+      .then((pairs) => { pairs.forEach(([key, result]) => { if (result?.ok) competitiveState.leaderboards[key] = result.data || []; }); })
+      .finally(() => { competitiveState.loadingBoards = false; if (activeScreenName() === "competitive") render(); });
+  }
+  if (client.getPublicEvents) {
+    Promise.resolve(client.getPublicEvents(COMPETITIVE_EVENT_LIMIT)).then((result) => { if (result?.ok) competitiveState.publicEvents = result.data || []; if (activeScreenName() === "competitive") render(); }).catch(() => {});
+  }
+}
+
+function subscribeToCompetitiveEvents() {
+  const client = firebaseClient();
+  if (!client?.onPublicEventsChange || competitiveState.eventsListening) return;
+  client.onPublicEventsChange(({ ok, records = [], status } = {}) => {
+    competitiveState.eventsListening = Boolean(ok);
+    competitiveState.eventsStatus = status?.status || (ok ? "listening" : "unavailable");
+    competitiveState.eventsMessage = ok ? "Shared activity feed listening." : (status?.error || "Competitive leaderboards require Google sign-in.");
+    competitiveState.publicEvents = records.slice(0, COMPETITIVE_EVENT_LIMIT);
+    if (activeScreenName() === "competitive") render();
+  });
+}
+
 function timestampMillis(value) {
   if (!value) return 0;
   if (typeof value.toMillis === "function") return value.toMillis();
@@ -3145,6 +3306,7 @@ function safePresenceRecord(record = {}) {
     uid: String(record.uid || record.id || ""),
     displayName: safePlainText(record.captainName || record.displayName || "Signed-in Captain", "Signed-in Captain"),
     shipName: safePlainText(record.shipName || "Unregistered Ship", "Unregistered Ship"),
+    specialty: safePlainText(record.specialty || "Explorer", "Explorer"),
     status: safePlainText(record.status || "online", "online"),
     sectorNumber: Math.max(1, Math.floor(Number(record.sectorNumber) || 1)),
     updatedAtMs: timestampMillis(record.updatedAt || record.lastSeenAt),
@@ -3152,7 +3314,7 @@ function safePresenceRecord(record = {}) {
 }
 
 function currentPresencePayload(status = "online") {
-  return { captainName: captainDisplayName(captainProfile()), displayName: captainDisplayName(captainProfile()), sectorNumber: game.player.currentSector, shipName: game.player.shipName || currentShip().name, status, prototypeVersion: STORAGE_KEY };
+  return { captainName: captainDisplayName(captainProfile()), displayName: captainDisplayName(captainProfile()), sectorNumber: game.player.currentSector, shipName: game.player.shipName || currentShip().name, specialty: captainProfile().specialty, status, prototypeVersion: STORAGE_KEY };
 }
 
 function updatePresenceStatus(status = "online", options = {}) {
@@ -3224,7 +3386,7 @@ function renderSectorTraffic() {
   }
   if (!cloudUiState.user) return `<section class="sector-traffic"><h3>Sector Traffic</h3><p class="empty-note">Sign in to see display-only nearby captains.</p></section>`;
   const occupants = sectorTrafficState.currentSectorOccupants || [];
-  const list = occupants.length ? `<ul>${occupants.map((record) => `<li><strong>${safeDisplayText(record.displayName)}</strong><span>${safeDisplayText(record.shipName)}</span><em>${safeDisplayText(record.status)}</em></li>`).join("")}</ul>` : `<p class="empty-note">No other online captains in this sector.</p>`;
+  const list = occupants.length ? `<ul>${occupants.map((record) => `<li><strong>${safeDisplayText(record.displayName)}</strong><span>${safeDisplayText(record.shipName)} · ${safeDisplayText(record.specialty || "Explorer")}</span><em>${safeDisplayText(record.status)}</em></li>`).join("")}</ul>` : `<p class="empty-note">No other online captains in this sector.</p>`;
   return `<section class="sector-traffic"><h3>Sector Traffic</h3>${list}<p class="help-text">Display-only presence: no chat, PvP, trading, stealing, or shared combat.</p></section>`;
 }
 
@@ -3924,6 +4086,9 @@ function travelToSector(number, options = {}) {
   const extras = [...discoveryMessages, ...game.log.slice(0, Math.max(0, game.log.length - logStart)).reverse().filter((entry) => !entry.startsWith("Traveled to Sector") && !discoveryMessages.includes(entry))];
   setArrivalReport(number, extras);
   updatePresenceStatus("online");
+  scheduleCompetitiveProfileUpdate("travel", { force: wasFirstVisit });
+  publishCompetitiveEvent("warpedSector", `${safeCompetitiveCaptainName()} warped into Sector ${number}.`, { sectorNumber: number });
+  if (wasFirstVisit) publishCompetitiveEvent("discoveredSector", `${safeCompetitiveCaptainName()} discovered Sector ${number}.`, { sectorNumber: number });
   saveGame();
   if (!options.silentRender) render();
 }
@@ -4007,7 +4172,9 @@ function sellResource(resource, amount) {
   game.player.credits += price;
   recordDockingCredits(price, "trade", tradeProfit);
   game.stats.creditsEarnedFromTrade += price;
+  game.stats.tradeProfit = (game.stats.tradeProfit || 0) + Math.max(0, tradeProfit);
   game.stats.resourcesSold += amount;
+  scheduleCompetitiveProfileUpdate("trade profit", { force: true });
   if (resource === "Tech") game.stats.techSold += amount;
   setSectorActionResult("Cargo Sold", `Sold ${amount} ${resource} for ${price} credits${traderBonus ? ` including ${traderBonus} Trader bonus` : ""}.`, { type: "positive", gained: [`+${price} credits`], lost: [`-${amount} ${resource}`] });
   addLog(`Sold ${amount} ${resource} for ${price} credits${traderBonus ? ` with Trader specialty bonus` : ""}.`);
@@ -4286,6 +4453,8 @@ function buyShip(shipId) {
   game.player.hull = Math.min(game.player.hull, game.player.maxHull);
   game.player.turns = Math.min(game.player.turns, game.player.maxTurns);
   addLog(`Traded in ${oldShip.name} for ${tradeIn} credits and purchased ${ship.name}.`);
+  scheduleCompetitiveProfileUpdate("ship upgraded", { force: true });
+  publishCompetitiveEvent("upgradedShip", `${safeCompetitiveCaptainName()} upgraded to ${ship.name}.`, { sectorNumber: game.player.currentSector });
   updateScannerReveals();
   saveGame();
   render();
@@ -4307,6 +4476,8 @@ function submitMissionAnswer() {
     awardMissionReward();
     game.stats.mathMissionsCompleted += 1;
     incrementTierMissionStat(mission.tier);
+    scheduleCompetitiveProfileUpdate("mission complete", { force: true });
+    publishCompetitiveEvent("completedMission", `${safeCompetitiveCaptainName()} completed a ${mission.tierName || "math"} mission.`, { sectorNumber: game.player.currentSector });
     completeTutorialStep("math");
     game.missionLocked = true;
     game.missionFeedbackClass = "correct";
@@ -4644,6 +4815,8 @@ function claimBoardMission(id) {
   const replacement = nextAvailableMission();
   if (replacement) game.activeMissions.push(createActiveMission(replacement.id));
   addLog(`Claimed mission reward for ${template.title}: ${formatReward(template.reward)}.`);
+  scheduleCompetitiveProfileUpdate("board mission complete", { force: true });
+  publishCompetitiveEvent("completedMission", `${safeCompetitiveCaptainName()} completed ${template.title}.`, { sectorNumber: game.player.currentSector });
   saveGame();
   render();
 }
@@ -4902,6 +5075,8 @@ function defeatPirate(pirate, verb = "defeated", report = {}) {
   addLog(`Combat report: ${verb} ${pirate.name}. Lost ${lost} fighter${lost === 1 ? "" : "s"}, destroyed ${fighterReport.actualLoss} pirate fighter${fighterReport.actualLoss === 1 ? "" : "s"}, took ${hull} hull damage, earned ${totalBounty} credits and +${totalReputation} reputation.`);
   addLog(message);
   if (pirate.isStronghold) addLog(`Stronghold cleared in Sector ${pirate.sector}. Trade lanes are safer.`);
+  scheduleCompetitiveProfileUpdate("pirate defeated", { force: true });
+  publishCompetitiveEvent("defeatedPirate", `${safeCompetitiveCaptainName()} defeated ${pirate.name} in Sector ${pirate.sector}.`, { sectorNumber: pirate.sector });
 }
 
 function loseCombatToPirates(pirate, cautious = false) {

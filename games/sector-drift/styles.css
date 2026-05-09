@@ -1811,3 +1811,74 @@ button.button-admin {
   color: #cbd5e1;
   font-size: 0.88rem;
 }
+
+/* Competitive multiplayer foundation: public rankings, shared activity, and traffic only. */
+.competitive-screen {
+  display: grid;
+  gap: 1rem;
+}
+
+.competitive-notice {
+  border-color: rgba(255, 209, 102, 0.5);
+}
+
+.leaderboard-section {
+  margin: 0.6rem 0;
+}
+
+.leaderboard-table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  width: 100%;
+}
+
+.leaderboard-table th,
+.leaderboard-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.45rem 0.35rem;
+  text-align: left;
+}
+
+.leaderboard-table th:last-child,
+.leaderboard-table td:last-child {
+  text-align: right;
+}
+
+.competitive-feed {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.competitive-feed li {
+  background: rgba(255, 255, 255, 0.055);
+  border-left: 4px solid rgba(43, 212, 217, 0.7);
+  border-radius: 10px;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.65rem;
+}
+
+.competitive-feed span,
+.competitive-feed em {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.sector-traffic ul {
+  display: grid;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0.4rem 0;
+  padding: 0;
+}
+
+.sector-traffic li {
+  background: rgba(255, 255, 255, 0.055);
+  border-radius: 10px;
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.45rem 0.55rem;
+}

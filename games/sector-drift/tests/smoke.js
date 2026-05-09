@@ -18,6 +18,7 @@ vm.runInContext(`
 (function () {
   function assert(condition, message) { if (!condition) throw new Error(message); }
   function clean(text) { return normalize(text).replace(/[^a-z0-9^=,./()+-]/g, ''); }
+  function awaitResult(result) { if (result && typeof result.then === 'function') return { ok: false, error: 'async helper returned safely' }; return result; }
   function makeEventTargetStub({ dataset = {}, className = '', parent = null } = {}) {
     const listeners = {};
     const classes = new Set(String(className || '').split(/\s+/).filter(Boolean));
@@ -1118,6 +1119,35 @@ vm.runInContext(`
   buyResource('Ore', 5);
   sellResource('Ore', 2);
   assert(game.dockingLedger.tradeProfit === Math.round((oreSell - oreBuy) * 2), 'selling calculates profit/loss using average cost');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  game.player.currentSector = 3;
+  game.player.cargo.Ore = 2;
+  game.player.cargoCostBasis.Ore = { quantity: 2, totalCost: 20, known: true };
+  game.dockingLedger = defaultDockingLedger(game.player.credits, 3);
+  const profitableSellPrice = sectorMap[3].portPrices.Ore.sell;
+  sellResource('Ore', 2);
+  const expectedProfit = profitableSellPrice * 2 - 20;
+  assert(expectedProfit > 0, 'test setup should create a profitable sale');
+  assert(game.dockingLedger.tradeProfit === expectedProfit, 'profitable sale updates local docking ledger trade P/L');
+  assert(game.stats.tradeProfit === expectedProfit, 'profitable sale updates career tradeProfit stat');
+  const profileAfterSale = publicProfilePayloadFromGame('online');
+  assert(profileAfterSale.tradeProfit === game.stats.tradeProfit, 'public profile tradeProfit uses career stat only');
+  assert(profileAfterSale.tradeProfit !== game.stats.tradeProfit + game.dockingLedger.tradeProfit, 'public profile tradeProfit does not double-count docking ledger profit');
+  const expectedNonDuplicatedScore = calculateCompetitiveScore({
+    creditsEarned: game.stats.creditsEarnedFromTrade + (game.player.bountiesEarned || 0),
+    sectorsExplored: game.stats.visitedSectors.length,
+    piratesDefeated: game.player.piratesDefeated || 0,
+    missionsCompleted: (game.stats.mathMissionsCompleted || 0) + (game.stats.missionsClaimed || 0),
+    tradeProfit: game.stats.tradeProfit,
+    reputation: game.player.reputation || 0,
+    achievementsCount: game.achievements.length,
+  });
+  assert(profileAfterSale.totalScore === expectedNonDuplicatedScore, 'public profile totalScore uses non-duplicated tradeProfit');
+  assert(renderDockingLedger().includes('Trade P/L') && renderDockingLedger().includes(signedCredits(expectedProfit)), 'docking ledger still displays session trade P/L locally');
+  assert(renderLeaderboardRows([{ captainName: 'Profit Pilot', shipName: 'Rusty Comet', specialty: 'Trader', tradeProfit: expectedProfit }], 'tradeProfit').includes(String(expectedProfit)), 'leaderboard rendering still works for trade profit rows');
+
   game.player.fuel = game.player.maxFuel - 2;
   buyFuel(1);
   game.player.hull = game.player.maxHull - 2;
@@ -1312,7 +1342,46 @@ vm.runInContext(`
   game.player.currentSector = 1;
   applyPresenceRecords([{ uid: 'other-1', captainName: 'Jordan', shipName: 'Rusty Comet', sectorNumber: 1, status: 'docked', updatedAt: remoteNow }]);
   assert(liveEvents.some((event) => event.message.includes('Jordan') && event.message.includes('warped into Sector 1')), 'remote sector arrival pushes live event without initial spam');
-  assert(renderSectorTraffic().includes('Jordan') && renderSectorTraffic().includes('Rusty Comet') && renderSectorTraffic().includes('docked'), 'sector traffic lists nearby captain, ship, and status');
+  assert(renderSectorTraffic().includes('Jordan') && renderSectorTraffic().includes('Rusty Comet') && renderSectorTraffic().includes('docked') && renderSectorTraffic().includes('Explorer'), 'sector traffic lists nearby captain, ship, specialty, and status');
+  const signedOutWindow = { SectorDriftFirebase: {} };
+  window = signedOutWindow;
+  cloudUiState.user = null;
+  launchGate.mode = 'localPrototype';
+  game = defaultGameState();
+  game.ui.activeScreen = 'competitive';
+  const localCompetitiveHtml = renderCompetitiveScreen();
+  assert(localCompetitiveHtml.includes('Competitive leaderboards require Google sign-in.'), 'competitive screen renders local sign-in notice');
+  assert(calculateCompetitiveScore({ creditsEarned: 1000, sectorsExplored: 2, piratesDefeated: 1, missionsCompleted: 3, tradeProfit: 50, reputation: 4, achievementsCount: 2 }) === 665, 'competitive score formula works');
+  const mockRows = [{ captainName: 'Vega', shipName: 'Rusty Comet', specialty: 'Explorer', totalScore: 321 }];
+  assert(renderLeaderboardRows(mockRows, 'totalScore').includes('#1') && renderLeaderboardRows(mockRows, 'totalScore').includes('Vega') && renderLeaderboardRows(mockRows, 'totalScore').includes('321'), 'leaderboard rows render from mock data');
+  const mockEvents = [{ captainName: 'Vega', message: 'Captain Vega warped into Sector 12.', sectorNumber: 12 }];
+  assert(renderPublicEventFeed(mockEvents).includes('Captain Vega warped into Sector 12.') && renderPublicEventFeed(mockEvents).includes('Sector 12'), 'shared event feed renders from mock data');
+  assert((awaitResult(scheduleCompetitiveProfileUpdate('signed out test'))).ok === false, 'profile update helper fails safely when signed out');
+  assert((awaitResult(publishCompetitiveEvent('warpedSector', 'signed out test'))).ok === false, 'public event helper fails safely when signed out');
+
+  window = { SectorDriftFirebase: {
+    getFirebaseStatus: () => ({ ok: true, status: 'available', user: { uid: 'student-3', displayName: 'Student Three' }, role: 'student' }),
+    getCurrentFirebaseUser: () => ({ ok: true, data: { uid: 'student-3', displayName: 'Student Three' } }),
+    getCurrentUserRole: () => ({ ok: true, data: 'student', reason: 'test' }),
+    updatePresence: (payload) => ({ ok: Boolean(payload && payload.sectorNumber), data: payload }),
+    updatePublicProfile: (payload) => ({ ok: true, data: payload }),
+    createPublicEvent: (payload) => ({ ok: true, data: payload }),
+    getPublicLeaderboard: (field) => ({ ok: true, data: mockRows.map((row) => ({ ...row, [field]: row[field] || 7 })) }),
+    getPublicEvents: () => ({ ok: true, data: mockEvents }),
+    onPresenceChange: (callback) => { callback({ ok: true, records: [], status: { ok: true, status: 'listening' } }); return () => {}; },
+    onPublicEventsChange: (callback) => { callback({ ok: true, records: mockEvents, status: { ok: true, status: 'listening' } }); return () => {}; },
+  } };
+  launchGate.mode = 'signedIn';
+  refreshFirebaseUiState(false);
+  cloudUiState.user = { uid: 'student-3', displayName: 'Student Three' };
+  game.player.captainProfile = normalizeCaptainProfile({ name: 'Vega', title: 'Captain', specialty: 'Explorer', setupComplete: true }, 'Vega', true);
+  game.player.pilotName = captainDisplayName(game.player.captainProfile);
+  const profilePayload = publicProfilePayloadFromGame('online');
+  assert(profilePayload.captainName === 'Captain Vega' && profilePayload.uid === 'student-3' && profilePayload.totalScore >= 0, 'public profile payload includes allowed public fields');
+  assert(!('email' in profilePayload) && !('cargo' in profilePayload) && !('saveData' in profilePayload) && !('devCodes' in profilePayload), 'public profile payload excludes private fields');
+  const competitiveHtml = renderCompetitiveScreen();
+  assert(competitiveHtml.includes('Leaderboards') && competitiveHtml.includes('Shared Live Activity') && competitiveHtml.includes('Sector Traffic'), 'competitive screen renders signed-in sections');
+
   const firebaseSource = fs.readFileSync('games/sector-drift/firebase-client.js', 'utf8');
   const presenceFunction = firebaseSource.slice(firebaseSource.indexOf('function presencePayload'), firebaseSource.indexOf('// Presence is display-only'));
   assert(presenceFunction.includes('sectorNumber') && presenceFunction.includes('shipName') && presenceFunction.includes('status'), 'presence data model includes safe display fields');

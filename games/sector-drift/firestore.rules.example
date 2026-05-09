@@ -46,6 +46,43 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    function publicProfileFieldsOnly() {
+      return request.resource.data.keys().hasOnly([
+        'uid', 'captainName', 'title', 'specialty', 'shipName', 'currentSector',
+        'status', 'lastSeenAt', 'totalScore', 'sectorsExplored', 'piratesDefeated',
+        'missionsCompleted', 'tradeProfit', 'creditsEarned', 'reputation', 'achievementsCount'
+      ]);
+    }
+
+    function publicEventFieldsOnly() {
+      return request.resource.data.keys().hasOnly([
+        'uid', 'captainName', 'eventType', 'message', 'sectorNumber', 'createdAt', 'public'
+      ]);
+    }
+
+    match /sectorDriftPublicProfiles/{uid} {
+      // Public profile is display/leaderboard data only; it must not contain email,
+      // full save data, exact cargo inventory, dev codes, private save data, or cloud backups.
+      // Client-reported stats are acceptable for early classroom competition, but not cheat-proof.
+      allow read: if signedIn();
+      allow create, update: if isSelf(uid)
+        && request.resource.data.uid == request.auth.uid
+        && publicProfileFieldsOnly();
+      allow delete: if false;
+    }
+
+    match /sectorDriftPublicEvents/{eventId} {
+      // System-generated public activity only. No chat, PvP, cargo trades, stealing,
+      // or server-authoritative combat is implemented here. Future direct PvP/trading
+      // must require server-authoritative validation or stricter rules.
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.public == true
+        && publicEventFieldsOnly();
+      allow update, delete: if false;
+    }
+
     match /sectorDriftPresence/{uid} {
       // Display-only classroom presence. Never treat this as authority for credits,
       // cargo, combat, ownership, PvP, trading, stealing, or shared economy.
@@ -54,7 +91,7 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.keys().hasOnly([
           'uid', 'displayName', 'captainName', 'sectorNumber', 'shipName',
-          'status', 'updatedAt', 'lastSeenAt', 'prototypeVersion'
+          'status', 'specialty', 'updatedAt', 'lastSeenAt', 'prototypeVersion'
         ]);
       allow delete: if false;
     }
