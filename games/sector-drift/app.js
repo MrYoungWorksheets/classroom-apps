@@ -1178,11 +1178,37 @@ function hasCompletedCaptainProfile(state = game) {
 function needsCaptainSetup(state = game) {
   return !hasCompletedCaptainProfile(state);
 }
+function legacyCaptainOwnerName(state = game) {
+  return safePlainText(state?.player?.legacyPlanetOwnerName, "").trim();
+}
+
+function migratePlanetOwnershipForCaptainIdentity(previousNames = [], newOwnerName = game?.player?.pilotName, { legacy = false } = {}) {
+  const newOwner = safePlainText(newOwnerName, "").trim();
+  if (!newOwner || !game?.planets) return 0;
+  const aliases = new Set(safeArray(previousNames).map((name) => safePlainText(name, "").trim()).filter((name) => name && name !== newOwner));
+  if (!aliases.size) return 0;
+  let migrated = 0;
+  Object.entries(game.planets || {}).forEach(([id, planet]) => {
+    const normalized = normalizePlanetState(planet);
+    if (isProtectedHomeworld(normalized)) return;
+    if (!aliases.has(safePlainText(normalized.owner, "").trim())) return;
+    normalized.owner = newOwner;
+    game.planets[id] = normalized;
+    migrated += 1;
+  });
+  if (migrated > 0) addLog(legacy ? "Legacy planet ownership updated for new captain identity." : "Planet ownership updated for new captain identity.");
+  return migrated;
+}
+
 
 function applyCaptainProfile({ name, title, specialty } = {}) {
+  const previousPilotName = safePlainText(game.player?.pilotName, "").trim();
+  const pendingLegacyOwner = legacyCaptainOwnerName(game);
   const profile = normalizeCaptainProfile({ name, title, specialty, setupComplete: true }, game.player.pilotName, true);
   game.player.captainProfile = profile;
   game.player.pilotName = captainDisplayName(profile);
+  migratePlanetOwnershipForCaptainIdentity([pendingLegacyOwner, previousPilotName], game.player.pilotName, { legacy: Boolean(pendingLegacyOwner) });
+  if (game.player.legacyPlanetOwnerName) delete game.player.legacyPlanetOwnerName;
   addLog(`Captain profile saved: ${game.player.pilotName}, ${profile.specialty}.`);
   updatePresenceStatus("online", { silent: true });
   scheduleCompetitiveProfileUpdate("captain profile saved", { force: true });
@@ -1525,8 +1551,11 @@ function migrateGameState(saved = {}) {
 
     const merged = { ...fresh, ...safeObject(saved) };
     merged.player = { ...fresh.player, ...savedPlayer };
-    merged.player.captainProfile = normalizeCaptainProfile(savedPlayer.captainProfile, savedPlayer.pilotName || fresh.player.pilotName, false);
+    const savedPilotName = safePlainText(savedPlayer.pilotName, "").trim();
+    merged.player.captainProfile = normalizeCaptainProfile(savedPlayer.captainProfile, savedPilotName || fresh.player.pilotName, false);
     merged.player.pilotName = captainDisplayName(merged.player.captainProfile);
+    if (!hasCompletedCaptainProfile(merged) && savedPilotName) merged.player.legacyPlanetOwnerName = legacyCaptainOwnerName(merged) || savedPilotName;
+    else if (hasCompletedCaptainProfile(merged) && merged.player.legacyPlanetOwnerName) delete merged.player.legacyPlanetOwnerName;
     const originalSector = merged.player.currentSector;
     merged.player.currentSector = normalizeSectorNumber(merged.player.currentSector, 1);
     if (Number(originalSector) !== merged.player.currentSector) repairs.push(`invalid sector reset to Sector ${merged.player.currentSector}`);

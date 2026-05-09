@@ -1504,6 +1504,36 @@ vm.runInContext(`
   assert(recoveredHyper.ui.warpDestination === 5, 'hyperdrive refresh recovery restores plotted target safely');
   const legacySave = migrateGameState({ player: { pilotName: 'Legacy Ace', credits: 777 } });
   assert(needsCaptainSetup(legacySave) && legacySave.player.captainProfile.name === 'Legacy Ace', 'existing saves without captain profiles migrate to needs setup without erasing progress');
+  const legacyOwnedSector = Object.values(sectorMap).find((sector) => sector.type === 'planet' && !isProtectedSpace(sector.number) && !game.pirates[sector.number]);
+  const otherOwnedSector = Object.values(sectorMap).find((sector) => sector.type === 'planet' && !isProtectedSpace(sector.number) && sector.number !== legacyOwnedSector.number);
+  game = migrateGameState({
+    player: { pilotName: 'Legacy Owner', currentSector: legacyOwnedSector.number, cargo: { Ore: 0, Food: 5, Tech: 8 } },
+    planets: {
+      [legacyOwnedSector.planet.id]: { ...legacyOwnedSector.planet, owner: 'Legacy Owner', stored: { Ore: 200, Food: 200, Tech: 200, Fighters: 0 } },
+      [otherOwnedSector.planet.id]: { ...otherOwnedSector.planet, owner: 'Rival Captain', stored: { Ore: 200, Food: 200, Tech: 200, Fighters: 0 } },
+    },
+  });
+  assert(needsCaptainSetup(game) && game.player.legacyPlanetOwnerName === 'Legacy Owner', 'legacy saves remember the old owner name while captain setup is pending');
+  applyCaptainProfile({ name: 'New Star', title: 'Commander', specialty: 'Engineer' });
+  assert(game.planets[legacyOwnedSector.planet.id].owner === game.player.pilotName && game.log.some((entry) => entry.includes('Legacy planet ownership updated')), 'captain setup migrates legacy-owned planets to the new captain identity once');
+  assert(game.planets[otherOwnedSector.planet.id].owner === 'Rival Captain', 'captain setup does not migrate planets owned by another name');
+  game.player.currentSector = legacyOwnedSector.number;
+  const legacyMigratedPlanet = game.planets[legacyOwnedSector.planet.id];
+  const storedTechBeforeLegacyDeposit = legacyMigratedPlanet.stored.Tech;
+  depositToPlanet('Tech', 'max');
+  assert(game.planets[legacyMigratedPlanet.id].stored.Tech === storedTechBeforeLegacyDeposit + 8 && !game.ui.lastSectorActionResult?.message.includes('Cannot deposit cargo here'), 'migrated legacy owner can still deposit cargo without being treated as non-owner defense');
+  const productionBeforeLegacyUpgrade = game.planets[legacyMigratedPlanet.id].upgrades.production;
+  upgradePlanet('production');
+  assert(game.planets[legacyMigratedPlanet.id].upgrades.production === productionBeforeLegacyUpgrade + 1, 'migrated legacy owner can still upgrade the previously owned planet');
+  game.player.currentSector = otherOwnedSector.number;
+  game.player.cargo.Food = 5;
+  depositToPlanet('Food', 'max');
+  assert(game.player.cargo.Food === 5 && game.ui.lastSectorActionResult?.message.includes('Cannot deposit cargo here'), 'planets owned by another name remain non-owned and defended');
+  upgradePlanet('production');
+  assert(game.ui.lastSectorActionResult?.message.includes('Only your owned planets can be upgraded'), 'non-owned planet upgrades remain blocked after legacy ownership migration');
+  game.player.currentSector = 1;
+  claimPlanet();
+  assert(game.ui.lastSectorActionResult?.message.includes('cannot be claimed') && !Object.values(game.planets).some((planet) => isProtectedHomeworld(planet) && planet.owner === game.player.pilotName), 'protected worlds remain blocked after legacy ownership migration');
   const completeSave = migrateGameState({ player: { pilotName: 'Captain Riley', credits: 888, captainProfile: { name: 'Riley', title: 'Captain', specialty: 'Trader', setupComplete: true } } });
   assert(!needsCaptainSetup(completeSave) && completeSave.player.credits === 888, 'completed captain profiles still migrate directly to cockpit-ready saves');
   const activeBeforeCloud = game.ui.activeScreen;
