@@ -1322,6 +1322,14 @@ function closeScreen() {
   render();
 }
 
+function returnToCockpitAfterSuccessfulRoute(previousScreen = activeScreenName()) {
+  if (previousScreen === COCKPIT_SCREEN) return false;
+  game.ui = game.ui || {};
+  game.ui.activeScreen = COCKPIT_SCREEN;
+  updatePresenceStatus("online");
+  return true;
+}
+
 function activeScreenName() {
   game.ui = game.ui || {};
   if (!screenNames().includes(game.ui.activeScreen)) game.ui.activeScreen = "cockpit";
@@ -1631,6 +1639,7 @@ function findExploratoryRouteToSector(startSector, targetSector) {
 }
 
 function setWarpDestination(sectorNumber, options = {}) {
+  const previousScreen = activeScreenName();
   const target = Number(sectorNumber);
   if (!sectorMap[target]) return addAndRender("Warp destination must be a valid sector number.");
   const knownRoute = findRouteToSector(game.player.currentSector, target);
@@ -1643,11 +1652,13 @@ function setWarpDestination(sectorNumber, options = {}) {
   const next = scoutRoute[1] || target;
   const isBountyRoute = options.context === "bounty";
   const title = isBountyRoute ? (exploratory ? "Bounty Scout Route Set" : "Bounty Route Set") : (exploratory ? "Scout Route Set" : "Route Set");
-  const message = isBountyRoute
+  const baseMessage = isBountyRoute
     ? `Bounty route set: Sector ${target}. Next jump: Sector ${next}.${exploratory ? " Scout route uses visible unexplored lanes one jump at a time." : ""}`
     : exploratory
       ? `Scout Route Set: Sector ${target} selected. Next hop: Sector ${next}. Exploratory autopilot may enter dangerous unexplored sectors one jump at a time.`
       : `Route Set: Sector ${target} selected. Next hop: Sector ${next}. Use Autopilot one jump at a time.`;
+  const returnedToCockpit = returnToCockpitAfterSuccessfulRoute(previousScreen);
+  const message = `${baseMessage}${returnedToCockpit ? " Autopilot is ready in the cockpit." : ""}`;
   const gained = [`Destination Sector ${target}`];
   if (isBountyRoute && options.targetName) gained.push(`Bounty: ${options.targetName}`);
   setSectorActionResult(title, message, { type: "neutral", gained, sector: target });
@@ -3225,6 +3236,13 @@ function sellFighters(amountValue) {
   render();
 }
 
+function renderPlanetCargoDepositRow(resource, planet) {
+  const amount = Math.max(0, Math.floor(Number(game.player.cargo?.[resource]) || 0));
+  const disabled = planet.owner !== game.player.pilotName || amount <= 0 ? "disabled" : "";
+  const status = planet.owner !== game.player.pilotName ? "Cannot deposit cargo here." : amount <= 0 ? "None aboard" : `${amount} aboard`;
+  return `<div class="mini-card planet-cargo-row"><h4>${resource}</h4>${stat("Ship", amount)}${stat("Planet", planet.stored[resource] || 0)}<p class="help-text">${status}</p><div class="button-row"><button data-action="deposit" data-resource="${resource}" data-amount="1" ${disabled}>Deposit 1</button><button data-action="deposit" data-resource="${resource}" data-amount="10" ${disabled}>Deposit 10</button><button data-action="deposit" data-resource="${resource}" data-amount="max" ${disabled}>Deposit All</button></div></div>`;
+}
+
 function renderPlanet(sector) {
   const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
   const profile = getPlanetTypeProfile(planet.type);
@@ -3242,7 +3260,7 @@ function renderPlanet(sector) {
   <div class="production-preview"><strong>Current Collection:</strong> ${formatProduction(preview)}</div>
   <h3>Planet Upgrade Tracks</h3><div class="planet-grid">${capStats}</div>
   <div class="planet-upgrade-grid">${PLANET_UPGRADE_TRACKS.map((track) => renderPlanetUpgradeCard(planet, track)).join("")}</div>
-  <h3>Planet Logistics</h3><div class="button-row">${RESOURCES.map((resource) => `<button data-action="deposit" data-resource="${resource}">Deposit ${resource}</button>`).join("")}<button data-action="collectProduction">Collect Planet Production</button></div>
+  <h3>Planet Logistics</h3><p class="help-text">Transfer cargo from ship storage into this managed planet without changing trade prices or cost basis.</p><div class="planet-grid">${RESOURCES.map((resource) => renderPlanetCargoDepositRow(resource, planet)).join("")}</div><div class="button-row"><button data-action="collectProduction">Collect Planet Production</button></div>
   ${renderPlanetFighterTransfer(planet)}
   <details class="compact-section future-tech"><summary>Future Tech Potential</summary><p class="help-text">Descriptive scaffolding only; functional tech trees arrive in a later update.</p><ul>${techList}</ul></details>
   <p class="cooldown">${productionStatusText()}</p></section>`;
@@ -3264,7 +3282,7 @@ function renderPlanetFighterTransfer(planet) {
   const shipSpace = Math.max(0, game.player.fighterCapacity - game.player.fighters);
   const canLoad = planet.owner === game.player.pilotName && planet.stored.Fighters > 0 && shipSpace > 0;
   const canUnload = planet.owner === game.player.pilotName && game.player.fighters > 0;
-  return `<div class="fighter-transfer mini-card"><h3>Fighter Transfer</h3>${stat("Ship Fighters", `${game.player.fighters}/${game.player.fighterCapacity}`)}${stat("Planet Fighters", planet.stored.Fighters)}<p class="help-text">Planet Fighters do not use cargo space. Transfers respect ship fighter capacity.</p><div class="button-row"><button data-action="loadPlanetFighters" data-amount="1" ${canLoad ? "" : "disabled"}>Load 1 Fighter to Ship</button><button data-action="loadPlanetFighters" data-amount="10" ${canLoad ? "" : "disabled"}>Load 10 Fighters to Ship</button><button data-action="loadPlanetFighters" data-amount="max" ${canLoad ? "" : "disabled"}>Load Max Fighters to Ship</button><button data-action="unloadPlanetFighters" data-amount="1" ${canUnload ? "" : "disabled"}>Unload 1 Fighter</button><button data-action="unloadPlanetFighters" data-amount="10" ${canUnload ? "" : "disabled"}>Unload 10 Fighters</button><button data-action="unloadPlanetFighters" data-amount="max" ${canUnload ? "" : "disabled"}>Unload Max Fighters</button></div></div>`;
+  return `<div class="fighter-transfer mini-card"><h3>Fighter Transfer</h3>${stat("Ship Fighters", `${game.player.fighters}/${game.player.fighterCapacity}`)}${stat("Planet Fighters", planet.stored.Fighters)}<p class="help-text">Planet Fighters do not use cargo space. Transfers respect ship fighter capacity.</p><div class="button-row"><button data-action="loadPlanetFighters" data-amount="1" ${canLoad ? "" : "disabled"}>Load 1 Fighter to Ship</button><button data-action="loadPlanetFighters" data-amount="10" ${canLoad ? "" : "disabled"}>Load 10 Fighters to Ship</button><button data-action="loadPlanetFighters" data-amount="max" ${canLoad ? "" : "disabled"}>Load Max Fighters to Ship</button><button data-action="unloadPlanetFighters" data-amount="1" ${canUnload ? "" : "disabled"}>Deposit 1 Fighter</button><button data-action="unloadPlanetFighters" data-amount="10" ${canUnload ? "" : "disabled"}>Deposit 10 Fighters</button><button data-action="unloadPlanetFighters" data-amount="max" ${canUnload ? "" : "disabled"}>Deposit All Fighters</button></div></div>`;
 }
 
 // LEGACY RENDERER: older asteroid markup; active mining is reached from renderSituationCard().
@@ -3300,7 +3318,7 @@ function wireLocationButtons(scope = panels.location) {
   wirePlotSelectedRouteButtons(scope);
   scope.querySelectorAll("[data-action='sell']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(() => sellResource(button.dataset.resource, Number(button.dataset.amount))); }));
   scope.querySelector("[data-action='claim']")?.addEventListener("click", () => runGameAction(claimPlanet));
-  scope.querySelectorAll("[data-action='deposit']").forEach((button) => button.addEventListener("click", () => runGameAction(() => depositToPlanet(button.dataset.resource))));
+  scope.querySelectorAll("[data-action='deposit']").forEach((button) => button.addEventListener("click", () => runGameAction(() => depositToPlanet(button.dataset.resource, button.dataset.amount || 1))));
   scope.querySelectorAll("[data-action='upgradePlanet']").forEach((button) => button.addEventListener("click", () => runGameAction(() => upgradePlanet(button.dataset.track || "production"))));
   scope.querySelector("[data-action='collectProduction']")?.addEventListener("click", () => runGameAction(collectPlanetProduction));
   scope.querySelectorAll("[data-action='loadPlanetFighters']").forEach((button) => button.addEventListener("click", () => runGameAction(() => transferPlanetFighters("load", button.dataset.amount))));
@@ -3520,15 +3538,24 @@ function claimPlanet() {
   render();
 }
 
-function depositToPlanet(resource) {
+function depositToPlanet(resource, amountValue = 1) {
   const sector = sectorMap[game.player.currentSector];
+  if (!sector || sector.type !== "planet") return addAndRender("No owned planet in this sector.");
+  if (!RESOURCES.includes(resource)) return addAndRender("Planet storage unavailable.");
   const planet = normalizePlanetState(getPlanetState(sector), sector.number, sector.routeRole, sector.dangerLevel);
-  if (!planet.owner || game.player.cargo[resource] <= 0) return addAndRender(`No ${resource} available to deposit.`);
-  game.player.cargo[resource] -= 1;
-  planet.stored[resource] += 1;
+  if (!planet || !planet.stored || planet.owner !== game.player.pilotName) return addAndRender(planet?.owner ? "Cannot deposit cargo here." : "No owned planet in this sector.");
+  const aboard = Math.max(0, Math.floor(Number(game.player.cargo?.[resource]) || 0));
+  if (aboard <= 0) return addAndRender(`No ${resource} aboard.`);
+  const requested = amountValue === "max" ? aboard : Math.max(1, Math.floor(Number(amountValue) || 1));
+  const amount = Math.min(aboard, requested);
+  if (amount <= 0) return addAndRender(`No ${resource} aboard.`);
+  game.player.cargo[resource] -= amount;
+  planet.stored[resource] = (planet.stored[resource] || 0) + amount;
   game.planets[planet.id] = planet;
-  game.stats.resourcesDeposited += 1;
-  addLog(`Deposited 1 ${resource} on ${planet.name}.`);
+  game.stats.resourcesDeposited += amount;
+  const message = `Deposited ${amount} ${resource} to ${planet.name}.`;
+  setSectorActionResult("Cargo Deposited", message, { type: "positive", gained: [`+${amount} ${resource} on ${planet.name}`], lost: [`-${amount} ${resource} from ship`], sector: sector.number });
+  addLog(message);
   completeTutorialStep("deposit");
   saveGame();
   render();
