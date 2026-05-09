@@ -1251,7 +1251,7 @@ vm.runInContext(`
   game.player.upgrades.scanner = 1;
   renderSectorPanel();
   assert(panels.sector.innerHTML.includes('Arrival Report') && panels.sector.innerHTML.includes('Alliance protected space'), 'arrival reports still render with sector identity flavor');
-  assert(panels.sector.innerHTML.includes('sector-tag'), 'sector tags render safely in cockpit panels');
+  assert(panels.sector.innerHTML.includes('sector-tag') && panels.sector.innerHTML.includes('Protected'), 'stronger sector tags render safely in cockpit panels');
   const identityAsteroidSector = Object.values(sectorMap).find((sector) => sector.type === 'asteroid' && sectorDistance(1, sector.number) <= 2);
   game.player.currentSector = sectorMap[identityAsteroidSector.number].adjacent[0];
   game.visitedSectors = [game.player.currentSector];
@@ -1262,7 +1262,7 @@ vm.runInContext(`
   assert(lowScannerIntel.includes('Vague mass and danger returns only') && !lowScannerIntel.includes('Rich Ore') && !lowScannerIntel.includes('Dense Ore'), 'low scanner levels do not reveal all opportunity tags');
   game.player.upgrades.scanner = 2;
   const levelTwoIntel = renderNavigationIntel();
-  assert(levelTwoIntel.includes('Route Role') && /Ore|ore/.test(levelTwoIntel), 'scanner level 2 reveals route role and asteroid richness');
+  assert(levelTwoIntel.includes('Route Role') && /Ore|ore/.test(levelTwoIntel) && levelTwoIntel.includes('Sector brief'), 'scanner level 2 reveals clearer type/opportunity detail without a full deep scan');
   const identityAnomalySector = Object.values(sectorMap).find((sector) => sector.type === 'anomaly');
   game.player.currentSector = sectorMap[identityAnomalySector.number].adjacent[0];
   game.visitedSectors = [game.player.currentSector];
@@ -1275,7 +1275,18 @@ vm.runInContext(`
   const firstDiscovery = recordSectorDiscovery(routeSector.number, true).join(' ');
   const discoveryAfter = game.stats.explorationDiscoveries || 0;
   const duplicateDiscovery = recordSectorDiscovery(routeSector.number, false).join(' ');
-  assert(firstDiscovery.includes('Trade lane mapped') && discoveryAfter === discoveryBefore + 1 && duplicateDiscovery === '', 'discovery events trigger once appropriately for meaningful first visits');
+  assert(firstDiscovery.includes('Trade lane mapped') && discoveryAfter === discoveryBefore + 1 && duplicateDiscovery === '' && game.ui.lastSectorActionResult?.title === 'Discovery Logged', 'discovery events trigger once and report through action results');
+  assert((game.stats.tradeRoutesMapped || game.stats.tradeRoutesDiscovered || 0) >= 1, 'trade route discovery stats update');
+  const deadEndSector = Object.values(sectorMap).find((sector) => sector.routeRole === 'deadEnd' && sector.number !== routeSector.number);
+  const deadEndDiscovery = recordSectorDiscovery(deadEndSector.number, true).join(' ');
+  assert(deadEndDiscovery.includes('Dead-end sector logged') && (game.stats.deadEndSectorsLogged || 0) >= 1, 'dead-end discovery feedback and stats update');
+  game.player.currentSector = 1;
+  game.visitedSectors = [1];
+  game.revealedSectors = [1, 2, 3, 4, 5];
+  selectedSectorNumber = 5;
+  game.player.upgrades.scanner = 4;
+  const crossroadTags = renderNavigationIntel();
+  assert(crossroadTags.includes('Trade Route') && crossroadTags.includes('Crossroad'), 'level 4 route-role sector tags render in selected sector intel');
 
   game.player.credits = 2468;
   saveGame();
