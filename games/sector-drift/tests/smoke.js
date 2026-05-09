@@ -914,8 +914,8 @@ vm.runInContext(`
 
   game = defaultGameState();
   launchGate.mode = 'localPrototype';
-  const anomalySector = Object.values(sectorMap).find((sector) => sector.type === 'anomaly');
-  game.player.currentSector = anomalySector.number;
+  const scannerAnomalySector = Object.values(sectorMap).find((sector) => sector.type === 'anomaly');
+  game.player.currentSector = scannerAnomalySector.number;
   game.player.turns = 5;
   game.player.fuel = 5;
   Math.random = () => 0.7;
@@ -1177,6 +1177,41 @@ vm.runInContext(`
   setWarpDestination(1);
   assert(liveEvents.some((event) => event.title.includes('Route Set') && event.message.includes('Sector 1')), 'route setting pushes a live event');
   window = undefined;
+
+
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  game.player.fuel = 20;
+  game.player.turns = 20;
+  game.player.upgrades.scanner = 1;
+  renderSectorPanel();
+  assert(panels.sector.innerHTML.includes('Arrival Report') && panels.sector.innerHTML.includes('Alliance protected space'), 'arrival reports still render with sector identity flavor');
+  assert(panels.sector.innerHTML.includes('sector-tag'), 'sector tags render safely in cockpit panels');
+  const identityAsteroidSector = Object.values(sectorMap).find((sector) => sector.type === 'asteroid' && sectorDistance(1, sector.number) <= 2);
+  game.player.currentSector = sectorMap[identityAsteroidSector.number].adjacent[0];
+  game.visitedSectors = [game.player.currentSector];
+  game.revealedSectors = [game.player.currentSector, identityAsteroidSector.number];
+  selectedSectorNumber = identityAsteroidSector.number;
+  game.player.upgrades.scanner = 1;
+  const lowScannerIntel = renderNavigationIntel();
+  assert(lowScannerIntel.includes('Vague mass and danger returns only') && !lowScannerIntel.includes('Rich Ore') && !lowScannerIntel.includes('Dense Ore'), 'low scanner levels do not reveal all opportunity tags');
+  game.player.upgrades.scanner = 2;
+  const levelTwoIntel = renderNavigationIntel();
+  assert(levelTwoIntel.includes('Route Role') && /Ore|ore/.test(levelTwoIntel), 'scanner level 2 reveals route role and asteroid richness');
+  const identityAnomalySector = Object.values(sectorMap).find((sector) => sector.type === 'anomaly');
+  game.player.currentSector = sectorMap[identityAnomalySector.number].adjacent[0];
+  game.visitedSectors = [game.player.currentSector];
+  game.revealedSectors = [game.player.currentSector, identityAnomalySector.number];
+  selectedSectorNumber = identityAnomalySector.number;
+  game.player.upgrades.scanner = 3;
+  assert(renderNavigationIntel().includes('instability'), 'scanner level 3 reveals anomaly instability details');
+  const routeSector = Object.values(sectorMap).find((sector) => sector.identityType === 'tradeCorridor' && sector.number !== 1);
+  const discoveryBefore = game.stats.explorationDiscoveries || 0;
+  const firstDiscovery = recordSectorDiscovery(routeSector.number, true).join(' ');
+  const discoveryAfter = game.stats.explorationDiscoveries || 0;
+  const duplicateDiscovery = recordSectorDiscovery(routeSector.number, false).join(' ');
+  assert(firstDiscovery.includes('Trade lane mapped') && discoveryAfter === discoveryBefore + 1 && duplicateDiscovery === '', 'discovery events trigger once appropriately for meaningful first visits');
 
   game.player.credits = 2468;
   saveGame();

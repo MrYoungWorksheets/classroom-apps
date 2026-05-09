@@ -1748,3 +1748,22 @@ button.button-admin {
     animation: none;
   }
 }
+
+.sector-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.45rem 0;
+}
+
+.sector-tag {
+  background: rgba(43, 212, 217, 0.12);
+  border: 1px solid rgba(43, 212, 217, 0.35);
+  border-radius: 999px;
+  color: #dffcff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 0.18rem 0.5rem;
+  text-transform: uppercase;
+}
