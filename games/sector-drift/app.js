@@ -918,6 +918,23 @@ function plotDeliveryRoute(id) {
   return setWarpDestination(quest.targetSector);
 }
 
+function bountyBySector(sectorNumber) {
+  const target = Number(sectorNumber);
+  return Object.values(game.pirates || {}).find((pirate) => Number(pirate.sector) === target && !pirate.defeated);
+}
+
+function plotBountyRoute(sectorNumber) {
+  const pirate = bountyBySector(sectorNumber);
+  if (!pirate) return addAndRender("Bounty target not found or already defeated.");
+  return setWarpDestination(pirate.sector, { context: "bounty", targetName: pirate.name });
+}
+
+function openBountyCombat(sectorNumber) {
+  const pirate = bountyBySector(sectorNumber);
+  if (!pirate || Number(pirate.sector) !== game.player.currentSector) return addAndRender("Travel to the bounty sector before opening combat.");
+  return openScreen("combat");
+}
+
 function incrementTierMissionStat(tier) {
   const keys = {
     1: "basicMissionsCompleted",
@@ -1613,7 +1630,7 @@ function findExploratoryRouteToSector(startSector, targetSector) {
   return null;
 }
 
-function setWarpDestination(sectorNumber) {
+function setWarpDestination(sectorNumber, options = {}) {
   const target = Number(sectorNumber);
   if (!sectorMap[target]) return addAndRender("Warp destination must be a valid sector number.");
   const knownRoute = findRouteToSector(game.player.currentSector, target);
@@ -1624,10 +1641,16 @@ function setWarpDestination(sectorNumber) {
   game.ui.warpDestination = target;
   game.ui.exploratoryWarp = exploratory;
   const next = scoutRoute[1] || target;
-  const message = exploratory
-    ? `Scout Route Set: Sector ${target} selected. Next hop: Sector ${next}. Exploratory autopilot may enter dangerous unexplored sectors one jump at a time.`
-    : `Route Set: Sector ${target} selected. Next hop: Sector ${next}. Use Autopilot one jump at a time.`;
-  setSectorActionResult(exploratory ? "Scout Route Set" : "Route Set", message, { type: "neutral", gained: [`Destination Sector ${target}`], sector: target });
+  const isBountyRoute = options.context === "bounty";
+  const title = isBountyRoute ? (exploratory ? "Bounty Scout Route Set" : "Bounty Route Set") : (exploratory ? "Scout Route Set" : "Route Set");
+  const message = isBountyRoute
+    ? `Bounty route set: Sector ${target}. Next jump: Sector ${next}.${exploratory ? " Scout route uses visible unexplored lanes one jump at a time." : ""}`
+    : exploratory
+      ? `Scout Route Set: Sector ${target} selected. Next hop: Sector ${next}. Exploratory autopilot may enter dangerous unexplored sectors one jump at a time.`
+      : `Route Set: Sector ${target} selected. Next hop: Sector ${next}. Use Autopilot one jump at a time.`;
+  const gained = [`Destination Sector ${target}`];
+  if (isBountyRoute && options.targetName) gained.push(`Bounty: ${options.targetName}`);
+  setSectorActionResult(title, message, { type: "neutral", gained, sector: target });
   addLog(message);
   saveGame();
   render();
@@ -2410,13 +2433,38 @@ function renderSpecialMissionsScreen() {
   const tier = missionTierByNumber(normalizeMissionTier(game.selectedMissionTier || game.currentMission.tier || 2));
   const sector = sectorMap[game.player.currentSector];
   const hubText = game.player.currentSector === 1 ? "Sector 1 hub online: all contract boards available." : "Remote terminal: review active work, but new delivery/fetch contracts launch from Sector 1.";
-  return `<section class="location-intro mission-terminal-intro mini-card"><p class="eyebrow">Station Contract Terminal</p><h3>Special Missions Terminal</h3><p class="help-text">${hubText} Math contracts, delivery work, bounty jobs, training jobs, and station jobs are grouped below.</p><div class="intel-grid">${stat("Current Station", sector.type === "port" ? stationDisplayName(sector) : `Sector ${sector.number} Relay`)}${stat("Selected Math Difficulty", tier.tierName)}${stat("Reward Preview", `${tier.rewardMultiplier}x math payout`)}${stat("Board Contracts", (game.activeMissions || []).length)}</div></section><div class="terminal-sections"><details class="terminal-section" open><summary>${missionBadge("Math")} Math Contracts</summary>${renderMathMissionContent()}</details><details class="terminal-section" open><summary>${missionBadge("Delivery")} Delivery / Fetch Contracts</summary>${renderDeliveryQuestBoard()}</details><details class="terminal-section" open><summary>${missionBadge("Bounty")} Bounty Board</summary>${renderBountyBoardContent()}</details><details class="terminal-section"><summary>${missionBadge("Training")} Training Jobs</summary>${renderTutorialContent()}<h3>Dev Code Handling</h3><p class="help-text">If classroom testing codes are enabled, enter them in the math mission answer field and submit from this terminal.</p></details><details class="terminal-section" open><summary>${missionBadge("Station Job")} Active Contracts</summary>${renderMissionBoardContent()}${renderActiveDeliveryContracts()}</details><details class="terminal-section" open><summary>${missionBadge("Claimable")} Completed / Claimable Contracts</summary>${renderClaimableContracts()}</details></div>`;
+  return `<section class="location-intro mission-terminal-intro mini-card"><p class="eyebrow">Station Contract Terminal</p><h3>Special Missions Terminal</h3><p class="help-text">${hubText} Delivery / fetch contracts are accepted contracts, the Bounty Board lists automatic pirate bounties, and Math Contracts are training / reward contracts. Training jobs and station jobs are grouped below.</p><div class="intel-grid">${stat("Current Station", sector.type === "port" ? stationDisplayName(sector) : `Sector ${sector.number} Relay`)}${stat("Selected Math Difficulty", tier.tierName)}${stat("Reward Preview", `${tier.rewardMultiplier}x math payout`)}${stat("Board Contracts", (game.activeMissions || []).length)}</div></section><div class="terminal-sections"><details class="terminal-section" open><summary>${missionBadge("Math")} Math Contracts — training / reward contracts</summary>${renderMathMissionContent()}</details><details class="terminal-section" open><summary>${missionBadge("Delivery")} Delivery / Fetch Contracts — accepted contracts</summary>${renderDeliveryQuestBoard()}</details><details class="terminal-section" open><summary>${missionBadge("Bounty")} Bounty Board — automatic pirate bounties</summary>${renderBountyBoardContent()}</details><details class="terminal-section"><summary>${missionBadge("Training")} Training Jobs</summary>${renderTutorialContent()}<h3>Dev Code Handling</h3><p class="help-text">If classroom testing codes are enabled, enter them in the math mission answer field and submit from this terminal.</p></details><details class="terminal-section" open><summary>${missionBadge("Station Job")} Active Contracts</summary>${renderMissionBoardContent()}${renderActiveDeliveryContracts()}</details><details class="terminal-section" open><summary>${missionBadge("Claimable")} Completed / Claimable Contracts</summary>${renderClaimableContracts()}</details></div>`;
+}
+
+function bountyRouteIntel(pirate) {
+  const target = Number(pirate.sector);
+  const visited = game.visitedSectors.includes(target);
+  const revealed = game.revealedSectors.includes(target);
+  const visible = getVisibleSectorNumbers().includes(target);
+  const knownRoute = findRouteToSector(game.player.currentSector, target);
+  const scoutRoute = knownRoute || findExploratoryRouteToSector(game.player.currentSector, target);
+  const routeStatus = game.player.currentSector === target ? "target here" : knownRoute ? "route known" : scoutRoute ? "scout route visible" : "route unknown";
+  const targetStatus = visited ? "known" : revealed ? "revealed" : visible ? "unexplored" : "unknown / unexplored";
+  const next = scoutRoute && scoutRoute.length > 1 ? `Next jump: Sector ${scoutRoute[1]}${knownRoute ? "" : " (scout)"}` : "Route unknown. Explore nearby lanes first.";
+  return { target, targetStatus, routeStatus, knownRoute, route: scoutRoute, next, targetHere: game.player.currentSector === target };
+}
+
+function renderBountyRouteActions(pirate) {
+  const intel = bountyRouteIntel(pirate);
+  if (intel.targetHere) {
+    return `<p class="help-text"><strong>Target here. Open Combat.</strong></p><button type="button" data-open-bounty-combat="${intel.target}">Open Combat</button>`;
+  }
+  const label = intel.knownRoute ? "Plot Route" : intel.route ? "Scout Toward Target" : "Route unknown. Explore nearby lanes first.";
+  return `<p class="help-text">${intel.next}</p><button type="button" data-plot-bounty="${intel.target}" ${intel.route ? "" : "disabled"}>${label}</button>`;
 }
 
 function renderBountyBoardContent() {
   const bounties = Object.values(game.pirates || {}).filter((pirate) => !pirate.defeated).slice(0, 6);
   if (!bounties.length) return `<p class="empty-note">No NPC bounty targets remain on the current board.</p>`;
-  return `<p class="help-text">Single-player NPC bounty jobs only. No multiplayer and no PvP targets.</p><div class="mission-grid">${bounties.map((pirate) => `<div class="mission-card contract-card"><div class="contract-badges">${missionBadge("Bounty")}</div><h3>${pirate.name}</h3>${stat("Sector", pirate.sector)}${stat("Threat", pirate.threatLevel)}${stat("Reward", `${pirate.bounty} credits, ${pirate.reputationReward} reputation`)}<p class="help-text">Use Combat / Pirate Intel when you reach the sector.</p></div>`).join("")}</div>`;
+  return `<p class="help-text"><strong>Bounties are automatic.</strong> Reach the sector, defeat the pirate, and the reward is paid after combat. No acceptance is required; rewards are granted through the combat system.</p><p class="help-text">Single-player NPC bounty jobs only. No multiplayer and no PvP targets.</p><div class="mission-grid">${bounties.map((pirate) => {
+    const intel = bountyRouteIntel(pirate);
+    return `<div class="mission-card contract-card"><div class="contract-badges">${missionBadge("Automatic Bounty")}</div><h3>${pirate.name}</h3>${stat("Sector", `Sector ${pirate.sector}`)}${stat("Threat Level", pirate.threatLevel)}${stat("Reward", `${pirate.bounty} credits, ${pirate.reputationReward} reputation`)}${stat("Route Status", intel.routeStatus)}${stat("Target Intel", intel.targetStatus)}<div class="button-row">${renderBountyRouteActions(pirate)}</div><p class="help-text">Travel to Sector ${pirate.sector} and use Combat / Pirate Intel to claim the automatic bounty.</p></div>`;
+  }).join("")}</div>`;
 }
 
 function renderActiveDeliveryContracts() {
@@ -2914,6 +2962,8 @@ function wireDockedButtons(scope = document) {
   scope.querySelectorAll("[data-start-delivery]").forEach((button) => button.addEventListener("click", () => runGameAction(() => startDeliveryQuest(button.dataset.startDelivery))));
   scope.querySelectorAll("[data-complete-delivery]").forEach((button) => button.addEventListener("click", () => runGameAction(() => completeDeliveryQuest(button.dataset.completeDelivery))));
   scope.querySelectorAll("[data-plot-delivery]").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(() => plotDeliveryRoute(button.dataset.plotDelivery)); }));
+  scope.querySelectorAll("[data-plot-bounty]").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(() => plotBountyRoute(button.dataset.plotBounty)); }));
+  scope.querySelectorAll("[data-open-bounty-combat]").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(() => openBountyCombat(button.dataset.openBountyCombat)); }));
   scope.querySelectorAll("[data-station-activity]").forEach((button) => button.addEventListener("click", () => {
     const inputId = button.dataset.stationActivity === "cargoSorting" ? "cargoSortingAnswer" : "repairAssistAnswer";
     return runGameAction(() => runStationActivity(button.dataset.stationActivity, scope.querySelector(`#${inputId}`)?.value || ""));
