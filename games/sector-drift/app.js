@@ -412,12 +412,43 @@ function createSectorMap() {
       flavor: getSectorFlavor(type, number),
       objects: getSectorObjects(type, number, hazardType),
     });
+    sector.signals = createSectorSignals(number, type, routeRole, dangerLevel);
+    sector.identityType = sector.signals.identity;
+    sector.identityLabel = sectorIdentityLabel(sector.identityType);
 
     if (economy) Object.assign(sector, economy);
     if ([1, 5, 8, 45].includes(number)) sector.hasShipyard = true;
     if ([1, 5, 8, 45].includes(number)) sector.portType = number === 1 ? "Core Port" : number === 45 ? "Frontier Starbase" : "Major Station";
     if (type === "planet") sector.planet = createPlanetState(number, planetNames[number % planetNames.length], routeRole, dangerLevel);
   }
+
+  function localSectorDistance(a, b) {
+    if (a === b) return 0;
+    const visited = new Set([a]);
+    let frontier = [a];
+    for (let distance = 1; distance <= MAX_SECTOR; distance += 1) {
+      const next = [];
+      frontier.forEach((sectorNumber) => {
+        (sectors[sectorNumber]?.adjacent || []).forEach((neighbor) => {
+          if (neighbor === b) next.push(neighbor);
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            next.push(neighbor);
+          }
+        });
+      });
+      if (next.includes(b)) return distance;
+      frontier = next;
+    }
+    return Infinity;
+  }
+  Object.values(sectors).forEach((sector) => {
+    sector.protectedSpace = localSectorDistance(1, sector.number) <= PROTECTED_SPACE_DEPTH;
+    sector.pirateActivity = Boolean(pirateBlueprints()[sector.number]) && !sector.protectedSpace;
+    sector.signals.smugglingRisk = sector.signals.smugglingRisk && !sector.protectedSpace;
+    sector.identityType = sectorIdentityType(sector);
+    sector.identityLabel = sectorIdentityLabel(sector.identityType);
+  });
 
   return sectors;
 }
@@ -602,15 +633,111 @@ function planetUpgradeBenefit(planet, track) {
   return `Next preview: ${nextPreview}.`;
 }
 
-function getSectorFlavor(type, number) {
-  const text = {
-    empty: "Quiet stars drift beyond the cockpit glass. This is a safe place to plan your next move.",
-    port: "Docking lights blink in calm patterns while merchants post classroom-safe trade prices.",
-    planet: "A survey beacon marks a planet with room for patient builders.",
-    asteroid: "Slow-moving rocks sparkle with ore. Mining here is careful work, not a race.",
-    anomaly: "A soft signal bends the scanner display. It looks strange, but not dangerous.",
+function sectorIdentityType(sector) {
+  if (!sector) return "empty";
+  if (sector.type === "port") return "port";
+  if (sector.type === "asteroid") return "asteroid";
+  if (sector.type === "anomaly") return "anomaly";
+  if (sector.type === "planet") return "planet";
+  if (sector.pirateActivity) return "pirate";
+  if (sector.protectedSpace) return "protected";
+  if (sector.routeRole === "crossroad" || [6, 8, 10, 29, 33].includes(sector.number)) return "tradeCorridor";
+  if ([18, 36, 44].includes(sector.number)) return "ruins";
+  if ([11, 22, 35, 42, 49].includes(sector.number)) return "nebula";
+  if (sector.routeRole === "deadEnd" || sector.dangerLevel >= 3) return "deadZone";
+  return "empty";
+}
+
+function sectorIdentityLabel(type) {
+  return ({ port: "Port", asteroid: "Asteroid Field", nebula: "Nebula", anomaly: "Anomaly", pirate: "Pirate Sector", deadZone: "Dead Zone", protected: "Protected Space", planet: "Planetary Sector", tradeCorridor: "Trade Corridor", ruins: "Ruins", empty: "Open Space" })[type] || titleCase(type);
+}
+
+function createSectorSignals(number, type, routeRole, dangerLevel) {
+  const identity = sectorIdentityType({ number, type, routeRole, dangerLevel });
+  return {
+    identity,
+    oreRichness: type === "asteroid" ? ["Trace Ore", "Workable Ore", "Rich Ore", "Dense Ore"][stableNumber(number, 101) % 4] : "",
+    anomalyInstability: type === "anomaly" ? ["Low", "Shifting", "Unstable", "Volatile"][stableNumber(number, 103) % 4] : "",
+    traffic: routeRole === "crossroad" || type === "port" ? ["Steady", "High", "Convoy", "Busy"][stableNumber(number, 107) % 4] : routeRole === "deadEnd" ? "Sparse" : ["Light", "Patchy", "Moderate"][stableNumber(number, 109) % 3],
+    salvage: [18, 36, 44].includes(number) || identity === "ruins" || (dangerLevel >= 2 && stableNumber(number, 113) % 3 === 0),
+    hiddenBonus: stableNumber(number, 127) % 5 === 0 ? "Unusual readings worth revisiting after scanner upgrades" : "",
+    smugglingRisk: dangerLevel >= 2,
   };
-  return `${text[type]} Sector registry code: SD-${String(number).padStart(2, "0")}.`;
+}
+
+function sectorArrivalFlavor(sector) {
+  const identity = sectorIdentityType(sector);
+  const variants = {
+    port: ["Docking lights blink through orderly approach lanes. Cargo calls promise safe profit if you compare prices.", "Station beacons sweep across the hull. Merchants, repairs, and mission boards wait inside."],
+    asteroid: ["Dense rock fields drift through the sector. Mining lasers could operate here.", "Ore-bright stones tumble in slow arcs. Rich pockets may reward a careful mining pass."],
+    nebula: ["Static crawls across the cockpit glass. Scanner returns flicker through ionized clouds.", "Colored vapor folds around the lane. Contacts blur, but hidden paths glimmer at the edge of scan range."],
+    anomaly: ["The scanner bends around a pulsing signal. A careful scan could uncover fuel, data, or trouble.", "Instrument needles twitch in impossible rhythms. The anomaly invites a one-turn survey."],
+    pirate: ["Encrypted bursts chatter across the lane. Pirate traffic may be using the local shadows.", "Weapon scars mark old buoy plating. This sector feels watched by raiders."],
+    deadZone: ["Beacon echoes fade into a cold quiet. Few ships cross this far without a reason.", "The lane thins into dark static. Salvage and risk tend to travel together here."],
+    protected: ["Alliance patrol signatures dominate local channels. Civilian traffic moves under heavy escort.", "Clean patrol pings bracket the route. This is protected space, safer but closely watched."],
+    planet: ["A planetary disc rises beyond the canopy. Survey beacons mark future colony work.", "Cloud bands and orbital markers fill the viewer. Builders could make a home here."],
+    tradeCorridor: ["Freighter wakes cross the lane in bright lines. Trade traffic hints at routes worth mapping.", "Buoys repeat market codes and jump timings. This corridor wants to be charted."],
+    ruins: ["Broken hull plates drift around silent beacons. Salvage traces suggest someone left in a hurry.", "Ancient frames turn slowly in the dark. The scanner marks salvage dust among the wreckage."],
+    empty: ["Quiet stars drift beyond the cockpit glass. It is a clean place to plan the next jump.", "The lane is calm and mostly empty. Scanner buoys whisper just enough to keep moving."],
+  };
+  const list = variants[identity] || variants.empty;
+  return list[stableNumber(sector.number, 131) % list.length];
+}
+
+function sectorSignalTags(sector, options = {}) {
+  const scanner = game?.player?.upgrades?.scanner || 1;
+  const visited = game?.visitedSectors?.includes(sector.number) || sector.number === game?.player?.currentSector;
+  const tags = [];
+  const identity = sectorIdentityType(sector);
+  const canShowBasics = options.force || visited || getVisibleSectorNumbers().includes(sector.number);
+  if (!canShowBasics) return ["Uncharted"];
+  if (sector.dangerLevel > 0 && (visited || scanner >= 3)) tags.push("Hazardous");
+  if (identity === "protected") tags.push("Heavy Patrol");
+  if (identity === "tradeCorridor" && (visited || scanner >= 2)) tags.push("Trade Route");
+  if (sector.signals?.traffic && (visited || scanner >= 4) && ["High", "Convoy", "Busy"].includes(sector.signals.traffic)) tags.push("High Traffic");
+  if (sector.type === "asteroid" && (visited || scanner >= 2)) tags.push((sector.signals?.oreRichness || "Ore Field").includes("Rich") || (sector.signals?.oreRichness || "").includes("Dense") ? "Rich Ore" : "Ore Field");
+  if (sector.type === "anomaly" && (visited || scanner >= 3)) tags.push(["Unstable", "Volatile"].includes(sector.signals?.anomalyInstability) ? "Unstable" : "Anomaly");
+  if (sector.signals?.salvage && (visited || scanner >= 4)) tags.push("Salvage Traces");
+  if (sector.signals?.smugglingRisk && (visited || scanner >= 4)) tags.push("Smuggling Risk");
+  if (identity === "pirate" && (visited || scanner >= 3)) tags.push("Pirate Activity");
+  if (identity === "nebula") tags.push(scanner >= 3 || visited ? "Nebula Drift" : "Sensor Static");
+  if (identity === "ruins" && (visited || scanner >= 4)) tags.push("Ruins");
+  return Array.from(new Set(tags)).slice(0, 5);
+}
+
+function renderSectorTags(sector, options = {}) {
+  const tags = sectorSignalTags(sector, options);
+  if (!tags.length) return "";
+  return `<div class="sector-tags" aria-label="Sector signals">${tags.map((tag) => `<span class="sector-tag">${tag}</span>`).join("")}</div>`;
+}
+
+function scannerIntelDetails(sector) {
+  const scanner = game.player.upgrades?.scanner || 1;
+  const visited = game.visitedSectors.includes(sector.number) || sector.number === game.player.currentSector;
+  const visible = getVisibleSectorNumbers().includes(sector.number);
+  if (!visible) return "Outside current scanner range.";
+  const lines = [`L${scanner}: ${visible ? "adjacent returns acquired" : "no lock"}`];
+  if (scanner >= 2 || visited) {
+    lines.push(`route role ${titleCase(sector.routeRole)}`);
+    if (sector.type === "asteroid") lines.push(`ore ${sector.signals?.oreRichness || "unknown"}`);
+  }
+  if (scanner >= 3 || visited) {
+    const pirate = game.pirates?.[sector.number];
+    if (pirate && !pirate.defeated) lines.push(`pirate threat L${pirate.threatLevel}`);
+    else if (sector.dangerLevel > 0) lines.push(`threat estimate ${sector.dangerLevel}`);
+    if (sector.type === "anomaly") lines.push(`instability ${sector.signals?.anomalyInstability || "unknown"}`);
+  }
+  if (scanner >= 4 || visited) {
+    if (sector.signals?.traffic) lines.push(`traffic ${sector.signals.traffic}`);
+    if (sector.signals?.salvage) lines.push("salvage traces");
+    if (sector.signals?.hiddenBonus) lines.push("deep-scan warning logged");
+  }
+  return lines.join(" · ");
+}
+
+function getSectorFlavor(type, number) {
+  const temp = { number, type, routeRole: "tunnel", dangerLevel: createDangerLevel(number, type), signals: {} };
+  return `${sectorArrivalFlavor(temp)} Registry code SD-${String(number).padStart(2, "0")}.`;
 }
 
 function getSectorObjects(type, number, hazardType) {
@@ -621,6 +748,11 @@ function getSectorObjects(type, number, hazardType) {
     asteroid: ["asteroid field", "ore fragments"],
     anomaly: ["scanner anomaly", "unknown signal"],
   }[type] || [];
+  const identity = sectorIdentityType({ number, type, routeRole: "tunnel", dangerLevel: createDangerLevel(number, type) });
+  if (identity === "nebula") base.push("ionized clouds");
+  if (identity === "tradeCorridor") base.push("trade buoys");
+  if (identity === "deadZone") base.push("faint beacon");
+  if (identity === "ruins") base.push("salvage traces");
   const objects = [...base];
   if (type === "port" && createPortEconomy(number).hasShipyard) objects.push("shipyard");
   if (hazardType) objects.push(HAZARD_TYPES[hazardType].label.toLowerCase());
@@ -991,6 +1123,16 @@ function defaultStats() {
     lawfulReputation: 0,
     pirateReputation: 0,
     alignmentStatus: "Independent",
+    sectorsExplored: 1,
+    discoveredSectorTypes: ["protected"],
+    explorationDiscoveries: 0,
+    anomaliesCataloged: 0,
+    asteroidFieldsMined: 0,
+    minedAsteroidSectors: [],
+    tradeRoutesDiscovered: 0,
+    discoveredTradeRoutes: [],
+    protectedSystemsVisited: 1,
+    visitedProtectedSystems: [1],
     combatRank: "Civilian Pilot",
   };
 }
@@ -1849,7 +1991,7 @@ function renderSituationCard() {
     };
   }
 
-  return `<section class="situation-card situation-${card.type.replace(/\s+/g, "-")}" data-situation-type="${card.type}" aria-label="Situation card"><div class="situation-card-header"><p class="eyebrow">Situation Card</p><h3>${card.title}</h3></div><p class="situation-summary">${card.summary}</p><div class="intel-grid situation-meta">${card.meta.join("")}</div>${card.actions.length ? `<div class="situation-actions">${card.actions.slice(0, 4).join("")}</div>` : `<p class="empty-note">No immediate action is required.</p>`}</section>`;
+  return `<section class="situation-card situation-${card.type.replace(/\s+/g, "-")}" data-situation-type="${card.type}" aria-label="Situation card"><div class="situation-card-header"><p class="eyebrow">Situation Card</p><h3>${card.title}</h3></div><p class="situation-summary">${card.summary}</p>${renderSectorTags(current, { force: true })}<div class="intel-grid situation-meta">${card.meta.join("")}</div>${card.actions.length ? `<div class="situation-actions">${card.actions.slice(0, 4).join("")}</div>` : `<p class="empty-note">No immediate action is required.</p>`}</section>`;
 }
 
 function focusRouteFromSituation(sectorNumber = selectedSectorNumber) {
@@ -1881,8 +2023,9 @@ function renderCurrentSituation(sector, danger) {
     ${renderArrivalReport()}
     ${renderSituationCard()}
     ${renderActionResult()}
+    ${renderSectorTags(sector, { force: true })}
     <div class="current-situation-grid compact-current-readout">
-      ${stat("Current Sector", `Sector ${sector.number}: ${titleCase(sector.type)}`)}${stat("Visible Objects", featureText)}${stat("Scanner", scannerHelpText())}${stat("Threat Readout", danger)}
+      ${stat("Current Sector", `Sector ${sector.number}: ${sectorIdentityLabel(sectorIdentityType(sector))}`)}${stat("Visible Objects", featureText)}${stat("Scanner", scannerHelpText())}${stat("Threat Readout", danger)}
     </div>
   </section>`;
 }
@@ -1924,15 +2067,16 @@ function renderNavigationIntel() {
   const canTravel = adjacent && game.player.turns > 0 && game.player.fuel > 0 && !currentPirateEncounter() && canUseGameActions();
   const danger = canSeeDanger(selected.number) ? (selected.dangerLevel > 0 ? `${HAZARD_TYPES[selected.hazardType].icon} Danger ${selected.dangerLevel}: ${HAZARD_TYPES[selected.hazardType].label}` : "No danger detected") : "Danger unknown";
   const features = scannerFeatureText(selected);
+  const tags = renderSectorTags(selected);
   const missionIntel = missionTargetIntel(selected.number);
   const routeStatus = current ? "Already here" : adjacent ? (canTravel ? "Direct lane available" : travelBlockedReason()) : route ? `${knownRoute ? "Route known" : "Scout route visible"}; next hop Sector ${route[1]}` : "Route unknown. Explore nearby lanes or use future probes.";
   const suggested = suggestedSectorAction(selected, { current, adjacent, route, missionIntel });
   const actionButton = !current && !adjacent && route ? `<button type="button" data-action="plotSelectedRoute" data-sector="${selected.number}">${knownRoute ? "Set Warp Destination" : "Scout Route"}</button>` : !current && !adjacent ? `<button type="button" data-action="plotSelectedRoute" data-sector="${selected.number}" disabled>Plot Route</button>` : "";
   const hint = game.ui?.mapHint ? `<p class="action-hint">${game.ui.mapHint}</p>` : "";
   return `<aside class="nav-intel main-viewer priority-card" aria-live="polite"><p class="eyebrow">Main Viewer</p><div class="viewer-title-row"><h3>Selected Sector Intel</h3>${actionButton}</div><div class="intel-grid">
-    ${stat("Sector", selected.number)}${stat("Status", status)}${stat("System Type", visible ? titleCase(selected.type) : "Unknown")}${stat("Route Role", canSeeRouteRole(selected.number) ? titleCase(selected.routeRole) : "Scan level 4")}
-    ${stat("Danger", danger)}${stat("Patrol Zone", protectedSpaceLabel(selected.number))}${stat("Route / Travel", routeStatus)}${stat("Suggested Action", suggested)}
-  </div><p class="known-features"><strong>Known features:</strong> ${features}</p>${missionIntel ? renderMissionTargetIntel(missionIntel) : ""}<p class="strategic-note">${canSeeRouteRole(selected.number) ? selected.strategicNote : "Upgrade scanners to reveal route roles."}</p><p class="recommendation">${navigationRecommendation(selected.number)}</p>${hint}</aside>`;
+    ${stat("Sector", selected.number)}${stat("Status", status)}${stat("System Type", visible ? sectorIdentityLabel(sectorIdentityType(selected)) : "Unknown")}${stat("Route Role", canSeeRouteRole(selected.number) ? titleCase(selected.routeRole) : "Scan level 2")}
+    ${stat("Danger", danger)}${stat("Patrol Zone", protectedSpaceLabel(selected.number))}${stat("Route / Travel", routeStatus)}${stat("Scanner Detail", scannerIntelDetails(selected))}${stat("Suggested Action", suggested)}
+  </div>${tags}<p class="known-features"><strong>Known features:</strong> ${features}</p>${missionIntel ? renderMissionTargetIntel(missionIntel) : ""}<p class="strategic-note">${canSeeRouteRole(selected.number) ? selected.strategicNote : "Upgrade scanners to reveal route roles."}</p><p class="recommendation">${navigationRecommendation(selected.number)}</p>${hint}</aside>`;
 }
 
 function renderArrivalReport() {
@@ -2021,12 +2165,14 @@ function sectorTooltip(number) {
 
 function scannerFeatureText(sector) {
   if (!getVisibleSectorNumbers().includes(sector.number)) return "Upgrade scanners to reveal more";
-  if (game.player.upgrades.scanner < 3 && !game.visitedSectors.includes(sector.number) && sector.number !== game.player.currentSector) return "Major features require scanner level 3 or a visit";
+  const visited = game.visitedSectors.includes(sector.number) || sector.number === game.player.currentSector;
+  if (game.player.upgrades.scanner < 2 && !visited) return "Vague mass and danger returns only";
+  if (game.player.upgrades.scanner < 3 && !visited) return `Route ${titleCase(sector.routeRole)}${sector.type === "asteroid" ? ` · ${sector.signals?.oreRichness || "ore field"}` : ""}`;
   return knownFeatures(sector).join(", ");
 }
 
 function canSeeRouteRole(number) {
-  return game.player.upgrades.scanner >= 4 || game.visitedSectors.includes(number) || number === game.player.currentSector;
+  return game.player.upgrades.scanner >= 2 || game.visitedSectors.includes(number) || number === game.player.currentSector;
 }
 
 
@@ -2120,15 +2266,18 @@ function initialArrivalReport(number = 1) {
   const sector = sectorMap[number];
   if (!sector) return "Arrival telemetry unavailable.";
   const features = (sector.objects || []).filter((feature) => feature && feature !== "Empty space");
-  return [`Arrived in Sector ${number}.`, `${titleCase(sector.type)} detected.`, features.length ? `Visible features: ${features.join(", ")}.` : "", isProtectedSpace(number) ? "Alliance protected space." : ""].filter(Boolean).join(" ");
+  return [`Arrived in Sector ${number}.`, `${sectorIdentityLabel(sectorIdentityType(sector))} detected.`, sectorArrivalFlavor(sector), features.length ? `Signals: ${features.join(", ")}.` : "", isProtectedSpace(number) ? "Alliance protected space." : ""].filter(Boolean).join(" ");
 }
 
 function buildArrivalReport(number = game.player.currentSector, extras = []) {
   const sector = sectorMap[number];
   if (!sector) return "Arrival telemetry unavailable.";
-  const parts = [`Arrived in Sector ${number}.`, `${titleCase(sector.type)} detected.`];
+  const identity = sectorIdentityType(sector);
+  const parts = [`Arrived in Sector ${number}.`, `${sectorIdentityLabel(identity)} detected.`, sectorArrivalFlavor(sector)];
   const features = knownFeatures(sector).filter((feature) => feature && feature !== "Empty space");
-  if (features.length) parts.push(`Visible features: ${features.join(", ")}.`);
+  if (features.length) parts.push(`Signals: ${features.join(", ")}.`);
+  const tags = sectorSignalTags(sector).slice(0, 3);
+  if (tags.length) parts.push(`Tags: ${tags.join(", ")}.`);
   if (sector.hasShipyard) parts.push("Shipyard available.");
   if (isProtectedSpace(number)) parts.push("Alliance protected space.");
   const pirate = game.pirates?.[number];
@@ -3404,7 +3553,7 @@ function renderStatsPanel() {
   const cargoMoved = RESOURCES.reduce((total, resource) => total + (game.player.cargo[resource] || 0), 0) + (s.resourcesSold || 0) + (s.resourcesDeposited || 0);
   const upgradesPurchased = Object.values(game.player.upgrades || {}).reduce((total, level) => total + Math.max(0, (level || 1) - 1), 0) + (s.planetUpgrades || 0);
   const missionsCompleted = (s.mathMissionsCompleted || 0) + (s.missionsClaimed || 0);
-  return `<section class="mini-card stats-intro"><p class="eyebrow">Active Stats Screen</p><h3>Career Stats</h3><p class="help-text">Lightweight classroom-friendly totals pulled from the current save. This is now an active docked screen, not the old orphaned stats panel.</p></section><div class="screen-grid stats-screen-grid"><section class="mini-card"><h3>Progress</h3><div class="stats-grid">${stat("Sectors Explored", (s.visitedSectors || game.visitedSectors || []).length)}${stat("Reputation", game.player.reputation)}${stat("Rank", currentRank())}${stat("Combat Rank", combatRankTitle())}${stat("Missions Completed", missionsCompleted)}${stat("Math Missions", s.mathMissionsCompleted || 0)}${stat("Board Missions", s.missionsClaimed || 0)}</div></section><section class="mini-card"><h3>Trade and Cargo</h3><div class="stats-grid">${stat("Credits Earned", (s.creditsEarnedFromTrade || 0) + (game.player.bountiesEarned || 0))}${stat("Trades Completed", s.resourcesSold || 0)}${stat("Cargo Moved", cargoMoved)}${stat("Resources Sold", s.resourcesSold || 0)}${stat("Resources Deposited", s.resourcesDeposited || 0)}</div></section><section class="mini-card"><h3>Exploration and Combat</h3><div class="stats-grid">${stat("Mining Total", s.resourcesMined || 0)}${stat("Ore Mined", s.oreMined || 0)}${stat("Anomaly Scans", s.anomaliesScanned || 0)}${stat("Pirates Defeated", game.player.piratesDefeated || 0)}${stat("Bounties Earned", game.player.bountiesEarned || 0)}</div></section><section class="mini-card"><h3>Growth</h3><div class="stats-grid">${stat("Planets Claimed", s.planetsClaimed || 0)}${stat("Ship Upgrades Purchased", upgradesPurchased)}${stat("Planet Upgrades", s.planetUpgrades || 0)}${stat("Fighters Bought", game.player.fightersBought || 0)}${stat("Ships Captured", game.player.shipsCaptured || 0)}</div></section></div>`;
+  return `<section class="mini-card stats-intro"><p class="eyebrow">Active Stats Screen</p><h3>Career Stats</h3><p class="help-text">Lightweight classroom-friendly totals pulled from the current save. This is now an active docked screen, not the old orphaned stats panel.</p></section><div class="screen-grid stats-screen-grid"><section class="mini-card"><h3>Progress</h3><div class="stats-grid">${stat("Sectors Explored", (s.visitedSectors || game.visitedSectors || []).length)}${stat("Reputation", game.player.reputation)}${stat("Rank", currentRank())}${stat("Combat Rank", combatRankTitle())}${stat("Missions Completed", missionsCompleted)}${stat("Math Missions", s.mathMissionsCompleted || 0)}${stat("Board Missions", s.missionsClaimed || 0)}</div></section><section class="mini-card"><h3>Trade and Cargo</h3><div class="stats-grid">${stat("Credits Earned", (s.creditsEarnedFromTrade || 0) + (game.player.bountiesEarned || 0))}${stat("Trades Completed", s.resourcesSold || 0)}${stat("Cargo Moved", cargoMoved)}${stat("Resources Sold", s.resourcesSold || 0)}${stat("Resources Deposited", s.resourcesDeposited || 0)}</div></section><section class="mini-card"><h3>Exploration and Combat</h3><div class="stats-grid">${stat("Mining Total", s.resourcesMined || 0)}${stat("Ore Mined", s.oreMined || 0)}${stat("Asteroid Fields Mined", s.asteroidFieldsMined || 0)}${stat("Anomaly Scans", s.anomaliesScanned || 0)}${stat("Anomalies Cataloged", s.anomaliesCataloged || 0)}${stat("Trade Routes Discovered", s.tradeRoutesDiscovered || 0)}${stat("Protected Systems", s.protectedSystemsVisited || 0)}${stat("Pirates Defeated", game.player.piratesDefeated || 0)}${stat("Bounties Earned", game.player.bountiesEarned || 0)}</div></section><section class="mini-card"><h3>Growth</h3><div class="stats-grid">${stat("Planets Claimed", s.planetsClaimed || 0)}${stat("Ship Upgrades Purchased", upgradesPurchased)}${stat("Planet Upgrades", s.planetUpgrades || 0)}${stat("Fighters Bought", game.player.fightersBought || 0)}${stat("Ships Captured", game.player.shipsCaptured || 0)}</div></section></div>`;
 }
 
 function renderLogPanel() {
@@ -3423,15 +3572,17 @@ function travelToSector(number) {
   selectedMapClickSector = null;
   game.ui = game.ui || {};
   game.ui.mapHint = "";
+  const wasFirstVisit = !(game.visitedSectors || []).includes(number);
   markSectorVisited(number);
   const logStart = game.log.length;
+  const discoveryMessages = recordSectorDiscovery(number, wasFirstVisit);
   updateDeliveryQuestProgress();
   addLog(`Traveled to Sector ${number}.`);
   completeTutorialStep("travel");
   resolveSectorDanger(number);
   updateScannerReveals();
   maybeTravelEvent();
-  const extras = game.log.slice(0, Math.max(0, game.log.length - logStart)).reverse().filter((entry) => !entry.startsWith("Traveled to Sector"));
+  const extras = [...discoveryMessages, ...game.log.slice(0, Math.max(0, game.log.length - logStart)).reverse().filter((entry) => !entry.startsWith("Traveled to Sector") && !discoveryMessages.includes(entry))];
   setArrivalReport(number, extras);
   updatePresenceStatus("online");
   saveGame();
@@ -3658,6 +3809,11 @@ function mineAsteroids() {
   game.player.cargo.Ore += amount;
   game.stats.resourcesMined += amount;
   game.stats.oreMined += amount;
+  game.stats.minedAsteroidSectors = Array.isArray(game.stats.minedAsteroidSectors) ? game.stats.minedAsteroidSectors : [];
+  if (!game.stats.minedAsteroidSectors.includes(game.player.currentSector)) {
+    game.stats.minedAsteroidSectors.push(game.player.currentSector);
+    game.stats.asteroidFieldsMined = game.stats.minedAsteroidSectors.length;
+  }
   addLog(`Mined ${amount} Ore from the asteroid field.`);
   completeTutorialStep("mine");
   resolveSectorDanger(game.player.currentSector);
@@ -4779,6 +4935,49 @@ function markSectorVisited(number) {
   game.visitedSectors = normalizeSectorList([...(game.visitedSectors || []), number], number);
   game.revealedSectors = normalizeSectorList([...(game.revealedSectors || []), number], number);
   game.stats.visitedSectors = normalizeSectorList([...(game.stats.visitedSectors || []), number], number);
+  game.stats.sectorsExplored = (game.stats.visitedSectors || []).length;
+}
+
+function recordSectorDiscovery(number, wasFirstVisit = false) {
+  if (!wasFirstVisit) return [];
+  const sector = sectorMap[number];
+  if (!sector) return [];
+  const messages = [];
+  const reward = 12 + Math.min(28, sector.dangerLevel * 4 + (sector.routeRole === "deadEnd" ? 6 : 0));
+  game.stats.discoveredSectorTypes = Array.isArray(game.stats.discoveredSectorTypes) ? game.stats.discoveredSectorTypes : [];
+  game.stats.discoveredTradeRoutes = Array.isArray(game.stats.discoveredTradeRoutes) ? game.stats.discoveredTradeRoutes : [];
+  game.stats.visitedProtectedSystems = Array.isArray(game.stats.visitedProtectedSystems) ? game.stats.visitedProtectedSystems : [];
+  const identity = sectorIdentityType(sector);
+  if (!game.stats.discoveredSectorTypes.includes(identity)) {
+    game.stats.discoveredSectorTypes.push(identity);
+    messages.push(`New sector type logged: ${sectorIdentityLabel(identity)}.`);
+  }
+  if (identity === "tradeCorridor" && !game.stats.discoveredTradeRoutes.includes(number)) {
+    game.stats.discoveredTradeRoutes.push(number);
+    game.stats.tradeRoutesDiscovered = game.stats.discoveredTradeRoutes.length;
+    messages.push("Trade lane mapped.");
+  }
+  if (identity === "nebula") messages.push("Nebula corridor added to charts.");
+  if (sector.type === "anomaly") {
+    game.stats.anomaliesCataloged = (game.stats.anomaliesCataloged || 0) + 1;
+    messages.push(`${sector.signals?.anomalyInstability || "Unusual"} anomaly signature cataloged.`);
+  }
+  if (isProtectedSpace(number) && !game.stats.visitedProtectedSystems.includes(number)) {
+    game.stats.visitedProtectedSystems.push(number);
+    game.stats.protectedSystemsVisited = game.stats.visitedProtectedSystems.length;
+    messages.push("Protected patrol pattern logged.");
+  }
+  if (!messages.length && (sector.signals?.salvage || sector.dangerLevel > 0)) messages.push(`${sectorIdentityLabel(identity)} survey note added.`);
+  if (messages.length) {
+    game.player.credits += reward;
+    game.stats.explorationDiscoveries = (game.stats.explorationDiscoveries || 0) + 1;
+    game.stats.creditsEarnedFromTrade = game.stats.creditsEarnedFromTrade || 0;
+    const summary = `${messages[0]} +${reward} exploration credits.`;
+    addLog(summary);
+    setSectorActionResult("Discovery Logged", summary, { type: "positive", gained: [`+${reward} credits`, "chart update"], sector: number });
+    return messages.map((message, index) => index === 0 ? `${message} +${reward} credits.` : message);
+  }
+  return [];
 }
 
 function scannerTravelLabel(number) {
