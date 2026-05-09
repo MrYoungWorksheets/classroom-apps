@@ -29,6 +29,8 @@ vm.runInContext(`
       addEventListener(type, handler) {
         listeners[type] = listeners[type] || [];
         listeners[type].push(handler);
+        target._listenerCounts = target._listenerCounts || {};
+        target._listenerCounts[type] = listeners[type].length;
       },
       dispatchEvent(event) {
         const evt = event || { type: '' };
@@ -101,7 +103,12 @@ vm.runInContext(`
             const tag = match[0];
             const mode = tag.match(/data-mode="([^"]+)"/);
             const sector = tag.match(/data-sector="([^"]+)"/);
-            this._actionButtons.push(makeEventTargetStub({ dataset: { action: match[1], mode: mode ? mode[1] : '', sector: sector ? sector[1] : '' }, parent: this }));
+            const upgrade = tag.match(/data-upgrade="([^"]+)"/);
+            const ship = tag.match(/data-ship="([^"]+)"/);
+            const amount = tag.match(/data-amount="([^"]+)"/);
+            const resource = tag.match(/data-resource="([^"]+)"/);
+            const track = tag.match(/data-track="([^"]+)"/);
+            this._actionButtons.push(makeEventTargetStub({ dataset: { action: match[1], mode: mode ? mode[1] : '', sector: sector ? sector[1] : '', upgrade: upgrade ? upgrade[1] : '', ship: ship ? ship[1] : '', amount: amount ? amount[1] : '', resource: resource ? resource[1] : '', track: track ? track[1] : '' }, parent: this }));
           }
         }
         const screenPattern = /<button\\b[^>]*data-screen="([^"]+)"[^>]*>/g;
@@ -117,8 +124,8 @@ vm.runInContext(`
       if (selector === '[data-screen]') return this._screenButtons;
       if (selector === "[data-action='travel']") return this._travelButtons;
       if (selector === "[data-action='plotSelectedRoute']") return this._actionButtons.filter((button) => button.dataset.action === 'plotSelectedRoute');
-      const actionMatch = selector.match(/^\[data-action=['"]?([^'"\]]+)['"]?\]$/);
-      if (actionMatch) return this._actionButtons.filter((button) => button.dataset.action === actionMatch[1]);
+      const actionSelector = String(selector).match(/data-action=['"]([^'"]+)['"]/);
+      if (actionSelector) return this._actionButtons.filter((button) => button.dataset.action === actionSelector[1]);
       return [];
     };
     panel.querySelector = function (selector) {
@@ -464,10 +471,76 @@ vm.runInContext(`
   const rumorCreditsBefore = game.player.credits;
   readRumorBoard();
   assert(game.stationActivities.lastRumor && game.player.credits === rumorCreditsBefore - 5, 'Rumor Board renders rumor text and charges small fee');
-
-  game.player.currentSector = Object.values(sectorMap).find((sector) => sector.hasShipyard).number;
+  game.player.currentSector = 1;
+  const originalWireDockedButtons = wireDockedButtons;
+  let dockedWireCount = 0;
+  wireDockedButtons = function (scope) { dockedWireCount += 1; return originalWireDockedButtons(scope); };
   openScreen('shipyard');
+  wireDockedButtons = originalWireDockedButtons;
+  assert(dockedWireCount === 1, 'renderDockedScreen should wire docked buttons exactly once per render');
   assert(panels.docked.innerHTML.includes('Shipyard') && panels.docked.innerHTML.includes('Trade-in'), 'shipyard docked screen should show trade-in cards');
+  assert(panels.docked.innerHTML.includes('Docked at Sector 1') && panels.docked.innerHTML.includes('Current Ship'), 'Sector 1 shipyard screen should show current ship section');
+  assert(panels.docked.innerHTML.includes('Cargo Capacity') && panels.docked.innerHTML.includes('Fuel') && panels.docked.innerHTML.includes('Hull') && panels.docked.innerHTML.includes('Fighters'), 'current ship section should show core ship stats');
+  assert(panels.docked.innerHTML.includes('Upgrade Current Ship'), 'shipyard screen should show current ship upgrades');
+  for (const label of ['Cargo Hold', 'Engine', 'Scanner', 'Shield']) {
+    assert(panels.docked.innerHTML.includes('Upgrade ' + label), label + ' upgrade control should be visible');
+  }
+  assert(panels.docked.innerHTML.includes('Cost: 250 credits') && panels.docked.innerHTML.includes('Ready: upgrades to Level 2'), 'shipyard upgrade cards should show costs and readiness');
+  game.player.credits = 2000;
+  game.log = [];
+  liveEvents = [];
+  game.ui.lastSectorActionResult = null;
+  openScreen('shipyard');
+  const cargoUpgradeButton = makeEventTargetStub({ dataset: { action: 'upgradeShip', upgrade: 'cargoHold' } });
+  const refuelButton = makeEventTargetStub({ dataset: { action: 'refuel', amount: '1' } });
+  const fakeDockedScope = {
+    querySelectorAll(selector) {
+      if (String(selector).includes('upgradeShip')) return [cargoUpgradeButton];
+      if (String(selector).includes('refuel')) return [refuelButton];
+      return [];
+    },
+    querySelector() { return null; },
+  };
+  wireDockedButtons(fakeDockedScope);
+  assert(cargoUpgradeButton._listenerCounts?.click === 1, 'cargo upgrade button should be wired exactly once per render');
+  assert(refuelButton._listenerCounts?.click === 1, 'other docked service buttons should be wired exactly once per render');
+  game.player.fuel = game.player.maxFuel - 2;
+  const fuelBeforeDockedRefuel = game.player.fuel;
+  const creditsBeforeDockedRefuel = game.player.credits;
+  refuelButton.dispatchEvent({ type: 'click' });
+  assert(game.player.fuel === fuelBeforeDockedRefuel + 1 && game.player.credits === creditsBeforeDockedRefuel - FUEL_COST_PER_UNIT, 'other docked service buttons should still work after wiring audit');
+  game.log = [];
+  liveEvents = [];
+  game.ui.lastSectorActionResult = null;
+  const creditsBeforeUpgrade = game.player.credits;
+  const cargoLevelBefore = game.player.upgrades.cargoHold;
+  const cargoCapacityBefore = game.player.cargoCapacity;
+  cargoUpgradeButton.dispatchEvent({ type: 'click' });
+  const cargoUpgradeLogCount = game.log.filter((entry) => entry.includes('Cargo Hold upgraded to Level 2')).length;
+  const cargoUpgradeLiveCount = liveEvents.filter((event) => event.message.includes('Cargo Hold upgraded to Level 2')).length;
+  assert(game.player.upgrades.cargoHold === cargoLevelBefore + 1, 'one cargo upgrade click should purchase exactly one cargoHold level');
+  assert(game.player.credits === creditsBeforeUpgrade - cargoLevelBefore * 250, 'one cargo upgrade click should charge credits exactly once');
+  assert(game.player.cargoCapacity > cargoCapacityBefore, 'cargo hold upgrade should increase cargo capacity');
+  assert(cargoUpgradeLogCount === 1, "one cargo upgrade click should create exactly one Captain\'s Log entry");
+  assert(cargoUpgradeLiveCount === 1, 'one cargo upgrade click should create exactly one live event');
+  assert(game.ui.lastSectorActionResult.message.includes('Cargo Hold upgraded to Level 2'), 'one cargo upgrade click should set the action result once');
+  assert(panels.docked.innerHTML.includes('Ship Upgrade Purchased') && panels.docked.innerHTML.includes('Cargo Hold upgraded to Level 2'), 'upgrade result should appear in the shipyard action result');
+  game.player.upgrades.shield = currentShip().upgradeCaps.shield;
+  const maxShield = game.player.upgrades.shield;
+  upgradeShip('shield');
+  assert(game.player.upgrades.shield === maxShield, 'maxed ship upgrades cannot exceed ship cap');
+  assert(panels.docked.innerHTML.includes("Shield is already at this ship's maximum"), 'maxed upgrade should report clear maximum message');
+  game.player.upgrades.engine = 1;
+  game.player.credits = 0;
+  upgradeShip('engine');
+  assert(game.player.upgrades.engine === 1, 'unaffordable ship upgrade should not change level');
+  assert(panels.docked.innerHTML.includes('Not enough credits for Engine Level 2'), 'unaffordable upgrade should report clear message');
+  game.player.credits = 500;
+  game.player.currentSector = 2;
+  upgradeShip('scanner');
+  assert(panels.docked.innerHTML.includes('Scanner upgrades require an available shipyard'), 'non-shipyard upgrade attempt should report unavailable shipyard');
+  game.player.currentSector = 1;
+  openScreen('shipyard');
   assert(panels.docked.innerHTML.includes('Ship purchases only happen in this Shipyard mode'), 'shipyard screen should explain focused purchase mode');
   assert(panels.docked.innerHTML.includes('Exit / Return to Ship') && !panels.docked.innerHTML.includes('sector-map'), 'shipyard mode should have return button and hide cockpit map');
   assert(panels.docked.innerHTML.includes('stat-delta-positive') && panels.docked.innerHTML.includes('stat-delta-neutral'), 'shipyard cards should render comparison delta classes');
