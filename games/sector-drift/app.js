@@ -1327,6 +1327,7 @@ function defaultStats() {
   return {
     visitedSectors: [1],
     creditsEarnedFromTrade: 0,
+    tradeProfit: 0,
     resourcesMined: 0,
     oreMined: 0,
     mathMissionsCompleted: 0,
@@ -3148,7 +3149,9 @@ function competitiveStats() {
   const sectorsExplored = Math.max(numericStat(s.sectorsExplored), (s.visitedSectors || game.visitedSectors || []).length || 0);
   const piratesDefeated = Math.max(numericStat(s.piratesDefeated), numericStat(game.player.piratesDefeated));
   const missionsCompleted = numericStat(s.mathMissionsCompleted) + numericStat(s.missionsClaimed);
-  const tradeProfit = numericStat(game.dockingLedger?.tradeProfit) + numericStat(s.tradeProfit);
+  // Public leaderboard trade profit uses the career stat only. The docking ledger
+  // is a local session display and can overlap with the career stat during a sale.
+  const tradeProfit = numericStat(s.tradeProfit);
   const creditsEarned = numericStat(s.creditsEarnedFromTrade) + numericStat(game.player.bountiesEarned);
   const reputation = numericStat(game.player.reputation);
   const achievementsCount = Array.isArray(game.achievements) ? game.achievements.length : 0;

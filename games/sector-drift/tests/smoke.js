@@ -1119,6 +1119,35 @@ vm.runInContext(`
   buyResource('Ore', 5);
   sellResource('Ore', 2);
   assert(game.dockingLedger.tradeProfit === Math.round((oreSell - oreBuy) * 2), 'selling calculates profit/loss using average cost');
+
+  game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  game.player.currentSector = 3;
+  game.player.cargo.Ore = 2;
+  game.player.cargoCostBasis.Ore = { quantity: 2, totalCost: 20, known: true };
+  game.dockingLedger = defaultDockingLedger(game.player.credits, 3);
+  const profitableSellPrice = sectorMap[3].portPrices.Ore.sell;
+  sellResource('Ore', 2);
+  const expectedProfit = profitableSellPrice * 2 - 20;
+  assert(expectedProfit > 0, 'test setup should create a profitable sale');
+  assert(game.dockingLedger.tradeProfit === expectedProfit, 'profitable sale updates local docking ledger trade P/L');
+  assert(game.stats.tradeProfit === expectedProfit, 'profitable sale updates career tradeProfit stat');
+  const profileAfterSale = publicProfilePayloadFromGame('online');
+  assert(profileAfterSale.tradeProfit === game.stats.tradeProfit, 'public profile tradeProfit uses career stat only');
+  assert(profileAfterSale.tradeProfit !== game.stats.tradeProfit + game.dockingLedger.tradeProfit, 'public profile tradeProfit does not double-count docking ledger profit');
+  const expectedNonDuplicatedScore = calculateCompetitiveScore({
+    creditsEarned: game.stats.creditsEarnedFromTrade + (game.player.bountiesEarned || 0),
+    sectorsExplored: game.stats.visitedSectors.length,
+    piratesDefeated: game.player.piratesDefeated || 0,
+    missionsCompleted: (game.stats.mathMissionsCompleted || 0) + (game.stats.missionsClaimed || 0),
+    tradeProfit: game.stats.tradeProfit,
+    reputation: game.player.reputation || 0,
+    achievementsCount: game.achievements.length,
+  });
+  assert(profileAfterSale.totalScore === expectedNonDuplicatedScore, 'public profile totalScore uses non-duplicated tradeProfit');
+  assert(renderDockingLedger().includes('Trade P/L') && renderDockingLedger().includes(signedCredits(expectedProfit)), 'docking ledger still displays session trade P/L locally');
+  assert(renderLeaderboardRows([{ captainName: 'Profit Pilot', shipName: 'Rusty Comet', specialty: 'Trader', tradeProfit: expectedProfit }], 'tradeProfit').includes(String(expectedProfit)), 'leaderboard rendering still works for trade profit rows');
+
   game.player.fuel = game.player.maxFuel - 2;
   buyFuel(1);
   game.player.hull = game.player.maxHull - 2;
