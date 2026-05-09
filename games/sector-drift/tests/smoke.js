@@ -101,7 +101,9 @@ vm.runInContext(`
             const tag = match[0];
             const mode = tag.match(/data-mode="([^"]+)"/);
             const sector = tag.match(/data-sector="([^"]+)"/);
-            this._actionButtons.push(makeEventTargetStub({ dataset: { action: match[1], mode: mode ? mode[1] : '', sector: sector ? sector[1] : '' }, parent: this }));
+            const upgrade = tag.match(/data-upgrade="([^"]+)"/);
+            const ship = tag.match(/data-ship="([^"]+)"/);
+            this._actionButtons.push(makeEventTargetStub({ dataset: { action: match[1], mode: mode ? mode[1] : '', sector: sector ? sector[1] : '', upgrade: upgrade ? upgrade[1] : '', ship: ship ? ship[1] : '' }, parent: this }));
           }
         }
         const screenPattern = /<button\\b[^>]*data-screen="([^"]+)"[^>]*>/g;
@@ -465,9 +467,42 @@ vm.runInContext(`
   readRumorBoard();
   assert(game.stationActivities.lastRumor && game.player.credits === rumorCreditsBefore - 5, 'Rumor Board renders rumor text and charges small fee');
 
-  game.player.currentSector = Object.values(sectorMap).find((sector) => sector.hasShipyard).number;
+  game.player.currentSector = 1;
   openScreen('shipyard');
   assert(panels.docked.innerHTML.includes('Shipyard') && panels.docked.innerHTML.includes('Trade-in'), 'shipyard docked screen should show trade-in cards');
+  assert(panels.docked.innerHTML.includes('Docked at Sector 1') && panels.docked.innerHTML.includes('Current Ship'), 'Sector 1 shipyard screen should show current ship section');
+  assert(panels.docked.innerHTML.includes('Cargo Capacity') && panels.docked.innerHTML.includes('Fuel') && panels.docked.innerHTML.includes('Hull') && panels.docked.innerHTML.includes('Fighters'), 'current ship section should show core ship stats');
+  assert(panels.docked.innerHTML.includes('Upgrade Current Ship'), 'shipyard screen should show current ship upgrades');
+  for (const label of ['Cargo Hold', 'Engine', 'Scanner', 'Shield']) {
+    assert(panels.docked.innerHTML.includes('Upgrade ' + label), label + ' upgrade control should be visible');
+  }
+  assert(panels.docked.innerHTML.includes('Cost: 250 credits') && panels.docked.innerHTML.includes('Ready: upgrades to Level 2'), 'shipyard upgrade cards should show costs and readiness');
+  const creditsBeforeUpgrade = game.player.credits;
+  const cargoLevelBefore = game.player.upgrades.cargoHold;
+  const cargoCapacityBefore = game.player.cargoCapacity;
+  upgradeShip('cargoHold');
+  assert(game.player.upgrades.cargoHold === cargoLevelBefore + 1, 'affordable cargo upgrade should increase the cargoHold level');
+  assert(game.player.credits === creditsBeforeUpgrade - cargoLevelBefore * 250, 'affordable ship upgrade should decrease credits by cost');
+  assert(game.player.cargoCapacity > cargoCapacityBefore, 'cargo hold upgrade should increase cargo capacity');
+  assert(panels.docked.innerHTML.includes('Ship Upgrade Purchased') && panels.docked.innerHTML.includes('Cargo Hold upgraded to Level 2'), 'upgrade result should appear in the shipyard action result');
+  assert(liveEvents[0].message.includes('Cargo Hold upgraded to Level 2'), 'upgrade result should appear in live events');
+  assert(game.log[0].includes('Cargo Hold upgraded to Level 2'), "upgrade result should be added to Captain\'s Log");
+  game.player.upgrades.shield = currentShip().upgradeCaps.shield;
+  const maxShield = game.player.upgrades.shield;
+  upgradeShip('shield');
+  assert(game.player.upgrades.shield === maxShield, 'maxed ship upgrades cannot exceed ship cap');
+  assert(panels.docked.innerHTML.includes("Shield is already at this ship's maximum"), 'maxed upgrade should report clear maximum message');
+  game.player.upgrades.engine = 1;
+  game.player.credits = 0;
+  upgradeShip('engine');
+  assert(game.player.upgrades.engine === 1, 'unaffordable ship upgrade should not change level');
+  assert(panels.docked.innerHTML.includes('Not enough credits for Engine Level 2'), 'unaffordable upgrade should report clear message');
+  game.player.credits = 500;
+  game.player.currentSector = 2;
+  upgradeShip('scanner');
+  assert(panels.docked.innerHTML.includes('Scanner upgrades require an available shipyard'), 'non-shipyard upgrade attempt should report unavailable shipyard');
+  game.player.currentSector = 1;
+  openScreen('shipyard');
   assert(panels.docked.innerHTML.includes('Ship purchases only happen in this Shipyard mode'), 'shipyard screen should explain focused purchase mode');
   assert(panels.docked.innerHTML.includes('Exit / Return to Ship') && !panels.docked.innerHTML.includes('sector-map'), 'shipyard mode should have return button and hide cockpit map');
   assert(panels.docked.innerHTML.includes('stat-delta-positive') && panels.docked.innerHTML.includes('stat-delta-neutral'), 'shipyard cards should render comparison delta classes');

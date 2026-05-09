@@ -26,6 +26,12 @@ const REQUIRE_FIREBASE_LOGIN = true;
 const ALLOW_LOCAL_PROTOTYPE_MODE = true;
 const PRESENCE_ONLINE_WINDOW_MS = 4 * 60 * 1000;
 const LIVE_EVENT_LIMIT = 5;
+const SHIP_UPGRADE_OPTIONS = [
+  { key: "cargoHold", label: "Cargo Hold", description: "Cargo capacity increases by 10 units per level.", success: "Cargo capacity increased." },
+  { key: "engine", label: "Engine", description: "Max fuel, daily turn grant, and turn bank improve.", success: "Fuel capacity and route endurance improved." },
+  { key: "scanner", label: "Scanner", description: "Nearby sector identification, mining, anomaly scans, and route visibility improve.", success: "More nearby sectors can now be identified." },
+  { key: "shield", label: "Shield", description: "Max hull, fighter storage, and hazard resilience improve.", success: "Hull strength and hazard resilience improved." },
+];
 
 const PLANET_UPGRADE_TRACKS = ["production", "industry", "defense", "fighterBays", "research"];
 const PLANET_PRODUCTION_RESOURCES = ["Ore", "Food", "Tech", "Fighters"];
@@ -1342,7 +1348,7 @@ function renderDockedScreen(title, subtitle, contentHtml) {
 function renderScreenContent(screen) {
   const sector = sectorMap[game.player.currentSector];
   if (screen === "starbase") return sector.type === "port" ? renderStarbaseScreen(sector) : `<p class="empty-note">No port or starbase is available in Sector ${sector.number}.</p>`;
-  if (screen === "shipyard") return sector.hasShipyard ? renderShipyardScreen() : `<p class="empty-note">No shipyard is available in Sector ${sector.number}.</p>`;
+  if (screen === "shipyard") return sector.hasShipyard ? renderShipyardScreen() : `${renderActionResult()}<p class="empty-note">No shipyard is available in Sector ${sector.number}.</p>`;
   if (screen === "specialMissions") return renderSpecialMissionsScreen();
   if (screen === "planets") return renderPlanetsScreen();
   if (screen === "combat") return renderCombatScreen();
@@ -2276,7 +2282,45 @@ function renderStarbaseScreen(sector) {
 }
 
 function renderShipyardScreen() {
-  return `<section class="shipyard-brief mini-card"><p class="eyebrow">Industrial Hull Catalog</p><h3>Compare before you trade</h3><p class="help-text">Ship purchases only happen in this Shipyard mode. Every card is measured against your active ship, including locked hulls, cargo fit warnings, fighter bay warnings, upgrade caps, and trade-in pricing.</p></section>${renderFighterPurchasePanel()}<div class="ship-card-grid">${Object.values(SHIPS).map(renderShipCard).join("")}</div>`;
+  return `${renderActionResult()}<section class="shipyard-brief mini-card"><p class="eyebrow">Industrial Shipyard · Docked at Sector ${game.player.currentSector}</p><h3>Upgrade or trade your ship</h3><p class="help-text">Use this Shipyard mode to improve your active ship with credits, then compare hull purchases before you trade. Every purchase card is measured against your active ship, including locked hulls, cargo fit warnings, fighter bay warnings, upgrade caps, and trade-in pricing.</p></section>${renderShipyardCurrentShipPanel()}${renderShipyardUpgradePanel()}${renderFighterPurchasePanel()}<section class="shipyard-buy-trade"><p class="eyebrow">Buy / Trade Ships</p><h3>Shipyard Ships</h3><p class="help-text">Ship purchases only happen in this Shipyard mode. Trade-in pricing is shown on each ship card.</p><div class="ship-card-grid">${Object.values(SHIPS).map(renderShipCard).join("")}</div></section>`;
+}
+
+function renderShipyardCurrentShipPanel() {
+  const ship = currentShip();
+  const p = game.player;
+  const caps = ship.upgradeCaps;
+  return `<section class="mini-card shipyard-current-ship"><p class="eyebrow">Current Ship</p><h3>${ship.name}</h3><p class="help-text">${ship.description}</p><div class="stat-grid compact-stat-grid">${stat("Ship Name", p.shipName)}${stat("Cargo Capacity", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Credits", p.credits)}${stat("Cargo Hold", `Level ${p.upgrades.cargoHold}/${caps.cargoHold}`)}${stat("Engine", `Level ${p.upgrades.engine}/${caps.engine}`)}${stat("Scanner", `Level ${p.upgrades.scanner}/${caps.scanner}`)}${stat("Shield", `Level ${p.upgrades.shield}/${caps.shield}`)}</div></section>`;
+}
+
+function renderShipyardUpgradePanel() {
+  const sector = sectorMap[game.player.currentSector];
+  return `<section class="mini-card shipyard-upgrades"><p class="eyebrow">Upgrade Current Ship</p><h3>Credit upgrades for ${currentShip().name}</h3><p class="help-text">Upgrade caps come from the current ship. Purchases save immediately and report in the Action Result, Live Events feed, and Captain's Log.</p><div class="upgrade-grid shipyard-upgrade-grid">${SHIP_UPGRADE_OPTIONS.map((upgrade) => renderShipUpgradeCard(upgrade, sector)).join("")}</div></section>`;
+}
+
+function shipUpgradeCost(key) {
+  const level = Number(game.player.upgrades?.[key]) || 1;
+  return level * 250;
+}
+
+function shipUpgradeUnavailableReason(key, sector = sectorMap[game.player.currentSector]) {
+  const option = SHIP_UPGRADE_OPTIONS.find((upgrade) => upgrade.key === key);
+  const label = option?.label || titleCase(String(key).replace(/([A-Z])/g, " $1"));
+  const level = Number(game.player.upgrades?.[key]) || 1;
+  const cap = Number(currentShip().upgradeCaps?.[key]) || level;
+  const cost = shipUpgradeCost(key);
+  if (!sector?.hasShipyard) return "shipyard unavailable";
+  if (level >= cap) return `${label} is already at this ship's maximum.`;
+  if (game.player.credits < cost) return `Not enough credits for ${label} Level ${level + 1}.`;
+  return "Ready to upgrade";
+}
+
+function renderShipUpgradeCard(upgrade, sector = sectorMap[game.player.currentSector]) {
+  const level = Number(game.player.upgrades?.[upgrade.key]) || 1;
+  const cap = Number(currentShip().upgradeCaps?.[upgrade.key]) || level;
+  const cost = shipUpgradeCost(upgrade.key);
+  const reason = shipUpgradeUnavailableReason(upgrade.key, sector);
+  const available = reason === "Ready to upgrade";
+  return `<article class="mini-card ship-upgrade-card ${level >= cap ? "maxed" : ""}"><h4>${upgrade.label}</h4><p class="progress-text">Current level ${level} / Max level ${cap}</p><p>${upgrade.description}</p><p class="cost-line">Cost: ${cost} credits</p><button data-action="upgradeShip" data-upgrade="${upgrade.key}" ${available ? "" : "disabled"}>Upgrade ${upgrade.label}</button><p class="help-text disabled-reason">${available ? `Ready: upgrades to Level ${level + 1}.` : `Unavailable: ${reason}`}</p></article>`;
 }
 
 function shipTradeInValue(ship = currentShip()) {
@@ -3191,6 +3235,7 @@ function wireLocationButtons(scope = panels.location) {
   scope.querySelector("[data-action='repair']")?.addEventListener("click", () => runGameAction(repairHull));
   scope.querySelectorAll("[data-action='refuel']").forEach((button) => button.addEventListener("click", () => runGameAction(() => buyFuel(button.dataset.amount))));
   scope.querySelectorAll("[data-action='buyShip']").forEach((button) => button.addEventListener("click", () => runGameAction(() => buyShip(button.dataset.ship))));
+  scope.querySelectorAll("[data-action='upgradeShip']").forEach((button) => button.addEventListener("click", () => runGameAction(() => upgradeShip(button.dataset.upgrade))));
   scope.querySelectorAll("[data-action='buyFighters']").forEach((button) => button.addEventListener("click", () => runGameAction(() => buyFighters(button.dataset.amount))));
   scope.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => runGameAction(() => sellFighters(button.dataset.amount))));
   scope.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => runGameAction(() => sellFighters(button.dataset.amount))));
@@ -3249,19 +3294,8 @@ function renderTutorialPanel() {
 }
 
 function renderUpgradePanel() {
-  const upgrades = [
-    { key: "cargoHold", label: "Cargo Hold", description: "Increase cargo capacity by 10." },
-    { key: "engine", label: "Engine", description: "Increase daily turns and max fuel." },
-    { key: "scanner", label: "Scanner", description: "Improve mining, anomaly scans, and sector reveals." },
-    { key: "shield", label: "Shield", description: "Reduce hazard damage and improve hull." },
-  ];
-  const caps = currentShip().upgradeCaps;
-  panels.upgrade.innerHTML = `<h2 id="upgradeHeading">Ship Upgrades</h2><div class="upgrade-grid">${upgrades.map((upgrade) => {
-    const level = game.player.upgrades[upgrade.key];
-    const cost = level * 250;
-    const capped = level >= caps[upgrade.key];
-    return `<div class="mini-card"><h3>${upgrade.label}</h3><p>${upgrade.description}</p><p>Level ${level}/${caps[upgrade.key]} · Cost ${cost} credits</p><button data-upgrade="${upgrade.key}" ${game.player.credits < cost || capped ? "disabled" : ""}>Upgrade</button></div>`;
-  }).join("")}</div>`;
+  if (!panels.upgrade) return;
+  panels.upgrade.innerHTML = `<h2 id="upgradeHeading">Ship Upgrades</h2><p class="help-text">Dock at a Shipyard to purchase current-ship upgrades.</p><div class="upgrade-grid">${SHIP_UPGRADE_OPTIONS.map((upgrade) => renderShipUpgradeCard(upgrade)).join("")}</div>`;
   panels.upgrade.querySelectorAll("[data-upgrade]").forEach((button) => button.addEventListener("click", () => upgradeShip(button.dataset.upgrade)));
 }
 
@@ -3872,12 +3906,18 @@ function awardMissionReward() {
 }
 
 function upgradeShip(key) {
-  const caps = currentShip().upgradeCaps;
-  if (game.player.upgrades[key] >= caps[key]) return addAndRender(`${titleCase(key.replace(/([A-Z])/g, " $1"))} is at this ship's cap.`);
-  const cost = game.player.upgrades[key] * 250;
-  if (game.player.credits < cost) return;
+  const option = SHIP_UPGRADE_OPTIONS.find((upgrade) => upgrade.key === key);
+  if (!option) return addAndRender("Unknown ship upgrade selected.");
+  const sector = sectorMap[game.player.currentSector];
+  const level = Number(game.player.upgrades?.[key]) || 1;
+  const cap = Number(currentShip().upgradeCaps?.[key]) || level;
+  const cost = shipUpgradeCost(key);
+  if (!sector?.hasShipyard) return addAndRender(`${option.label} upgrades require an available shipyard.`);
+  if (level >= cap) return addAndRender(`${option.label} is already at this ship's maximum.`);
+  if (game.player.credits < cost) return addAndRender(`Not enough credits for ${option.label} Level ${level + 1}.`);
+
   game.player.credits -= cost;
-  game.player.upgrades[key] += 1;
+  game.player.upgrades[key] = level + 1;
   if (key === "cargoHold") game.player.cargoCapacity = calculateCargoCapacity(currentShip(), game.player.upgrades);
   if (key === "engine") {
     game.player.maxFuel = calculateFuelCapacity(currentShip(), game.player.upgrades);
@@ -3887,9 +3927,12 @@ function upgradeShip(key) {
   if (key === "scanner") updateScannerReveals();
   if (key === "shield") {
     game.player.maxHull = currentShip().maxHull + Math.max(0, game.player.upgrades.shield - 1) * 4;
+    game.player.fighterCapacity = calculateFighterCapacity(currentShip(), game.player.upgrades);
     game.player.hull = Math.min(game.player.maxHull, game.player.hull + 4);
   }
-  addLog(`Upgraded ${titleCase(key.replace(/([A-Z])/g, " $1"))} to level ${game.player.upgrades[key]}.`);
+  const message = `${option.label} upgraded to Level ${game.player.upgrades[key]}. ${option.success}`;
+  setSectorActionResult("Ship Upgrade Purchased", message, { type: "positive", gained: [`${option.label} Level ${game.player.upgrades[key]}`], lost: [`${cost} credits`], eventType: "ship-upgrade" });
+  addLog(message);
   saveGame();
   render();
 }
