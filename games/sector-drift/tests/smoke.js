@@ -741,6 +741,36 @@ vm.runInContext(`
 
   // Protected space, Alliance, smuggled inventory, and route travel foundations.
   game = defaultGameState();
+  launchGate.mode = 'localPrototype';
+  assert(sectorMap[1].homeworld && sectorMap[1].homeworld.name === LAMONT_PRIME_NAME, 'Sector 1 includes Lamont Prime');
+  assert(sectorMap[1].homeworld.protectedHomeworld && sectorMap[1].homeworld.claimLocked && sectorMap[1].homeworld.attackLocked, 'Lamont Prime should be flagged as protected and locked');
+  game.player.currentSector = 1;
+  selectedSectorNumber = 1;
+  renderSectorPanel();
+  assert(panels.sector.innerHTML.includes('Lamont Prime') && panels.sector.innerHTML.includes('Protected Homeworld') && panels.sector.innerHTML.includes('Hostile actions are disabled here'), 'Sector 1 cockpit displays Lamont Prime protected homeworld messaging');
+  assert(buildArrivalReport(1).includes('Sector 1 is protected space') && buildArrivalReport(1).includes('Lamont Prime'), 'arrival report mentions Sector 1 safe-zone status and Lamont Prime');
+  openScreen('planets');
+  assert(panels.docked.innerHTML.includes('Lamont Prime') && panels.docked.innerHTML.includes('Why it cannot be claimed') && panels.docked.innerHTML.includes('Attack Status'), 'planet screen explains Lamont Prime claim and attack restrictions');
+  const claimsBeforeLamont = game.stats.planetsClaimed;
+  claimPlanet();
+  assert(game.stats.planetsClaimed === claimsBeforeLamont && game.ui.lastSectorActionResult?.message.includes('cannot be claimed or attacked'), 'player cannot claim Lamont Prime');
+  const originalProtectedSector2 = { type: sectorMap[2].type, planet: sectorMap[2].planet };
+  sectorMap[2].type = 'planet';
+  sectorMap[2].planet = createPlanetState(2, 'Protected Test World', sectorMap[2].routeRole, sectorMap[2].dangerLevel);
+  game.player.currentSector = 2;
+  const protectedClaimsBefore = game.stats.planetsClaimed;
+  claimPlanet();
+  assert(game.stats.planetsClaimed === protectedClaimsBefore && game.ui.lastSectorActionResult?.message.includes('Protected Alliance territory'), 'protected-space claim rules still block normal protected planets');
+  sectorMap[2].type = originalProtectedSector2.type;
+  sectorMap[2].planet = originalProtectedSector2.planet;
+  game.player.currentSector = 1;
+  openScreen('starbase');
+  assert(panels.docked.innerHTML.includes('Starbase') && panels.docked.innerHTML.includes('Docking Ledger'), 'Sector 1 starbase still works with Lamont Prime present');
+  openScreen('shipyard');
+  assert(panels.docked.innerHTML.includes('Shipyard') && panels.docked.innerHTML.includes('Trade-in'), 'Sector 1 shipyard still works with Lamont Prime present');
+  openScreen('specialMissions');
+  assert(panels.docked.innerHTML.includes('Special Missions Terminal') && panels.docked.innerHTML.includes('Math Contracts'), 'Sector 1 missions still work with Lamont Prime present');
+  game = defaultGameState();
   assert(isProtectedSpace(1), 'Sector 1 should be protected');
   assert(sectorMap[1].adjacent.every((sector) => isProtectedSpace(sector)), 'sectors one lane step from 1 should be protected');
   assert(sectorMap[1].adjacent.flatMap((sector) => sectorMap[sector].adjacent).every((sector) => isProtectedSpace(sector)), 'sectors two lane steps from 1 should be protected');
@@ -837,7 +867,7 @@ vm.runInContext(`
   assert(panels.sector.innerHTML.includes('Selected Sector Intel') && panels.sector.innerHTML.includes('Arrival Report'), 'selected sector intel and arrival report render in the main viewer');
   const selectedIntelHtml = panels.sector.innerHTML.slice(panels.sector.innerHTML.indexOf('Selected Sector Intel'));
   assert(!selectedIntelHtml.includes('Only the current situation should render this cockpit action result.'), 'selected sector intel omits duplicate action-result copy');
-  assert(panels.sector.innerHTML.includes('data-situation-type="shipyard port"') && panels.sector.innerHTML.includes('Safe Port / Starbase'), 'situation card renders on Sector 1 port');
+  assert(panels.sector.innerHTML.includes('data-situation-type="shipyard port"') && (panels.sector.innerHTML.includes('Safe Port / Starbase') || panels.sector.innerHTML.includes('Lamont Prime Safe Home Base')), 'situation card renders on Sector 1 port');
   assert(panels.sector.innerHTML.includes('Dock at Starbase') && panels.sector.innerHTML.includes('Open Mission Terminal'), 'situation card exposes starbase and mission terminal buttons');
   assert(panels.sector.innerHTML.includes('Enter Shipyard'), 'situation card shows shipyard button when shipyard exists');
   const starbaseSituationButton = panels.sector.querySelectorAll('[data-screen]').find((button) => button.dataset.screen === 'starbase');
