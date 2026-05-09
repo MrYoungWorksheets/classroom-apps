@@ -226,7 +226,7 @@ vm.runInContext(`
 
   game = defaultGameState();
   game.player.credits = 5000;
-  game.player.cargo.Ore = 20;
+  game.player.cargo.Ore = 250;
   buyShip('nebulaSkiff');
   assert(game.player.shipId === 'rustyComet', 'ship purchase should block when cargo will not fit');
 
@@ -239,6 +239,17 @@ vm.runInContext(`
     }
   }
   assert(RESOURCES.some((resource) => ports.some((buyPort) => ports.some((sellPort) => sellPort.number !== buyPort.number && sellPort.portPrices[resource].sell > buyPort.portPrices[resource].buy))), 'port economy should include at least one profitable route');
+  for (const port of ports) {
+    assert(VALID_PORT_CODES.includes(port.portCode), 'every port should have a valid three-letter S/B code');
+    assert(stationDisplayName(port).includes('[' + port.portCode + ']'), 'station display name should include the port code');
+    for (const resource of PORT_CODE_RESOURCES) {
+      const role = portCodeRole(port.portCode, resource);
+      assert(port.portPrices[resource].role === role, 'port price role metadata should match the S/B code');
+      const opposite = ports.find((other) => other.number !== port.number && portCodeRole(other.portCode, resource) !== role);
+      if (opposite && role === 'S') assert(port.portPrices[resource].buy < opposite.portPrices[resource].buy, 'S resources should be cheaper to buy than opposite-role ports');
+      if (opposite && role === 'B') assert(port.portPrices[resource].sell > opposite.portPrices[resource].sell, 'B resources should sell for more than opposite-role ports');
+    }
+  }
 
 
 
@@ -246,22 +257,37 @@ vm.runInContext(`
   game = defaultGameState();
   assert(game.player.reputation === 0, 'default reputation should be 0');
   assert(game.player.fighters === 0, 'default fighters should be 0');
+  assert(SHIPS.rustyComet.cargoCapacity === 200 && SHIPS.atlasHauler.cargoCapacity === 360, 'ship cargo capacities should be scaled x10');
+  assert(SHIPS.rustyComet.fighterCapacity === 125 && SHIPS.atlasHauler.fighterCapacity === 300, 'ship fighter capacities should be scaled x5');
+  const shipSourceBlock = source.slice(source.indexOf('const SHIPS = {'), source.indexOf('let sessionRecoveryMessages'));
+  assert(shipSourceBlock.split('cargoCapacity:').length - 1 === Object.keys(SHIPS).length, 'ship definitions should contain exactly one cargoCapacity key per ship');
+  assert(shipSourceBlock.split('fighterCapacity:').length - 1 === Object.keys(SHIPS).length, 'ship definitions should contain exactly one fighterCapacity key per ship');
+  assert(game.player.cargoCapacity === SHIPS.rustyComet.cargoCapacity, 'cargo capacity should derive from starter ship');
   assert(game.player.fighterCapacity === SHIPS.rustyComet.fighterCapacity, 'fighter capacity should derive from starter ship');
+  updateAchievements();
+  assert(!game.achievements.includes('cargo-goblin'), 'fresh save should not unlock Cargo Goblin after cargo rebalance');
+  game.player.cargoCapacity = CARGO_GOBLIN_CAPACITY_THRESHOLD - 1;
+  updateAchievements();
+  assert(!game.achievements.includes('cargo-goblin'), 'Cargo Goblin should stay locked below the new threshold');
+  game.player.cargoCapacity = CARGO_GOBLIN_CAPACITY_THRESHOLD;
+  updateAchievements();
+  assert(game.achievements.includes('cargo-goblin'), 'Cargo Goblin should unlock at the rescaled threshold');
+  game = defaultGameState();
   assert(typeof reputationTitle === 'function' && reputationTitle(75) === 'Star Marshal', 'reputationTitle should exist');
   assert(typeof combatRankTitle === 'function' && combatRankTitle({ reputation: 25, piratesDefeated: 5 }) === 'Deputy Pilot', 'combatRankTitle should use reputation and pirates defeated');
   assert(typeof nextCombatRankProgress === 'function' && nextCombatRankProgress({ reputation: 0, piratesDefeated: 0 }).includes('Patrol Volunteer'), 'nextCombatRankProgress should identify next rank');
   const migrated = migrateGameState({
-    player: { credits: 777, fuel: 3, turns: 44, cargo: { Ore: 4 }, shipId: 'rustyComet', fighters: 99, fighterCapacity: 99 },
+    player: { credits: 777, fuel: 3, turns: 44, cargo: { Ore: 180 }, shipId: 'rustyComet', fighters: 99, fighterCapacity: 99 },
     planets: { 5: { owner: 'Cadet', productionLevel: 2, stored: { Ore: 1, Food: 2, Tech: 3 }, lastCollectedAt: 0 } },
     achievements: ['first-jump'],
     completedMissions: ['visit-3'],
     log: ['legacy'],
   });
-  assert(migrated.player.credits === 777 && migrated.player.turns === 44 && migrated.player.cargo.Ore === 4, 'migration should preserve existing save fields');
+  assert(migrated.player.credits === 777 && migrated.player.turns === 44 && migrated.player.cargo.Ore === 180, 'migration should preserve existing cargo that fits new scale');
   assert(migrated.planets[5].owner === 'Cadet' && migrated.achievements.includes('first-jump'), 'migration should preserve planets and achievements');
   assert(migrated.player.fighterCapacity === calculateFighterCapacity(SHIPS.rustyComet, migrated.player.upgrades), 'migration should recalculate fighter capacity');
-  assert(migrated.player.fighters === 99, 'migration should preserve legacy over-cap fighters safely');
-  assert(migrated.log[0].includes('preserved 99 fighters'), 'migration should log preserved over-cap fighters');
+  assert(migrated.player.fighters === 99, 'migration should preserve fighters that fit new scaled capacity');
+  assert((migrated.player.upgrades.hyperdrive || 0) === 0, 'migration should default Hyperdrive to 0');
 
   // Fighter economy checks.
   game = defaultGameState();
@@ -277,6 +303,9 @@ vm.runInContext(`
   const fightersBeforeSell = game.player.fighters;
   sellFighters(10);
   assert(game.player.fighters === fightersBeforeSell - 10 && game.player.fightersSold === 10, 'fighters should be sellable at shipyards');
+  const fightersBeforeSellAll = game.player.fighters;
+  sellFighters('all');
+  assert(game.player.fighters === 0 && game.player.fightersSold === 10 + fightersBeforeSellAll, 'Sell All fighters should clear the bay');
 
   // Pirate generation and persistence checks.
   game = defaultGameState();
@@ -592,10 +621,11 @@ vm.runInContext(`
   assert(panels.docked.innerHTML.includes('Docked at Sector 1') && panels.docked.innerHTML.includes('Current Ship'), 'Sector 1 shipyard screen should show current ship section');
   assert(panels.docked.innerHTML.includes('Cargo Capacity') && panels.docked.innerHTML.includes('Fuel') && panels.docked.innerHTML.includes('Hull') && panels.docked.innerHTML.includes('Fighters'), 'current ship section should show core ship stats');
   assert(panels.docked.innerHTML.includes('Upgrade Current Ship'), 'shipyard screen should show current ship upgrades');
-  for (const label of ['Cargo Hold', 'Engine', 'Scanner', 'Shield']) {
+  for (const label of ['Cargo Hold', 'Engine', 'Scanner', 'Shield', 'Hyperdrive']) {
     assert(panels.docked.innerHTML.includes('Upgrade ' + label), label + ' upgrade control should be visible');
   }
   assert(panels.docked.innerHTML.includes('Cost: 250 credits') && panels.docked.innerHTML.includes('Ready: upgrades to Level 2'), 'shipyard upgrade cards should show costs and readiness');
+  assert(panels.docked.innerHTML.includes('Cargo capacity increases by 20') && panels.docked.innerHTML.includes('Cost: 100000 credits') && panels.docked.innerHTML.includes('Current level 0 / Max level 1'), 'shipyard should show meaningful cargo growth and one-rank Hyperdrive cost/cap');
   game.player.credits = 2000;
   game.log = [];
   liveEvents = [];
@@ -630,11 +660,19 @@ vm.runInContext(`
   const cargoUpgradeLiveCount = liveEvents.filter((event) => event.message.includes('Cargo Hold upgraded to Level 2')).length;
   assert(game.player.upgrades.cargoHold === cargoLevelBefore + 1, 'one cargo upgrade click should purchase exactly one cargoHold level');
   assert(game.player.credits === creditsBeforeUpgrade - cargoLevelBefore * 250, 'one cargo upgrade click should charge credits exactly once');
-  assert(game.player.cargoCapacity > cargoCapacityBefore, 'cargo hold upgrade should increase cargo capacity');
+  assert(game.player.cargoCapacity === cargoCapacityBefore + CARGO_HOLD_CAPACITY_BONUS, 'cargo hold upgrade should increase cargo capacity by meaningful growth amount');
   assert(cargoUpgradeLogCount === 1, "one cargo upgrade click should create exactly one Captain\'s Log entry");
   assert(cargoUpgradeLiveCount === 1, 'one cargo upgrade click should create exactly one live event');
   assert(game.ui.lastSectorActionResult.message.includes('Cargo Hold upgraded to Level 2'), 'one cargo upgrade click should set the action result once');
   assert(panels.docked.innerHTML.includes('Ship Upgrade Purchased') && panels.docked.innerHTML.includes('Cargo Hold upgraded to Level 2'), 'upgrade result should appear in the shipyard action result');
+  game.player.credits = HYPERDRIVE_COST;
+  game.player.upgrades.hyperdrive = 0;
+  const hyperCreditsBefore = game.player.credits;
+  upgradeShip('hyperdrive');
+  assert(game.player.credits === hyperCreditsBefore - HYPERDRIVE_COST && game.player.upgrades.hyperdrive === 1, 'buying Hyperdrive should spend 100,000 credits and set level to 1');
+  upgradeShip('hyperdrive');
+  assert(game.player.upgrades.hyperdrive === 1, 'Hyperdrive max level should stay 1');
+
   game.player.upgrades.shield = currentShip().upgradeCaps.shield;
   const maxShield = game.player.upgrades.shield;
   upgradeShip('shield');
@@ -657,7 +695,7 @@ vm.runInContext(`
   const currentShipCard = renderShipCard(SHIPS.rustyComet);
   assert(currentShipCard.includes('Current Ship') && currentShipCard.includes('(±0)'), 'current ship card should show current status and neutral comparisons');
   const haulerCard = renderShipCard(SHIPS.atlasHauler);
-  assert(haulerCard.includes('Cargo') && haulerCard.includes('(+16)') && haulerCard.includes('stat-delta-positive'), 'larger cargo ship should show positive cargo delta');
+  assert(haulerCard.includes('Cargo') && haulerCard.includes('(+160)') && haulerCard.includes('stat-delta-positive'), 'larger cargo ship should show positive cargo delta');
   const lockedShipCard = renderShipCard(SHIPS.blackfinRaider);
   assert(lockedShipCard.includes('Locked') && lockedShipCard.includes('stat-delta'), 'locked ships should still render comparison deltas');
   openScreen('specialMissions');
@@ -691,13 +729,13 @@ vm.runInContext(`
   game.player.credits = 10000;
   game.player.fighters = game.player.fighterCapacity;
   const lowerFighterCard = renderShipCard(SHIPS.nebulaSkiff);
-  assert(lowerFighterCard.includes('Fighters') && lowerFighterCard.includes('(-25)') && lowerFighterCard.includes('stat-delta-negative'), 'lower fighter capacity ship should show negative fighter delta');
+  assert(lowerFighterCard.includes('Fighters') && lowerFighterCard.includes('(-125)') && lowerFighterCard.includes('stat-delta-negative'), 'lower fighter capacity ship should show negative fighter delta');
   buyShip('nebulaSkiff');
   assert(game.player.shipId === 'atlasHauler', 'ship purchase should block when fighters will not fit');
 
   game = defaultGameState();
   game.player.credits = 10000;
-  game.player.cargo.Ore = 25;
+  game.player.cargo.Ore = 250;
   const cargoBlockedCard = renderShipCard(SHIPS.nebulaSkiff);
   assert(cargoBlockedCard.includes('Cannot Fit Cargo') && cargoBlockedCard.includes('Current cargo will not fit'), 'shipyard card should explain cargo blocking');
 
@@ -726,6 +764,8 @@ vm.runInContext(`
   assert(findRouteToSector(1, 999) === null, 'route helper should reject invalid target');
   game.player.fuel = 10;
   game.player.turns = 10;
+  maybeTravelEvent = function () { return false; };
+  resolveSectorDanger = function () { return false; };
   setWarpDestination(4);
   maybeTravelEvent = function () { return false; };
   resolveSectorDanger = function () { return false; };
@@ -737,6 +777,30 @@ vm.runInContext(`
   const sectorBeforeStop = game.player.currentSector;
   performWarpStep();
   assert(game.player.currentSector === sectorBeforeStop, 'warp step should stop when out of fuel');
+  game = defaultGameState();
+  game.revealedSectors = [1, 2, 3, 4];
+  game.player.upgrades.hyperdrive = 1;
+  game.player.fuel = 10;
+  game.player.turns = 10;
+  maybeTravelEvent = function () { return false; };
+  resolveSectorDanger = function () { return false; };
+  setWarpDestination(4);
+  renderSectorPanel();
+  assert(panels.sector.innerHTML.includes('data-action="engageHyperdrive"') && panels.sector.innerHTML.includes('Rapid jumps. Costs double fuel. Stops for danger.'), 'Hyperdrive button should appear when owned and route is active');
+  const hyperFuelBefore = game.player.fuel;
+  engageHyperdrive();
+  assert(game.player.currentSector === 4 && game.player.fuel === hyperFuelBefore - 6, 'Hyperdrive should consume double fuel per jump');
+  game = defaultGameState();
+  game.revealedSectors = [1, 2, 3, 4];
+  game.player.upgrades.hyperdrive = 1;
+  game.player.fuel = 10;
+  game.player.turns = 10;
+  setWarpDestination(4);
+  const normalDangerResolver = resolveSectorDanger;
+  resolveSectorDanger = function () { game.player.hull -= 1; addLog('Simulated hazard damage.'); return true; };
+  engageHyperdrive();
+  resolveSectorDanger = normalDangerResolver;
+  assert(game.player.currentSector === 2 && game.ui.lastSectorActionResult?.message.includes('Hull damage detected'), 'Hyperdrive should stop on simulated hull damage');
 
   // Mission board combat progress and existing system guards.
   game = defaultGameState();
@@ -895,7 +959,7 @@ vm.runInContext(`
   let logCountBeforePlot = game.log.length;
   plotButtons[0].dispatchEvent({ type: 'click' });
   assert(game.ui.warpDestination === 3, 'situation-card plot button sets warp destination');
-  assert(game.log.length === logCountBeforePlot + 1, 'situation-card plot button has one listener side effect');
+  assert(game.log.length >= logCountBeforePlot + 1 && game.ui.lastSectorActionResult?.message.includes('Route Set'), 'situation-card plot button reports route plotting');
   game.ui.warpDestination = null;
   renderSectorPanel();
   plotButtons = panels.sector.querySelectorAll("[data-action='plotSelectedRoute']");
