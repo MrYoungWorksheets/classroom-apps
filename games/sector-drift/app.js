@@ -1342,6 +1342,7 @@ function renderDockedScreen(title, subtitle, contentHtml) {
   panels.docked.className = `panel docked-screen docked-${screen}`;
   panels.docked.innerHTML = `<div class="docked-header"><div><p class="eyebrow">${locationLabel}</p><h2>${title}</h2><p class="help-text">${subtitle}</p></div>${screen === "launch" ? "" : `<button type="button" class="exit-button button-exit" data-action="closeScreen">${returnToShipLabel()}</button>`}</div><div class="docked-content">${contentHtml}</div>`;
   panels.docked.querySelector("[data-action='closeScreen']")?.addEventListener("click", closeScreen);
+  // Wire docked content exactly once after replacing the markup; duplicate wiring double-runs purchases.
   wireDockedButtons(panels.docked);
 }
 
@@ -3237,7 +3238,6 @@ function wireLocationButtons(scope = panels.location) {
   scope.querySelectorAll("[data-action='buyShip']").forEach((button) => button.addEventListener("click", () => runGameAction(() => buyShip(button.dataset.ship))));
   scope.querySelectorAll("[data-action='upgradeShip']").forEach((button) => button.addEventListener("click", () => runGameAction(() => upgradeShip(button.dataset.upgrade))));
   scope.querySelectorAll("[data-action='buyFighters']").forEach((button) => button.addEventListener("click", () => runGameAction(() => buyFighters(button.dataset.amount))));
-  scope.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => runGameAction(() => sellFighters(button.dataset.amount))));
   scope.querySelectorAll("[data-action='sellFighters']").forEach((button) => button.addEventListener("click", () => runGameAction(() => sellFighters(button.dataset.amount))));
   scope.querySelectorAll("[data-action='pirateCombat']").forEach((button) => button.addEventListener("click", () => { pulseActionButton(button); runGameAction(() => resolvePirateCombat(button.dataset.mode)); }));
   scope.querySelector("[data-action='boardPirate']")?.addEventListener("click", (event) => { pulseActionButton(event.currentTarget); runGameAction(boardPirateShip); });
