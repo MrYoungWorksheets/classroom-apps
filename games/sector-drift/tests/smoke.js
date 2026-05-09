@@ -562,9 +562,38 @@ vm.runInContext(`
   depositToPlanet('Food', 'max');
   assert(game.ui.lastSectorActionResult?.message.includes('No Food aboard'), 'Deposit All gives a clear no-cargo block reason');
   game.planets[claimed.id].owner = 'Someone Else';
+  game.planets[claimed.id].stored.Fighters = 0;
   game.player.cargo.Food = 5;
   depositToPlanet('Food', 'max');
-  assert(game.player.cargo.Food === 5 && game.ui.lastSectorActionResult?.message.includes('Cannot deposit cargo here'), 'Deposit All blocks cargo transfer to a planet the player does not own');
+  assert(game.player.cargo.Food === 5 && game.ui.lastSectorActionResult?.message.includes('non-owners cannot manage planets'), 'Deposit All blocks cargo transfer to a planet the player does not own');
+
+  game.planets[claimed.id].stored.Fighters = 12;
+  game.player.fighters = 10;
+  game.player.hull = game.player.maxHull;
+  liveEvents = [];
+  const playerFightersBeforeDefense = game.player.fighters;
+  const planetFightersBeforeDefense = game.planets[claimed.id].stored.Fighters;
+  depositToPlanet('Food', 'max');
+  assert(game.player.cargo.Food === 5, 'defended non-owner deposit does not move cargo');
+  assert(game.player.fighters < playerFightersBeforeDefense, 'planet defense damages player fighters first');
+  assert(game.planets[claimed.id].stored.Fighters < planetFightersBeforeDefense, 'planet defense can reduce defending fighters during the exchange');
+  assert(game.ui.lastSectorActionResult?.title === 'Planet Defended' && game.ui.lastSectorActionResult.message.includes('Planet defense engaged: 12 defending fighters intercepted your ship') && game.ui.lastSectorActionResult.message.includes('Access denied'), 'planet defense reports immediate action result details');
+  assert(liveEvents[0]?.title === 'Planet Defended' && game.log.some((entry) => entry.includes('Planet defense engaged')), 'planet defense reports through live event and Captain Log');
+
+  game.planets[claimed.id].stored.Fighters = 6;
+  game.player.fighters = 0;
+  game.player.hull = game.player.maxHull;
+  const hullBeforeDefense = game.player.hull;
+  claimPlanet();
+  assert(game.player.hull < hullBeforeDefense && game.ui.lastSectorActionResult?.message.includes('Took'), 'planet defense damages hull when the player has no fighters');
+
+  panels.docked.innerHTML = renderPlanet({ ...planetSector, planet: game.planets[claimed.id] });
+  assert(panels.docked.innerHTML.includes('Owner Status') && panels.docked.innerHTML.includes('Defense Fighters') && panels.docked.innerHTML.includes('Access Allowed') && panels.docked.innerHTML.includes('Request / Attempt Access'), 'non-owner planet screen shows owner, defense, access status, and a live blocked action');
+  const fightersBeforeManagedDefense = game.player.fighters = 8;
+  game.planets[claimed.id].stored.Fighters = 9;
+  openScreen('planets');
+  assert(game.ui.activeScreen !== 'planets' && game.player.fighters < fightersBeforeManagedDefense && game.ui.lastSectorActionResult?.title === 'Planet Defended', 'owned planet with fighters blocks non-owner management and attacks intruder');
+
   game.planets[claimed.id].owner = game.player.pilotName;
 
   game.planets[claimed.id].stored.Fighters = 20;
@@ -1521,16 +1550,16 @@ vm.runInContext(`
   const legacyMigratedPlanet = game.planets[legacyOwnedSector.planet.id];
   const storedTechBeforeLegacyDeposit = legacyMigratedPlanet.stored.Tech;
   depositToPlanet('Tech', 'max');
-  assert(game.planets[legacyMigratedPlanet.id].stored.Tech === storedTechBeforeLegacyDeposit + 8 && !game.ui.lastSectorActionResult?.message.includes('Cannot deposit cargo here'), 'migrated legacy owner can still deposit cargo without being treated as non-owner defense');
+  assert(game.planets[legacyMigratedPlanet.id].stored.Tech === storedTechBeforeLegacyDeposit + 8 && !game.ui.lastSectorActionResult?.message.includes('non-owners cannot manage planets'), 'migrated legacy owner can still deposit cargo without being treated as non-owner defense');
   const productionBeforeLegacyUpgrade = game.planets[legacyMigratedPlanet.id].upgrades.production;
   upgradePlanet('production');
   assert(game.planets[legacyMigratedPlanet.id].upgrades.production === productionBeforeLegacyUpgrade + 1, 'migrated legacy owner can still upgrade the previously owned planet');
   game.player.currentSector = otherOwnedSector.number;
   game.player.cargo.Food = 5;
   depositToPlanet('Food', 'max');
-  assert(game.player.cargo.Food === 5 && game.ui.lastSectorActionResult?.message.includes('Cannot deposit cargo here'), 'planets owned by another name remain non-owned and defended');
+  assert(game.player.cargo.Food === 5 && game.ui.lastSectorActionResult?.message.includes('non-owners cannot manage planets'), 'planets owned by another name remain non-owned and defended');
   upgradePlanet('production');
-  assert(game.ui.lastSectorActionResult?.message.includes('Only your owned planets can be upgraded'), 'non-owned planet upgrades remain blocked after legacy ownership migration');
+  assert(game.ui.lastSectorActionResult?.message.includes('non-owners cannot manage planets'), 'non-owned planet upgrades remain blocked after legacy ownership migration');
   game.player.currentSector = 1;
   claimPlanet();
   assert(game.ui.lastSectorActionResult?.message.includes('cannot be claimed') && !Object.values(game.planets).some((planet) => isProtectedHomeworld(planet) && planet.owner === game.player.pilotName), 'protected worlds remain blocked after legacy ownership migration');
