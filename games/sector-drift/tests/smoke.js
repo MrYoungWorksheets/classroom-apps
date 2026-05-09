@@ -1126,7 +1126,11 @@ vm.runInContext(`
   openScreen('starbase');
   assert(game.ui.activeScreen === 'launch', 'signed-out state blocks cockpit/gameplay screens when login is required');
   enterLocalPrototypeMode();
-  assert(game.ui.activeScreen === 'cockpit', 'Local Prototype Mode can enter cockpit when enabled');
+  assert(game.ui.activeScreen === 'captainSetup' && panels.docked.innerHTML.includes('Name Your Captain'), 'fresh local prototype save shows captain setup before cockpit');
+  applyCaptainProfile({ name: 'Jordan', title: 'Commander', specialty: 'Miner' });
+  assert(game.ui.activeScreen === 'cockpit' && game.player.captainProfile.setupComplete, 'profile saves correctly and enters cockpit');
+  renderShipPanel();
+  assert(panels.ship.innerHTML.includes('Commander Jordan') && panels.ship.innerHTML.includes('Miner') && panels.ship.innerHTML.includes('Asteroid mining yields +1 Ore'), 'captain name/title and specialty bonus appear in Ship Status');
 
   launchGate.mode = 'signedIn';
   cloudUiState.status = 'available';
@@ -1321,6 +1325,22 @@ vm.runInContext(`
   game.player.credits = 2468;
   saveGame();
   assert(loadGame().player.credits === 2468, 'localStorage save/load should still work');
+  const legacySave = migrateGameState({ player: { pilotName: 'Legacy Ace', credits: 777 } });
+  assert(legacySave.player.captainProfile.setupComplete && legacySave.player.captainProfile.name === 'Legacy Ace', 'existing saves migrate with a default completed captain profile');
+  game = defaultGameState();
+  game.player.currentSector = Object.values(sectorMap).find((sector) => sector.type === 'asteroid').number;
+  game.player.captainProfile = normalizeCaptainProfile({ name: 'Mina', title: 'Captain', specialty: 'Miner', setupComplete: true }, 'Mina', true);
+  game.player.pilotName = captainDisplayName(game.player.captainProfile);
+  game.player.fuel = 10;
+  game.player.turns = 10;
+  const minerRandom = Math.random;
+  Math.random = () => 0;
+  mineAsteroids();
+  Math.random = minerRandom;
+  assert(game.player.cargo.Ore === 2 && game.ui.lastSectorActionResult.message.includes('Miner specialty'), 'Miner specialty applies a small mining effect');
+  game.ui.activeScreen = 'settings';
+  const settingsProfileHtml = renderSettingsScreen();
+  assert(settingsProfileHtml.includes('Edit Captain Profile') && settingsProfileHtml.includes('Specialties can be changed freely'), 'Settings can edit captain profile');
   const html = fs.readFileSync('games/sector-drift/index.html', 'utf8');
   assert(html.includes('<script type="module" src="firebase-client.js"></script>'), 'index.html should load firebase-client.js as a module script');
 })();
