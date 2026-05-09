@@ -6,8 +6,14 @@ const BASE_MAX_TURN_BANK = 500;
 const ENGINE_TURN_BANK_BONUS = 50;
 const ENGINE_DAILY_TURN_BONUS = 10;
 const FUEL_COST_PER_UNIT = 8;
-const FIGHTER_COST = 15;
-const FIGHTER_SELL_VALUE = 8;
+const FIGHTER_COST = 12;
+const FIGHTER_SELL_VALUE = 6;
+const CARGO_HOLD_CAPACITY_BONUS = 20;
+const SHIELD_FIGHTER_CAPACITY_BONUS = 25;
+const HYPERDRIVE_COST = 100000;
+const HYPERDRIVE_FUEL_MULTIPLIER = 2;
+const PORT_CODE_RESOURCES = ["Food", "Ore", "Tech"];
+const VALID_PORT_CODES = ["SSS", "SSB", "SBS", "SBB", "BSS", "BSB", "BBS", "BBB"];
 const BOARDING_HULL_THRESHOLD = 5;
 const BOARDING_MAX_PIRATE_FIGHTERS = 3;
 const PIRATE_REPUTATION_MULTIPLIER = 1;
@@ -27,10 +33,11 @@ const ALLOW_LOCAL_PROTOTYPE_MODE = true;
 const PRESENCE_ONLINE_WINDOW_MS = 4 * 60 * 1000;
 const LIVE_EVENT_LIMIT = 5;
 const SHIP_UPGRADE_OPTIONS = [
-  { key: "cargoHold", label: "Cargo Hold", description: "Cargo capacity increases by 10 units per level.", success: "Cargo capacity increased." },
+  { key: "cargoHold", label: "Cargo Hold", description: `Cargo capacity increases by ${CARGO_HOLD_CAPACITY_BONUS} units per level.`, success: "Cargo capacity increased." },
   { key: "engine", label: "Engine", description: "Max fuel, daily turn grant, and turn bank improve.", success: "Fuel capacity and route endurance improved." },
   { key: "scanner", label: "Scanner", description: "Nearby sector identification, mining, anomaly scans, and route visibility improve.", success: "More nearby sectors can now be identified." },
   { key: "shield", label: "Shield", description: "Max hull, fighter storage, and hazard resilience improve.", success: "Hull strength and hazard resilience improved." },
+  { key: "hyperdrive", label: "Hyperdrive", description: "One-time rapid-route drive. Engage plotted routes step-by-step for double fuel until danger interrupts.", success: "Hyperdrive installed. Rapid route jumps are now available from Warp / Autopilot." },
 ];
 
 const PLANET_UPGRADE_TRACKS = ["production", "industry", "defense", "fighterBays", "research"];
@@ -71,15 +78,15 @@ const SHIPS = {
     name: "Rusty Comet",
     description: "A reliable starter ship with room to learn every system.",
     price: 0,
-    cargoCapacity: 20,
+    cargoCapacity: 200,
     maxFuel: 20,
     maxHull: 30,
     basePower: 8,
-    fighterCapacity: 25,
+    fighterCapacity: 125,
     boardingBonus: 0,
     captureResistance: 0,
     hazardResist: 0,
-    upgradeCaps: { cargoHold: 5, engine: 5, scanner: 5, shield: 5 },
+    upgradeCaps: { cargoHold: 5, engine: 5, scanner: 5, shield: 5, hyperdrive: 1 },
   },
   nebulaSkiff: {
     id: "nebulaSkiff",
@@ -87,15 +94,15 @@ const SHIPS = {
     aliases: ["Sparrow Scout"],
     description: "A light courier with efficient engines, a sharper scanner, and nimble fighter control.",
     price: 1300,
-    cargoCapacity: 18,
+    cargoCapacity: 180,
     maxFuel: 30,
     maxHull: 24,
     basePower: 12,
-    fighterCapacity: 35,
+    fighterCapacity: 175,
     boardingBonus: 1,
     captureResistance: 1,
     hazardResist: 1,
-    upgradeCaps: { cargoHold: 4, engine: 7, scanner: 7, shield: 4 },
+    upgradeCaps: { cargoHold: 4, engine: 7, scanner: 7, shield: 4, hyperdrive: 1 },
   },
   atlasHauler: {
     id: "atlasHauler",
@@ -103,30 +110,30 @@ const SHIPS = {
     aliases: ["Mule Hauler"],
     description: "A heavy trader built for big cargo jobs, sturdy repairs, and a roomy fighter bay.",
     price: 2200,
-    cargoCapacity: 36,
+    cargoCapacity: 360,
     maxFuel: 24,
     maxHull: 44,
     basePower: 10,
-    fighterCapacity: 60,
+    fighterCapacity: 300,
     boardingBonus: 0,
     captureResistance: 1,
     hazardResist: 1,
-    upgradeCaps: { cargoHold: 8, engine: 4, scanner: 4, shield: 6 },
+    upgradeCaps: { cargoHold: 8, engine: 4, scanner: 4, shield: 6, hyperdrive: 1 },
   },
   rockhogMiner: {
     id: "rockhogMiner",
     name: "Rockhog Miner",
     description: "A mining workhorse with reinforced plating and steady defensive systems.",
     price: 3000,
-    cargoCapacity: 30,
+    cargoCapacity: 300,
     maxFuel: 28,
     maxHull: 48,
     basePower: 14,
-    fighterCapacity: 50,
+    fighterCapacity: 250,
     boardingBonus: 0,
     captureResistance: 2,
     hazardResist: 2,
-    upgradeCaps: { cargoHold: 7, engine: 5, scanner: 5, shield: 7 },
+    upgradeCaps: { cargoHold: 7, engine: 5, scanner: 5, shield: 7, hyperdrive: 1 },
   },
   horizonRunner: {
     id: "horizonRunner",
@@ -134,146 +141,146 @@ const SHIPS = {
     aliases: ["Frontier Skiff"],
     description: "An advanced explorer with long range, strong hazard systems, and serious frontier defense power.",
     price: 3800,
-    cargoCapacity: 28,
+    cargoCapacity: 280,
     maxFuel: 38,
     maxHull: 36,
     basePower: 20,
-    fighterCapacity: 80,
+    fighterCapacity: 400,
     boardingBonus: 2,
     captureResistance: 2,
     hazardResist: 2,
-    upgradeCaps: { cargoHold: 6, engine: 8, scanner: 8, shield: 7 },
+    upgradeCaps: { cargoHold: 6, engine: 8, scanner: 8, shield: 7, hyperdrive: 1 },
   },
   patrolCutter: {
     id: "patrolCutter",
     name: "Patrol Cutter",
     description: "An early lawful combat ship for captains helping secure local lanes.",
     price: 2600,
-    cargoCapacity: 24,
+    cargoCapacity: 240,
     maxFuel: 30,
     maxHull: 42,
     basePower: 24,
-    fighterCapacity: 70,
+    fighterCapacity: 350,
     boardingBonus: 2,
     captureResistance: 3,
     hazardResist: 1,
     unlock: { reputation: 10, combatRank: "Patrol Volunteer", text: "Requires reputation 10+ or Patrol Volunteer rank" },
-    upgradeCaps: { cargoHold: 5, engine: 6, scanner: 6, shield: 7 },
+    upgradeCaps: { cargoHold: 5, engine: 6, scanner: 6, shield: 7, hyperdrive: 1 },
   },
   marshalCorvette: {
     id: "marshalCorvette",
     name: "Marshal Corvette",
     description: "A strong anti-pirate ship with durable shields and a broad fighter deck.",
     price: 6200,
-    cargoCapacity: 30,
+    cargoCapacity: 300,
     maxFuel: 34,
     maxHull: 58,
     basePower: 38,
-    fighterCapacity: 120,
+    fighterCapacity: 600,
     boardingBonus: 3,
     captureResistance: 4,
     hazardResist: 2,
     unlock: { reputation: 40, combatRank: "Lane Guard", text: "Requires reputation 40+ or Lane Guard rank" },
-    upgradeCaps: { cargoHold: 6, engine: 7, scanner: 7, shield: 8 },
+    upgradeCaps: { cargoHold: 6, engine: 7, scanner: 7, shield: 8, hyperdrive: 1 },
   },
   starWardenFrigate: {
     id: "starWardenFrigate",
     name: "Star Warden Frigate",
     description: "A high-end lawful ship for Star Marshals who protect deep routes.",
     price: 10500,
-    cargoCapacity: 34,
+    cargoCapacity: 340,
     maxFuel: 40,
     maxHull: 72,
     basePower: 55,
-    fighterCapacity: 180,
+    fighterCapacity: 900,
     boardingBonus: 4,
     captureResistance: 5,
     hazardResist: 3,
     unlock: { reputation: 75, combatRank: "Marshal", text: "Requires reputation 75+ or Marshal rank" },
-    upgradeCaps: { cargoHold: 6, engine: 8, scanner: 8, shield: 9 },
+    upgradeCaps: { cargoHold: 6, engine: 8, scanner: 8, shield: 9, hyperdrive: 1 },
   },
   deepRouteFreighter: {
     id: "deepRouteFreighter",
     name: "Deep Route Freighter",
     description: "An advanced neutral cargo ship for experienced trade captains.",
     price: 7200,
-    cargoCapacity: 58,
+    cargoCapacity: 580,
     maxFuel: 32,
     maxHull: 54,
     basePower: 18,
-    fighterCapacity: 90,
+    fighterCapacity: 450,
     boardingBonus: 0,
     captureResistance: 3,
     hazardResist: 2,
     unlock: { rank: "Trade Runner", credits: 1000, text: "Requires Trade Runner rank or 1000 credits" },
-    upgradeCaps: { cargoHold: 9, engine: 5, scanner: 5, shield: 7 },
+    upgradeCaps: { cargoHold: 9, engine: 5, scanner: 5, shield: 7, hyperdrive: 1 },
   },
   surveyorSloop: {
     id: "surveyorSloop",
     name: "Surveyor Sloop",
     description: "A neutral exploration ship with excellent scanner growth and safe route tools.",
     price: 4800,
-    cargoCapacity: 22,
+    cargoCapacity: 220,
     maxFuel: 42,
     maxHull: 34,
     basePower: 16,
-    fighterCapacity: 55,
+    fighterCapacity: 275,
     boardingBonus: 2,
     captureResistance: 2,
     hazardResist: 2,
     unlock: { scanner: 4, visitedSectors: 12, text: "Requires scanner level 4 or 12 visited sectors" },
-    upgradeCaps: { cargoHold: 5, engine: 8, scanner: 9, shield: 6 },
+    upgradeCaps: { cargoHold: 5, engine: 8, scanner: 9, shield: 6, hyperdrive: 1 },
   },
   blackfinRaider: {
     id: "blackfinRaider",
     name: "Blackfin Raider",
     description: "Future pirate ship data. Requires pirate reputation; PvP/pirate systems are not active yet.",
     price: 0,
-    cargoCapacity: 20,
+    cargoCapacity: 200,
     maxFuel: 34,
     maxHull: 38,
     basePower: 28,
-    fighterCapacity: 85,
+    fighterCapacity: 425,
     boardingBonus: 4,
     captureResistance: 2,
     hazardResist: 1,
     futureLocked: true,
     unlock: { future: true, text: "Requires pirate reputation. PvP/pirate systems not active yet." },
-    upgradeCaps: { cargoHold: 5, engine: 7, scanner: 6, shield: 6 },
+    upgradeCaps: { cargoHold: 5, engine: 7, scanner: 6, shield: 6, hyperdrive: 1 },
   },
   corsairPike: {
     id: "corsairPike",
     name: "Corsair Pike",
     description: "Future pirate ship data. Requires pirate reputation; PvP/pirate systems are not active yet.",
     price: 0,
-    cargoCapacity: 24,
+    cargoCapacity: 240,
     maxFuel: 38,
     maxHull: 48,
     basePower: 40,
-    fighterCapacity: 130,
+    fighterCapacity: 650,
     boardingBonus: 5,
     captureResistance: 3,
     hazardResist: 2,
     futureLocked: true,
     unlock: { future: true, text: "Requires pirate reputation. PvP/pirate systems not active yet." },
-    upgradeCaps: { cargoHold: 5, engine: 8, scanner: 7, shield: 7 },
+    upgradeCaps: { cargoHold: 5, engine: 8, scanner: 7, shield: 7, hyperdrive: 1 },
   },
   dreadhookFrigate: {
     id: "dreadhookFrigate",
     name: "Dreadhook Frigate",
     description: "Future pirate ship data. Requires pirate reputation; PvP/pirate systems are not active yet.",
     price: 0,
-    cargoCapacity: 32,
+    cargoCapacity: 320,
     maxFuel: 42,
     maxHull: 68,
     basePower: 58,
-    fighterCapacity: 190,
+    fighterCapacity: 950,
     boardingBonus: 6,
     captureResistance: 5,
     hazardResist: 3,
     futureLocked: true,
     unlock: { future: true, text: "Requires pirate reputation. PvP/pirate systems not active yet." },
-    upgradeCaps: { cargoHold: 6, engine: 8, scanner: 8, shield: 9 },
+    upgradeCaps: { cargoHold: 6, engine: 8, scanner: 8, shield: 9, hyperdrive: 1 },
   },
 };
 
@@ -469,13 +476,39 @@ function createDangerLevel(number, type) {
   return stableNumber(number, 29) % 4;
 }
 
+function createPortCode(number) {
+  if (number === 1) return "SSB";
+  return VALID_PORT_CODES[stableNumber(number, 37) % VALID_PORT_CODES.length];
+}
+
+function portCodeRole(code, resource) {
+  const index = PORT_CODE_RESOURCES.indexOf(resource);
+  return index >= 0 ? code[index] : "S";
+}
+
+function pairedPortCode(code) {
+  return String(code || "SSS").split("").map((letter) => letter === "S" ? "B" : "S").join("");
+}
+
+function portCodeHelpText() {
+  return "S = cheaper to buy here. B = better to sell here. Order: Food / Ore / Tech.";
+}
+
+function portCodeTradeTip(code) {
+  const pair = pairedPortCode(code);
+  const sellHere = PORT_CODE_RESOURCES.filter((resource) => portCodeRole(code, resource) === "S");
+  const buyHere = PORT_CODE_RESOURCES.filter((resource) => portCodeRole(code, resource) === "B");
+  return `Trade clue: ${code} pairs well with ${pair}. Buy ${sellHere.join("/") || "discount cargo"} here, sell them at ${pair} ports${buyHere.length ? `, then bring ${buyHere.join("/")} back` : ""}.`;
+}
+
 function createPortEconomy(number) {
+  const code = createPortCode(number);
   const portTypes = [
-    { name: "Mining Port", note: "Ore is abundant; food and tech imports are welcome.", tip: "Buy Ore here and compare food prices at agri lanes.", multipliers: { Ore: [0.72, 0.82], Food: [1.08, 1.28], Tech: [1.06, 1.22] } },
-    { name: "Agri Port", note: "Hydroponics domes keep Food affordable.", tip: "Food is usually a bargain here; miners often pay more.", multipliers: { Ore: [1.08, 1.22], Food: [0.72, 0.84], Tech: [1.05, 1.2] } },
-    { name: "Tech Port", note: "Fabricators make Tech cheaper than frontier markets.", tip: "Tech can sell well at frontier outposts.", multipliers: { Ore: [1.04, 1.18], Food: [1.05, 1.18], Tech: [0.72, 0.84] } },
-    { name: "Frontier Port", note: "Risky lanes raise import prices across the board.", tip: "Bring cargo from specialized ports for better margins.", multipliers: { Ore: [1.2, 1.38], Food: [1.16, 1.34], Tech: [1.25, 1.5] } },
-    { name: "Core Port", note: "Stable classrooms, stable ledgers, modest margins.", tip: "Use this as a safe refuel and repair stop.", multipliers: { Ore: [0.95, 1.05], Food: [0.95, 1.05], Tech: [0.95, 1.05] } },
+    { name: "Mining Port", note: "Ore brokers run loud loading bays and clear role-coded market boards." },
+    { name: "Agri Port", note: "Hydroponics domes post simple S/B cargo signals for visiting captains." },
+    { name: "Tech Port", note: "Fabricators tune prices around a published Food / Ore / Tech role code." },
+    { name: "Frontier Port", note: "Risky lanes raise demand, so captains should read the S/B code before trading." },
+    { name: "Core Port", note: "Stable classrooms, stable ledgers, and a clear role code keep margins readable." },
   ];
   const port = portTypes[stableNumber(number, 41) % portTypes.length];
   const base = {
@@ -484,21 +517,24 @@ function createPortEconomy(number) {
     Tech: { buy: 34 + ((number * 3) % 12), sell: 22 + (number % 9) },
   };
   const portPrices = Object.fromEntries(RESOURCES.map((resource) => {
-    const [buyMultiplier, sellMultiplier] = port.multipliers[resource];
-    const buy = Math.max(1, Math.round(base[resource].buy * buyMultiplier));
-    const sell = Math.max(1, Math.round(base[resource].sell * sellMultiplier));
-    return [resource, { buy: Math.max(buy, sell + 1), sell }];
+    const role = portCodeRole(code, resource);
+    const variation = 0.94 + (stableNumber(number, resource.charCodeAt(0)) % 13) / 100;
+    const buyMultiplier = role === "S" ? 0.72 + (stableNumber(number, resource.length + 11) % 8) / 100 : 1.12 + (stableNumber(number, resource.length + 17) % 12) / 100;
+    const sellMultiplier = role === "B" ? 1.28 + (stableNumber(number, resource.length + 23) % 13) / 100 : 0.72 + (stableNumber(number, resource.length + 29) % 10) / 100;
+    const buy = Math.max(1, Math.round(base[resource].buy * buyMultiplier * variation));
+    const sell = Math.max(1, Math.round(base[resource].sell * sellMultiplier * variation));
+    return [resource, { buy: Math.max(buy, sell + 1), sell, role }];
   }));
   return {
-    portType: port.name,
-    marketNote: port.note,
-    tradeTip: port.tip,
+    portCode: code,
+    portType: `${code} ${port.name}`,
+    marketNote: `${port.note} ${portCodeHelpText()}`,
+    tradeTip: portCodeTradeTip(code),
     portPrices,
     hasShipyard: number === 1 || stableNumber(number, 53) % 4 === 0,
     repairService: { baseFee: 20 + (stableNumber(number, 67) % 18), perHull: 4 + (stableNumber(number, 71) % 4) },
   };
 }
-
 function stableNumber(number, salt = 0) {
   const raw = Math.sin((number + 1) * 9301 + salt * 49297) * 233280;
   return Math.abs(Math.floor(raw));
@@ -860,7 +896,7 @@ function defaultGameState() {
       strongholdsCleared: 0,
       playerHullDamageTaken: 0,
       pirateHullDamageDealt: 0,
-      upgrades: { cargoHold: 1, engine: 1, scanner: 1, shield: 1 },
+      upgrades: { cargoHold: 1, engine: 1, scanner: 1, shield: 1, hyperdrive: 0 },
       ownedShips: [starter.id],
       legacyUpgradeOverride: false,
       legacyUpgradeNoteShown: false,
@@ -1188,10 +1224,12 @@ function normalizeResourceCargo(cargo = {}, capacity = 9999) {
 function normalizeUpgradeLevels(upgrades = {}, ship = SHIPS.rustyComet) {
   const source = safeObject(upgrades);
   const caps = ship?.upgradeCaps || SHIPS.rustyComet.upgradeCaps;
-  return Object.fromEntries(["cargoHold", "engine", "scanner", "shield"].map((key) => {
+  return Object.fromEntries(["cargoHold", "engine", "scanner", "shield", "hyperdrive"].map((key) => {
     const raw = Number(source[key]);
-    if (Number.isFinite(raw) && raw > (caps[key] || 1)) return [key, Math.min(99, Math.floor(raw))];
-    return [key, clampNumber(raw, 1, caps[key] || 1, 1)];
+    const min = key === "hyperdrive" ? 0 : 1;
+    const cap = caps[key] ?? (key === "hyperdrive" ? 1 : 1);
+    if (key !== "hyperdrive" && Number.isFinite(raw) && raw > cap) return [key, Math.min(99, Math.floor(raw))];
+    return [key, clampNumber(raw, min, cap, min)];
   }));
 }
 
@@ -1584,7 +1622,7 @@ function renderShipPanel() {
     <div class="cargo-grid">${RESOURCES.map((r) => `<div class="resource"><span class="label">${r}</span><span class="value">${p.cargo[r]}</span></div>`).join("")}${p.cargo[SMUGGLED_RESOURCE] > 0 ? `<div class="resource"><span class="label">${SMUGGLED_DISPLAY_NAME}</span><span class="value">${p.cargo[SMUGGLED_RESOURCE]}</span></div>` : ""}</div>
     <h3>Upgrades</h3>
     <div class="cargo-grid">
-      ${stat("Cargo Hold", `Level ${p.upgrades.cargoHold}/${caps.cargoHold}`)}${stat("Engine", `Level ${p.upgrades.engine}/${caps.engine}`)}${stat("Scanner", `Level ${p.upgrades.scanner}/${caps.scanner}`)}${stat("Shield", `Level ${p.upgrades.shield}/${caps.shield}`)}
+      ${stat("Cargo Hold", `Level ${p.upgrades.cargoHold}/${caps.cargoHold}`)}${stat("Engine", `Level ${p.upgrades.engine}/${caps.engine}`)}${stat("Scanner", `Level ${p.upgrades.scanner}/${caps.scanner}`)}${stat("Shield", `Level ${p.upgrades.shield}/${caps.shield}`)}${stat("Hyperdrive", `${p.upgrades.hyperdrive || 0}/${caps.hyperdrive || 1}`)}
     </div>`;
 }
 
@@ -1846,6 +1884,45 @@ function performWarpStep() {
 }
 
 
+function engageHyperdrive() {
+  if ((game.player.upgrades?.hyperdrive || 0) < 1) return addAndRender("Hyperdrive locked: purchase the Hyperdrive upgrade at a Shipyard first.");
+  const target = Number(game.ui?.warpDestination);
+  if (!sectorMap[target]) return addAndRender("Hyperdrive unavailable: plot a route first.");
+  if (game.player.currentSector === target) return addAndRender(`Hyperdrive already at destination Sector ${target}.`);
+  let jumps = 0;
+  let fuelSpent = 0;
+  let stopMessage = "";
+  let stopTitle = "Hyperdrive Stopped";
+  while (game.player.currentSector !== target) {
+    if (currentPirateEncounter()) { stopMessage = `Hyperdrive interrupted in Sector ${game.player.currentSector}. Pirate contact detected.`; stopTitle = "Hyperdrive Interrupted"; break; }
+    if (game.player.turns <= 0) { stopMessage = `Hyperdrive unavailable: not enough turns for the next jump.`; break; }
+    if (game.player.fuel < HYPERDRIVE_FUEL_MULTIPLIER) { stopMessage = `Hyperdrive unavailable: not enough fuel for the next jump.`; break; }
+    const route = findRouteToSector(game.player.currentSector, target) || (game.ui?.exploratoryWarp ? findExploratoryRouteToSector(game.player.currentSector, target) : null);
+    if (!route || route.length < 2) { stopMessage = `Hyperdrive stopped in Sector ${game.player.currentSector}. Route is blocked or no longer visible.`; break; }
+    const beforeSector = game.player.currentSector;
+    const beforeHull = game.player.hull;
+    travelToSector(route[1], { fuelCost: HYPERDRIVE_FUEL_MULTIPLIER, silentRender: true });
+    if (game.player.currentSector === beforeSector) { stopMessage = `Hyperdrive stopped in Sector ${game.player.currentSector}. Route blocker detected.`; break; }
+    jumps += 1;
+    fuelSpent += HYPERDRIVE_FUEL_MULTIPLIER;
+    if (currentPirateEncounter()) { stopMessage = `Hyperdrive interrupted in Sector ${game.player.currentSector}. Pirate contact detected.`; stopTitle = "Hyperdrive Interrupted"; break; }
+    if (game.player.hull < beforeHull) { stopMessage = `Hyperdrive stopped in Sector ${game.player.currentSector}. Hull damage detected.`; break; }
+  }
+  if (game.player.currentSector === target) {
+    game.ui.warpDestination = null;
+    game.ui.exploratoryWarp = false;
+    stopTitle = "Hyperdrive Jump Complete";
+    stopMessage = `Hyperdrive jump complete: Sector ${target} reached after ${jumps} jump${jumps === 1 ? "" : "s"}. Fuel spent: ${fuelSpent}.`;
+  } else if (!stopMessage) {
+    stopMessage = `Hyperdrive stopped in Sector ${game.player.currentSector}.`;
+  }
+  setSectorActionResult(stopTitle, stopMessage, { type: stopTitle.includes("Complete") ? "positive" : "neutral", gained: jumps ? [`${jumps} jump${jumps === 1 ? "" : "s"}`] : [], lost: fuelSpent ? [`${fuelSpent} fuel`] : [] });
+  addLog(stopMessage);
+  saveGame();
+  render();
+}
+
+
 function situationActionButton(label, options = {}) {
   const { screen = "", action = "", mode = "", sector = "", disabled = false, primary = false, note = "" } = options;
   const attrs = ["type=\"button\""];
@@ -2037,19 +2114,23 @@ function renderWarpControls() {
   const scout = Boolean(target && route && !knownRoute);
   const routeText = target ? (route ? `Sector ${target}, ${route.length - 1} ${scout ? "scout " : ""}jump${route.length === 2 ? "" : "s"}${scout ? " · exploratory" : ""}` : `Sector ${target}, route unavailable`) : "No active destination";
   const routeDetail = target ? (route ? `${scout ? "Scout route" : "Route"}: ${route.join(" → ")}` : "No visible route plotted.") : "Plot a destination only when you need route automation.";
+  const hyperdriveOwned = (game.player.upgrades?.hyperdrive || 0) >= 1;
+  const hyperdriveText = hyperdriveOwned ? (target && route ? "Rapid jumps. Costs double fuel. Stops for danger." : "Plot a route first.") : "Hyperdrive locked: buy the one-time Shipyard upgrade for rapid route jumps.";
   return `<details class="warp-panel collapsible-system compact-section" ${target ? "open" : ""}>
     <summary><span>Warp / Autopilot</span><strong>${routeText}</strong></summary>
     <p class="help-text">Known-lane route travel is preferred. Autopilot advances one adjacent jump per step; scout routes may enter visible unexplored sectors, but fuel, turns, hazards, and active pirates still apply.</p>
     <label for="warpDestination">Set Warp Destination</label>
     <input id="warpDestination" type="number" min="1" max="${MAX_SECTOR}" value="${target}" placeholder="Sector number">
-    <div class="button-row compact-button-row"><button type="button" data-action="plotWarp">Plot Route</button><button type="button" data-action="warpStep" ${target ? "" : "disabled"}>Engage Autopilot / Warp Step</button><button type="button" data-action="clearWarp" ${target ? "" : "disabled"}>Clear Destination</button></div>
+    <div class="button-row compact-button-row"><button type="button" data-action="plotWarp">Plot Route</button><button type="button" data-action="warpStep" ${target ? "" : "disabled"}>Engage Autopilot / Warp Step</button><button type="button" data-action="engageHyperdrive" ${hyperdriveOwned && target && route ? "" : "disabled"}>Engage Hyperdrive</button><button type="button" data-action="clearWarp" ${target ? "" : "disabled"}>Clear Destination</button></div>
     <p class="help-text">${routeDetail}</p>
+    <p class="help-text"><strong>Hyperdrive:</strong> ${hyperdriveText}</p>
   </details>`;
 }
 
 function wireWarpControls(scope = document) {
   scope.querySelector("[data-action='plotWarp']")?.addEventListener("click", (event) => { pulseActionButton(event.currentTarget); runGameAction(() => setWarpDestination(scope.querySelector("#warpDestination")?.value)); });
   scope.querySelector("[data-action='warpStep']")?.addEventListener("click", (event) => { pulseActionButton(event.currentTarget); runGameAction(performWarpStep); });
+  scope.querySelector("[data-action='engageHyperdrive']")?.addEventListener("click", (event) => { pulseActionButton(event.currentTarget); runGameAction(engageHyperdrive); });
   scope.querySelector("[data-action='clearWarp']")?.addEventListener("click", (event) => { pulseActionButton(event.currentTarget); runGameAction(clearWarpDestination); });
 }
 
@@ -2296,7 +2377,8 @@ function setArrivalReport(number = game.player.currentSector, extras = []) {
 
 function stationDisplayName(sector) {
   const names = { 1: "Core Classroom Starbase", 3: "Crossroad Exchange", 5: "Brightline Station", 7: "Waypoint Seven", 8: "Rimward Trade Hub", 10: "Long Arc Port", 31: "Deep Lane Depot", 45: "Frontier Starbase" };
-  return names[sector.number] || `${sector.portType || "Starbase"} ${sector.number}`;
+  const name = names[sector.number] || `${String(sector.portType || "Starbase").replace(/^[S|B]{3}\s+/, "")} ${sector.number}`;
+  return sector.portCode ? `[${sector.portCode}] ${name}` : name;
 }
 
 function defaultStationActivities() {
@@ -2469,10 +2551,10 @@ function renderStationActivities(sector) {
 }
 
 function renderStarbaseScreen(sector) {
-  return `${renderActionResult()}${renderDockingLedger()}<section class="location-intro starbase-intro mini-card"><p class="eyebrow">Docked at Sector ${sector.number}</p><h3>${stationDisplayName(sector)}</h3><div class="intel-grid">${stat("Station Type", sector.portType)}${stat("Services", `Trading · Fuel · Repairs · Activities · Rumors${sector.hasShipyard ? " · Shipyard next door" : ""}`)}${stat("Current Sector", sector.number)}</div><p class="help-text">${sector.flavor}</p></section><div class="screen-grid starbase-services"><section class="mini-card service-counter"><h3>Port Services</h3><p><span class="badge">${sector.portType}</span></p><p class="help-text"><strong>Local market notes:</strong> ${sector.marketNote}</p><p class="help-text"><strong>Trade tip:</strong> ${sector.tradeTip}</p><div class="trade-grid">${RESOURCES.map((resource) => {
+  return `${renderActionResult()}${renderDockingLedger()}<section class="location-intro starbase-intro mini-card"><p class="eyebrow">Docked at Sector ${sector.number}</p><h3>${stationDisplayName(sector)}</h3><div class="intel-grid">${stat("Station Code", sector.portCode || "---")}${stat("Station Type", sector.portType)}${stat("Services", `Trading · Fuel · Repairs · Activities · Rumors${sector.hasShipyard ? " · Shipyard next door" : ""}`)}${stat("Current Sector", sector.number)}</div><p class="help-text">${sector.flavor}</p></section><div class="screen-grid starbase-services"><section class="mini-card service-counter"><h3>Port Services</h3><p><span class="badge">${sector.portType}</span></p><p class="help-text"><strong>Port code help:</strong> ${portCodeHelpText()}</p><p class="help-text"><strong>Local market notes:</strong> ${sector.marketNote}</p><p class="help-text"><strong>Trade tip:</strong> ${sector.tradeTip}</p><div class="trade-grid">${RESOURCES.map((resource) => {
     const price = sector.portPrices[resource];
     const buyDisabled = cargoSpaceLeft() <= 0 || game.player.credits < price.buy ? "disabled" : "";
-    return `<div class="mini-card"><h3>${resource}</h3><p>Buy ${price.buy} credits · Sell ${price.sell} credits</p>${renderTradeCostIntel(resource, price)}<div class="resource-actions"><button data-action="buy" data-resource="${resource}" data-amount="1" ${buyDisabled}>Buy 1</button><button data-action="buy" data-resource="${resource}" data-amount="5" ${buyDisabled}>Buy 5</button><button data-action="buy" data-resource="${resource}" data-amount="10" ${buyDisabled}>Buy 10</button><button data-action="fillCargo" data-resource="${resource}" ${buyDisabled}>Fill Cargo</button><button data-action="sell" data-resource="${resource}" data-amount="1">Sell 1</button><button data-action="sell" data-resource="${resource}" data-amount="5">Sell 5</button></div></div>`;
+    return `<div class="mini-card"><h3>${resource} · ${price.role === "S" ? "Sells low" : "Buys high"}</h3><p>Buy ${price.buy} credits · Sell ${price.sell} credits</p>${renderTradeCostIntel(resource, price)}<div class="resource-actions"><button data-action="buy" data-resource="${resource}" data-amount="1" ${buyDisabled}>Buy 1</button><button data-action="buy" data-resource="${resource}" data-amount="5" ${buyDisabled}>Buy 5</button><button data-action="buy" data-resource="${resource}" data-amount="10" ${buyDisabled}>Buy 10</button><button data-action="fillCargo" data-resource="${resource}" ${buyDisabled}>Fill Cargo</button><button data-action="sell" data-resource="${resource}" data-amount="1">Sell 1</button><button data-action="sell" data-resource="${resource}" data-amount="5">Sell 5</button></div></div>`;
   }).join("")}</div><div class="button-row compact-button-row"><button type="button" data-action="fillBalanced" ${cargoSpaceLeft() <= 0 ? "disabled" : ""}>Fill Balanced</button></div>${renderRefuelPanel()}${renderRepairPanel(sector)}</section>${renderStationActivities(sector)}<section class="mini-card item-shop-placeholder"><h3>Item Shop: Coming Soon</h3><p><strong>Scanning Probe</strong></p><p class="help-text">Scanning Probes will allow long-range sector scans in a future update. They will be expensive, limited, and will not reveal the entire map cheaply.</p></section></div>`;
 }
 
@@ -2484,7 +2566,7 @@ function renderShipyardCurrentShipPanel() {
   const ship = currentShip();
   const p = game.player;
   const caps = ship.upgradeCaps;
-  return `<section class="mini-card shipyard-current-ship"><p class="eyebrow">Current Ship</p><h3>${ship.name}</h3><p class="help-text">${ship.description}</p><div class="stat-grid compact-stat-grid">${stat("Ship Name", p.shipName)}${stat("Cargo Capacity", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Credits", p.credits)}${stat("Cargo Hold", `Level ${p.upgrades.cargoHold}/${caps.cargoHold}`)}${stat("Engine", `Level ${p.upgrades.engine}/${caps.engine}`)}${stat("Scanner", `Level ${p.upgrades.scanner}/${caps.scanner}`)}${stat("Shield", `Level ${p.upgrades.shield}/${caps.shield}`)}</div></section>`;
+  return `<section class="mini-card shipyard-current-ship"><p class="eyebrow">Current Ship</p><h3>${ship.name}</h3><p class="help-text">${ship.description}</p><div class="stat-grid compact-stat-grid">${stat("Ship Name", p.shipName)}${stat("Cargo Capacity", `${cargoUsed()}/${p.cargoCapacity}`)}${stat("Fuel", `${p.fuel}/${p.maxFuel}`)}${stat("Hull", `${p.hull}/${p.maxHull}`)}${stat("Fighters", `${p.fighters}/${p.fighterCapacity}`)}${stat("Credits", p.credits)}${stat("Cargo Hold", `Level ${p.upgrades.cargoHold}/${caps.cargoHold}`)}${stat("Engine", `Level ${p.upgrades.engine}/${caps.engine}`)}${stat("Scanner", `Level ${p.upgrades.scanner}/${caps.scanner}`)}${stat("Shield", `Level ${p.upgrades.shield}/${caps.shield}`)}${stat("Hyperdrive", `${p.upgrades.hyperdrive || 0}/${caps.hyperdrive || 1}`)}</div></section>`;
 }
 
 function renderShipyardUpgradePanel() {
@@ -2492,16 +2574,23 @@ function renderShipyardUpgradePanel() {
   return `<section class="mini-card shipyard-upgrades"><p class="eyebrow">Upgrade Current Ship</p><h3>Credit upgrades for ${currentShip().name}</h3><p class="help-text">Upgrade caps come from the current ship. Purchases save immediately and report in the Action Result, Live Events feed, and Captain's Log.</p><div class="upgrade-grid shipyard-upgrade-grid">${SHIP_UPGRADE_OPTIONS.map((upgrade) => renderShipUpgradeCard(upgrade, sector)).join("")}</div></section>`;
 }
 
+function shipUpgradeLevel(key) {
+  const fallback = key === "hyperdrive" ? 0 : 1;
+  const level = Number(game.player.upgrades?.[key]);
+  return Number.isFinite(level) ? level : fallback;
+}
+
 function shipUpgradeCost(key) {
-  const level = Number(game.player.upgrades?.[key]) || 1;
+  if (key === "hyperdrive") return HYPERDRIVE_COST;
+  const level = shipUpgradeLevel(key) || 1;
   return level * 250;
 }
 
 function shipUpgradeUnavailableReason(key, sector = sectorMap[game.player.currentSector]) {
   const option = SHIP_UPGRADE_OPTIONS.find((upgrade) => upgrade.key === key);
   const label = option?.label || titleCase(String(key).replace(/([A-Z])/g, " $1"));
-  const level = Number(game.player.upgrades?.[key]) || 1;
-  const cap = Number(currentShip().upgradeCaps?.[key]) || level;
+  const level = shipUpgradeLevel(key);
+  const cap = Number(currentShip().upgradeCaps?.[key]) || (key === "hyperdrive" ? 1 : level);
   const cost = shipUpgradeCost(key);
   if (!sector?.hasShipyard) return "shipyard unavailable";
   if (level >= cap) return `${label} is already at this ship's maximum.`;
@@ -2509,13 +2598,21 @@ function shipUpgradeUnavailableReason(key, sector = sectorMap[game.player.curren
   return "Ready to upgrade";
 }
 
+function shipUpgradeBenefitText(key, level = shipUpgradeLevel(key)) {
+  if (key === "cargoHold") return `Cargo capacity increases by ${CARGO_HOLD_CAPACITY_BONUS}: ${calculateCargoCapacity(currentShip(), { ...game.player.upgrades, cargoHold: level })} → ${calculateCargoCapacity(currentShip(), { ...game.player.upgrades, cargoHold: level + 1 })}.`;
+  if (key === "shield") return `Fighter bay increases by ${SHIELD_FIGHTER_CAPACITY_BONUS}: ${calculateFighterCapacity(currentShip(), { ...game.player.upgrades, shield: level })} → ${calculateFighterCapacity(currentShip(), { ...game.player.upgrades, shield: level + 1 })}.`;
+  if (key === "engine") return `Fuel capacity improves: ${calculateFuelCapacity(currentShip(), { ...game.player.upgrades, engine: level })} → ${calculateFuelCapacity(currentShip(), { ...game.player.upgrades, engine: level + 1 })}.`;
+  if (key === "hyperdrive") return level >= 1 ? "Installed: Engage Hyperdrive appears for active plotted routes." : "Unlocks Engage Hyperdrive for plotted routes. Costs double fuel and stops for danger.";
+  return "Ship system improves after purchase.";
+}
+
 function renderShipUpgradeCard(upgrade, sector = sectorMap[game.player.currentSector]) {
-  const level = Number(game.player.upgrades?.[upgrade.key]) || 1;
-  const cap = Number(currentShip().upgradeCaps?.[upgrade.key]) || level;
+  const level = shipUpgradeLevel(upgrade.key);
+  const cap = Number(currentShip().upgradeCaps?.[upgrade.key]) || (upgrade.key === "hyperdrive" ? 1 : level);
   const cost = shipUpgradeCost(upgrade.key);
   const reason = shipUpgradeUnavailableReason(upgrade.key, sector);
   const available = reason === "Ready to upgrade";
-  return `<article class="mini-card ship-upgrade-card ${level >= cap ? "maxed" : ""}"><h4>${upgrade.label}</h4><p class="progress-text">Current level ${level} / Max level ${cap}</p><p>${upgrade.description}</p><p class="cost-line">Cost: ${cost} credits</p><button data-action="upgradeShip" data-upgrade="${upgrade.key}" ${available ? "" : "disabled"}>Upgrade ${upgrade.label}</button><p class="help-text disabled-reason">${available ? `Ready: upgrades to Level ${level + 1}.` : `Unavailable: ${reason}`}</p></article>`;
+  return `<article class="mini-card ship-upgrade-card ${level >= cap ? "maxed" : ""}"><h4>${upgrade.label}</h4><p class="progress-text">Current level ${level} / Max level ${cap}</p><p>${upgrade.description}</p><p class="help-text"><strong>Benefit:</strong> ${shipUpgradeBenefitText(upgrade.key, level)}</p><p class="cost-line">Cost: ${cost} credits</p><button data-action="upgradeShip" data-upgrade="${upgrade.key}" ${available ? "" : "disabled"}>Upgrade ${upgrade.label}</button><p class="help-text disabled-reason">${available ? `Ready: upgrades to Level ${level + 1}.` : `Unavailable: ${reason}`}</p></article>`;
 }
 
 function shipTradeInValue(ship = currentShip()) {
@@ -2585,6 +2682,7 @@ function renderShipCard(ship) {
     comparisonRow("Engine Cap", ship.upgradeCaps.engine, activeShip.upgradeCaps.engine),
     comparisonRow("Scanner Cap", ship.upgradeCaps.scanner, activeShip.upgradeCaps.scanner),
     comparisonRow("Shield Cap", ship.upgradeCaps.shield, activeShip.upgradeCaps.shield),
+    comparisonRow("Hyperdrive Cap", ship.upgradeCaps.hyperdrive || 1, activeShip.upgradeCaps.hyperdrive || 1),
   ].join("");
   return `<article class="ship-card ${lock.unlocked ? "" : "locked-ship"} ${active ? "current-ship-card" : ""}"><div class="ship-card-top"><div><h3>${ship.name}</h3><p class="ship-role-line"><span class="role-badge">${shipRoleLabel(ship)}</span></p></div><span class="status-badge ${statusClass}">${status}</span></div><p class="ship-description">${ship.description}</p><div class="ship-stat-table" aria-label="${ship.name} core stat comparison">${coreRows}</div><details class="ship-cap-details" open><summary>Upgrade cap comparison</summary><div class="ship-stat-table ship-cap-table">${capRows}</div></details><div class="ship-price-row"><span>${ship.futureLocked ? "Future locked" : `Price: ${ship.price}`}</span><span>Trade-in: ${tradeIn}</span><strong>${ship.futureLocked ? "Net: Locked" : `Net: ${netCost}`}</strong></div><p class="ship-requirement">${lock.unlocked ? "Requirements met" : lock.reason}</p><button class="${blocked ? "" : "button-primary"}" data-action="buyShip" data-ship="${ship.id}" ${blocked ? "disabled" : ""}>${active ? "Current Ship" : "Buy / Trade In"}</button><p class="help-text disabled-reason">${disabledReason}</p></article>`;
 }
@@ -3275,7 +3373,7 @@ function renderPort(sector) {
   return `<p><span class="badge">${sector.portType}</span>${sector.hasShipyard ? ` <span class="badge soft-badge">Shipyard</span>` : ""}</p><p class="help-text">${sector.marketNote}</p><p class="help-text"><strong>Trade tip:</strong> ${sector.tradeTip}</p><div class="trade-grid">${RESOURCES.map((resource) => {
     const price = sector.portPrices[resource];
     const buyDisabled = cargoSpaceLeft() <= 0 ? "disabled" : "";
-    return `<div class="mini-card"><h3>${resource}</h3><p>Buy ${price.buy} credits · Sell ${price.sell} credits</p>${renderTradeCostIntel(resource, price)}<div class="resource-actions">
+    return `<div class="mini-card"><h3>${resource} · ${price.role === "S" ? "Sells low" : "Buys high"}</h3><p>Buy ${price.buy} credits · Sell ${price.sell} credits</p>${renderTradeCostIntel(resource, price)}<div class="resource-actions">
       <button data-action="buy" data-resource="${resource}" data-amount="1" ${buyDisabled}>Buy 1</button><button data-action="buy" data-resource="${resource}" data-amount="5" ${buyDisabled}>Buy 5</button>
       <button data-action="sell" data-resource="${resource}" data-amount="1">Sell 1</button><button data-action="sell" data-resource="${resource}" data-amount="5">Sell 5</button>
     </div></div>`;
@@ -3321,7 +3419,7 @@ function renderFighterPurchasePanel() {
   const canSell = game.player.fighters > 0;
   const buyReason = space <= 0 ? "Fighter bay full" : game.player.credits < FIGHTER_COST ? "Not enough credits" : "Ready";
   const sellReason = canSell ? "Ready" : "No fighters to sell";
-  return `<div class="fighter-yard mini-card"><h3>Fighter Bay</h3>${stat("Fighters", `${game.player.fighters}/${capacity}`)}${stat("Cost", `${FIGHTER_COST} credits each`)}${stat("Resale", `${FIGHTER_SELL_VALUE} credits each`)}${stat("Buy Status", buyReason)}${stat("Sell Status", sellReason)}<div class="button-row"><button data-action="buyFighters" data-amount="1" ${maxAffordable < 1 ? "disabled" : ""}>Buy 1 Fighter</button><button data-action="buyFighters" data-amount="10" ${maxAffordable < 1 ? "disabled" : ""}>Buy 10 Fighters</button><button data-action="buyFighters" data-amount="max" ${maxAffordable < 1 ? "disabled" : ""}>Buy Max Affordable</button><button data-action="sellFighters" data-amount="1" ${!canSell ? "disabled" : ""}>Sell 1 Fighter</button><button data-action="sellFighters" data-amount="10" ${!canSell ? "disabled" : ""}>Sell 10 Fighters</button></div><p class="help-text">Fighters do not use Ore/Food/Tech cargo space.</p></div>`;
+  return `<div class="fighter-yard mini-card"><h3>Fighter Bay</h3>${stat("Fighters", `${game.player.fighters}/${capacity}`)}${stat("Cost", `${FIGHTER_COST} credits each`)}${stat("Resale", `${FIGHTER_SELL_VALUE} credits each`)}${stat("Buy Status", buyReason)}${stat("Sell Status", sellReason)}<div class="button-row"><button data-action="buyFighters" data-amount="1" ${maxAffordable < 1 ? "disabled" : ""}>Buy 1 Fighter</button><button data-action="buyFighters" data-amount="10" ${maxAffordable < 1 ? "disabled" : ""}>Buy 10 Fighters</button><button data-action="buyFighters" data-amount="50" ${maxAffordable < 1 ? "disabled" : ""}>Buy 50 Fighters</button><button data-action="buyFighters" data-amount="max" ${maxAffordable < 1 ? "disabled" : ""}>Fill Fighter Bay</button><button data-action="sellFighters" data-amount="1" ${!canSell ? "disabled" : ""}>Sell 1 Fighter</button><button data-action="sellFighters" data-amount="10" ${!canSell ? "disabled" : ""}>Sell 10 Fighters</button><button data-action="sellFighters" data-amount="50" ${!canSell ? "disabled" : ""}>Sell 50 Fighters</button><button data-action="sellFighters" data-amount="all" ${!canSell ? "disabled" : ""}>Sell All Fighters</button></div><p class="help-text">Fighters do not use Ore/Food/Tech cargo space.</p></div>`;
 }
 
 
@@ -3372,7 +3470,7 @@ function buyFighters(amountValue) {
 function sellFighters(amountValue) {
   const sector = sectorMap[game.player.currentSector];
   if (!sector?.hasShipyard) return addAndRender("Fighters can only be sold at shipyards.");
-  const requested = Math.max(0, Math.floor(Number(amountValue) || 0));
+  const requested = amountValue === "all" ? game.player.fighters : Math.max(0, Math.floor(Number(amountValue) || 0));
   const amount = Math.min(game.player.fighters, requested);
   if (amount <= 0) return addAndRender("No fighters available to sell.");
   const proceeds = amount * FIGHTER_SELL_VALUE;
@@ -3560,12 +3658,14 @@ function renderLogPanel() {
   panels.log.innerHTML = `<h2 id="logHeading">Recent Captain's Log</h2><ol class="log-list compact-log">${game.log.map((entry) => `<li>${entry}</li>`).join("")}</ol>`;
 }
 
-function travelToSector(number) {
+function travelToSector(number, options = {}) {
+  const fuelCost = Math.max(1, Math.floor(Number(options.fuelCost) || 1));
   const current = sectorMap[game.player.currentSector];
   if (!current.adjacent.includes(number)) return addAndRender("That sector is not adjacent from here. Select an adjacent node or plot a known route.");
   if (currentPirateEncounter()) return addAndRender("Pirate encounter blocks travel. Defeat, board, or disengage temporarily before making another combat decision; travel stays blocked until the pirate is resolved.");
+  if (game.player.fuel < fuelCost) return addAndRender(fuelCost > 1 ? "Hyperdrive unavailable: not enough fuel for the next jump." : "Fuel is empty. Complete math missions for fuel or trade when you reach a port.");
   if (!spendTurn("travel")) return;
-  game.player.fuel -= 1;
+  game.player.fuel -= fuelCost;
   game.player.currentSector = number;
   selectedSectorNumber = number;
   updatePresenceStatus("traveling");
@@ -3586,7 +3686,7 @@ function travelToSector(number) {
   setArrivalReport(number, extras);
   updatePresenceStatus("online");
   saveGame();
-  render();
+  if (!options.silentRender) render();
 }
 
 function buyResource(resource, amount) {
@@ -4169,8 +4269,8 @@ function upgradeShip(key) {
   const option = SHIP_UPGRADE_OPTIONS.find((upgrade) => upgrade.key === key);
   if (!option) return addAndRender("Unknown ship upgrade selected.");
   const sector = sectorMap[game.player.currentSector];
-  const level = Number(game.player.upgrades?.[key]) || 1;
-  const cap = Number(currentShip().upgradeCaps?.[key]) || level;
+  const level = shipUpgradeLevel(key);
+  const cap = Number(currentShip().upgradeCaps?.[key]) || (key === "hyperdrive" ? 1 : level);
   const cost = shipUpgradeCost(key);
   if (!sector?.hasShipyard) return addAndRender(`${option.label} upgrades require an available shipyard.`);
   if (level >= cap) return addAndRender(`${option.label} is already at this ship's maximum.`);
@@ -5024,9 +5124,9 @@ function upgradeReductionSummary(upgrades, caps) {
 
 function randomInt(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
-function calculateCargoCapacity(ship = currentShip(), upgrades = game.player.upgrades) { return ship.cargoCapacity + Math.max(0, (upgrades.cargoHold || 1) - 1) * 10; }
+function calculateCargoCapacity(ship = currentShip(), upgrades = game.player.upgrades) { return ship.cargoCapacity + Math.max(0, (upgrades.cargoHold || 1) - 1) * CARGO_HOLD_CAPACITY_BONUS; }
 function calculateFuelCapacity(ship = currentShip(), upgrades = game.player.upgrades) { return ship.maxFuel + Math.max(0, (upgrades.engine || 1) - 1) * 4; }
-function calculateFighterCapacity(ship = currentShip(), upgrades = game.player.upgrades) { return ship.fighterCapacity + Math.max(0, (upgrades.shield || 1) - 1) * 5; }
+function calculateFighterCapacity(ship = currentShip(), upgrades = game.player.upgrades) { return ship.fighterCapacity + Math.max(0, (upgrades.shield || 1) - 1) * SHIELD_FIGHTER_CAPACITY_BONUS; }
 function calculateMaxTurnBank(engineLevel) { return BASE_MAX_TURN_BANK + Math.max(0, engineLevel - 1) * ENGINE_TURN_BANK_BONUS; }
 function calculateDailyTurnGrant(engineLevel) { return DAILY_TURN_GRANT + Math.max(0, engineLevel - 1) * ENGINE_DAILY_TURN_BONUS; }
 function calculateMaxTurns(engineLevel) { return calculateMaxTurnBank(engineLevel); }
