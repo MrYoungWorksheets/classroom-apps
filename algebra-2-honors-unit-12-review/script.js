@@ -55,6 +55,7 @@ let state = {
 
 const THEME_STORAGE_KEY = 'unit12ReviewTheme';
 const CHAOS_STORAGE_KEY = 'unit12ReviewChaosPalette';
+const STATE_STORAGE_KEY = 'unit12ReviewStudentProgressV1';
 const DEFAULT_THEME = 'dark';
 const CHAOS_THEMES = [
   { name: 'Radioactive Flamingo', bg: '#ff4fd8', panel: '#39ff14', panelStrong: '#9d00ff', card: '#ffff33', cardBorder: '#00e5ff', text: '#111111', muted: '#3b164c', accent: '#ff6b00', accentStrong: '#111111', buttonBg: '#00e5ff', buttonText: '#111111', success: '#005c2f', warning: '#5a2d00', danger: '#7a001f', inputBg: '#ffffff', inputBorder: '#111111', shadow: 'rgba(17, 17, 17, 0.36)' },
@@ -83,6 +84,37 @@ function getStoredValue(key){
 function setStoredValue(key, value){
   try { window.localStorage.setItem(key, value); }
   catch (error) { }
+}
+function removeStoredValue(key){
+  try { window.localStorage.removeItem(key); }
+  catch (error) { }
+}
+function saveProgress(){
+  try {
+    window.localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(state));
+  } catch (error) { }
+}
+function loadProgress(){
+  const raw = getStoredValue(STATE_STORAGE_KEY);
+  if(!raw) return false;
+  try {
+    const saved = JSON.parse(raw);
+    if(!saved || typeof saved !== 'object') return false;
+    state = {
+      started: Boolean(saved.started),
+      student: { name: saved.student?.name || '', period: saved.student?.period || '' },
+      view: 'dashboard',
+      currentTopic: null,
+      topicPage: 0,
+      records: saved.records && typeof saved.records === 'object' ? saved.records : {},
+      practice: saved.practice && typeof saved.practice === 'object' ? saved.practice : {},
+      answers: saved.answers && typeof saved.answers === 'object' ? saved.answers : {}
+    };
+    return state.started;
+  } catch (error) {
+    removeStoredValue(STATE_STORAGE_KEY);
+    return false;
+  }
 }
 function sanitizeThemeChoice(value){ return ['light', 'dark', 'chaos'].includes(value) ? value : DEFAULT_THEME; }
 function cssVarName(key){ return `--${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`; }
@@ -366,7 +398,10 @@ function attachProblemEvents(){
     });
   });
 }
-function saveAnswer(id, card){ state.answers[id] = readAnswerFromCard(card); }
+function saveAnswer(id, card){
+  state.answers[id] = readAnswerFromCard(card);
+  saveProgress();
+}
 function readAnswerFromCard(card){
   const values = {};
   card.querySelectorAll('[data-answer-key]').forEach(input => {
@@ -554,6 +589,7 @@ function checkAnswer(id){
   if(!hasAnyAnswer){
     rec.feedback = 'Enter an answer before checking.';
     rec.feedbackType = 'hint';
+    saveProgress();
     renderTopic();
     return;
   }
@@ -578,6 +614,7 @@ function checkAnswer(id){
     rec.feedbackType = 'review';
   }
   if(rec.originalStatus === 'Not Started') rec.originalStatus = rec.status;
+  saveProgress();
   renderTopic();
 }
 function showHint(id){
@@ -586,6 +623,7 @@ function showHint(id){
   rec.hintUsed = true;
   rec.feedback = `Hint: ${problem.hint1}`;
   rec.feedbackType = 'hint';
+  saveProgress();
   renderTopic();
 }
 function practiceRetry(id){
@@ -595,6 +633,7 @@ function practiceRetry(id){
   rec.feedback = 'Practice retry started. Your original summary record is still saved.';
   rec.feedbackType = 'hint';
   rec.solutionShown = false;
+  saveProgress();
   renderTopic();
 }
 
@@ -665,15 +704,17 @@ function renderSummary(){
   const statsRows = data.statsRows.length ? data.statsRows : data.fallbackStatsRows;
   document.getElementById('summaryContent').innerHTML = `<p><strong>Student:</strong> ${escapeHtml(state.student.name || 'Not entered')} &nbsp; <strong>Period:</strong> ${escapeHtml(state.student.period || 'Not entered')}</p><p><strong>Assignment:</strong> ${ASSIGNMENT_TITLE}</p>${renderSummaryMetrics(data)}<h3>Most difficult skill areas</h3>${renderWeakSkillList(data.weakest)}<h3>Recommended Retry List</h3><p>${data.retryList.length ? escapeHtml(data.retryList.join(', ')) : 'None yet'}</p><h3>Skill breakdown</h3>${renderStatsTable(statsRows)}<h3>Problem record</h3>${renderProblemStatusTable(data.problemRows)}`;
   updatePrintableSummary(data);
+  saveProgress();
   showView('summary');
   typesetMath(document.getElementById('summaryView'));
 }
-function printSummary(){ updatePrintableSummary(); window.print(); }
+function printSummary(){ updatePrintableSummary(); saveProgress(); window.print(); }
 function titleCase(value){ return String(value).replace(/\b\w/g, letter => letter.toUpperCase()); }
 function startOver(){
   if(!window.confirm('Start over? This clears answers, attempts, hints, statuses, and summary data. Name and period will stay.')) return;
   const student = { ...state.student };
   state = { started: Boolean(student.name || student.period), student, view: 'dashboard', currentTopic: null, topicPage: 0, records: {}, practice: {}, answers: {} };
+  saveProgress();
   if(state.started) renderDashboard();
   else showView('landing');
 }
@@ -683,15 +724,18 @@ document.getElementById('startForm').addEventListener('submit', event => {
   state.student.name = document.getElementById('studentName').value.trim();
   state.student.period = document.getElementById('classPeriod').value.trim();
   state.started = true;
+  saveProgress();
   renderDashboard();
 });
 document.getElementById('dashboardBtn').addEventListener('click', () => state.started ? renderDashboard() : showView('landing'));
-document.getElementById('returnDashboardBtn').addEventListener('click', renderDashboard);
-document.getElementById('summaryDashboardBtn').addEventListener('click', renderDashboard);
+document.getElementById('returnDashboardBtn').addEventListener('click', () => { saveProgress(); renderDashboard(); });
+document.getElementById('summaryDashboardBtn').addEventListener('click', () => { saveProgress(); renderDashboard(); });
 document.getElementById('printSummaryBtn').addEventListener('click', printSummary);
 window.addEventListener('beforeprint', () => { if(state.view === 'summary') updatePrintableSummary(); });
+window.addEventListener('beforeunload', saveProgress);
 document.getElementById('startOverBtn').addEventListener('click', startOver);
-document.getElementById('prevPageBtn').addEventListener('click', () => { state.topicPage -= 1; renderTopic(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
-document.getElementById('nextPageBtn').addEventListener('click', () => { state.topicPage += 1; renderTopic(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+document.getElementById('prevPageBtn').addEventListener('click', () => { state.topicPage -= 1; saveProgress(); renderTopic(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+document.getElementById('nextPageBtn').addEventListener('click', () => { state.topicPage += 1; saveProgress(); renderTopic(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
 initializeThemeControls();
-updateProgress();
+if(loadProgress()) renderDashboard();
+else updateProgress();
