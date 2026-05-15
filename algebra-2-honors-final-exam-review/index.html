@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-palette="midnight-blue">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -26,6 +26,18 @@
         </label>
         <label>Class period
           <input id="classPeriod" type="text" placeholder="Period">
+        </label>
+        <label class="palette-control" for="paletteSelect">Color Theme
+          <select id="paletteSelect" aria-describedby="paletteCurrent">
+            <option value="midnight-blue">Midnight Blue</option>
+            <option value="paper-white">Paper White</option>
+            <option value="forest-calm">Forest Calm</option>
+            <option value="warm-sunset">Warm Sunset</option>
+            <option value="high-contrast">High Contrast</option>
+            <option value="soft-purple">Soft Purple</option>
+            <option value="ocean">Ocean</option>
+          </select>
+          <span id="paletteCurrent" class="palette-current">Current: Midnight Blue</span>
         </label>
         <div class="header-actions">
           <button id="skipSummaryBtn" class="btn secondary" type="button">Skip to Summary</button>

@@ -1,6 +1,17 @@
 (function () {
   const STORAGE_KEY = 'algebra2HonorsFinalReviewProgressV1';
+  const PALETTE_STORAGE_KEY = 'algebra2HonorsFinalReviewPaletteV1';
   const ASSIGNMENT_TITLE = 'Algebra 2 Honors Final Exam Review';
+  const DEFAULT_PALETTE = 'midnight-blue';
+  const FINAL_REVIEW_PALETTES = {
+    'midnight-blue': { label: 'Midnight Blue' },
+    'paper-white': { label: 'Paper White' },
+    'forest-calm': { label: 'Forest Calm' },
+    'warm-sunset': { label: 'Warm Sunset' },
+    'high-contrast': { label: 'High Contrast' },
+    'soft-purple': { label: 'Soft Purple' },
+    'ocean': { label: 'Ocean' }
+  };
   const problems = window.FINAL_REVIEW_PROBLEMS || [];
   const graphFieldDefinitions = window.FINAL_REVIEW_GRAPH_FIELDS || {};
   const solutions = window.FINAL_REVIEW_SOLUTIONS || {};
@@ -16,6 +27,46 @@
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+
+  function getStoredPalette() {
+    try {
+      return localStorage.getItem(PALETTE_STORAGE_KEY);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function setStoredPalette(value) {
+    try {
+      localStorage.setItem(PALETTE_STORAGE_KEY, value);
+    } catch (error) {
+      console.warn('Color theme could not be saved.', error);
+    }
+  }
+
+  function sanitizePalette(value) {
+    return Object.prototype.hasOwnProperty.call(FINAL_REVIEW_PALETTES, value) ? value : DEFAULT_PALETTE;
+  }
+
+  function applyPalette(value, shouldSave = true) {
+    const palette = sanitizePalette(value);
+    const label = FINAL_REVIEW_PALETTES[palette].label;
+    document.documentElement.dataset.palette = palette;
+    const select = $('#paletteSelect');
+    const current = $('#paletteCurrent');
+    if (select) select.value = palette;
+    if (current) current.textContent = `Current: ${label}`;
+    if (shouldSave) setStoredPalette(palette);
+  }
+
+  function initializePalette() {
+    applyPalette(getStoredPalette() || DEFAULT_PALETTE, false);
+    const select = $('#paletteSelect');
+    if (!select) return;
+    select.addEventListener('change', (event) => {
+      applyPalette(event.target.value);
+    });
+  }
 
   function defaultProblemState() {
     return { answer: null, status: 'Not Started', attempts: 0, hintUsed: false, skipped: false, revealed: false, feedback: '' };
@@ -401,6 +452,7 @@
   }
 
   function init() {
+    initializePalette();
     loadProgress();
     $('#studentName').value = state.studentName;
     $('#classPeriod').value = state.classPeriod;
