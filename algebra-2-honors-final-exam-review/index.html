@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Algebra 2 Honors Final Exam Review</title>
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+      options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+    };
+  </script>
+  <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+  <script src="https://www.desmos.com/api/v1.12/calculator.js?apiKey=[YOUR_API_KEY_HERE]" async></script>
+</head>
+<body>
+  <header class="site-header" id="top">
+    <div class="header-content">
+      <p class="eyebrow">End of Year Assessment Review</p>
+      <h1>Algebra 2 Honors Final Exam Review</h1>
+      <p class="subtitle">A long scrolling review sheet with saved progress, hints, structured graph checks, and a printable teacher summary.</p>
+      <div class="student-panel" aria-label="Student information">
+        <label>Student name
+          <input id="studentName" type="text" autocomplete="name" placeholder="First and last name">
+        </label>
+        <label>Class period
+          <input id="classPeriod" type="text" placeholder="Period">
+        </label>
+        <div class="header-actions">
+          <button id="skipSummaryBtn" class="btn secondary" type="button">Skip to Summary</button>
+          <button id="startOverBtn" class="btn danger" type="button">Start Over</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="sticky-nav" aria-label="Review navigation">
+    <a href="#top">Top</a>
+    <a href="#part-1">Part 1</a>
+    <a href="#part-2">Part 2</a>
+    <a href="#part-3">Part 3</a>
+    <a href="#summary">Summary</a>
+  </nav>
+
+  <main class="sheet" id="worksheet">
+    <section class="intro-card">
+      <h2>How to use this review</h2>
+      <ul>
+        <li>Try each problem, then press <strong>Check</strong>. You have unlimited attempts.</li>
+        <li>The <strong>Start by</strong> tip is always visible. Use the <strong>Hint</strong> button only when you need another nudge.</li>
+        <li>Graphing problems use dropdowns and short structured entries instead of requiring you to draw the graph.</li>
+        <li>Your work saves automatically on this device and browser.</li>
+      </ul>
+    </section>
+
+    <section class="part-section" id="part-1" data-part="Part 1">
+      <div class="part-heading">
+        <p class="eyebrow">Problems 1&ndash;13</p>
+        <h2>Part 1: Solve Equations</h2>
+      </div>
+      <div class="problem-list" id="part-1-list"></div>
+    </section>
+
+    <section class="part-section" id="part-2" data-part="Part 2">
+      <div class="part-heading">
+        <p class="eyebrow">Problems 14&ndash;25</p>
+        <h2>Part 2: Evaluate</h2>
+      </div>
+      <div class="problem-list" id="part-2-list"></div>
+    </section>
+
+    <section class="part-section" id="part-3" data-part="Part 3">
+      <div class="part-heading graph-heading">
+        <div>
+          <p class="eyebrow">Problems 26&ndash;37</p>
+          <h2>Part 3: Graph Parent Functions and Related Functions</h2>
+        </div>
+        <button class="btn desmos-trigger" type="button" data-expression="">Open Desmos</button>
+      </div>
+      <div class="problem-list" id="part-3-list"></div>
+    </section>
+
+    <section class="summary-section" id="summary" aria-labelledby="summaryTitle">
+      <div class="summary-header">
+        <div>
+          <p class="eyebrow">Printable teacher snapshot</p>
+          <h2 id="summaryTitle">Summary</h2>
+        </div>
+        <button id="printSummaryBtn" class="btn" type="button">Print / Save PDF Summary</button>
+      </div>
+      <div id="summaryContent" class="summary-content"></div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="desmosModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="desmosTitle">
+      <div class="modal-header">
+        <h2 id="desmosTitle">Desmos Graphing Calculator</h2>
+        <button id="closeDesmosBtn" class="btn secondary" type="button">Close</button>
+      </div>
+      <div id="desmosFallback" class="desmos-fallback" hidden>
+        <p>The embedded Desmos calculator needs a valid API key. You can still use Desmos in a new tab.</p>
+        <a class="btn" href="https://www.desmos.com/calculator" target="_blank" rel="noopener">Open Desmos in New Tab</a>
+      </div>
+      <div id="calculator" class="calculator" aria-label="Embedded Desmos calculator"></div>
+    </div>
+  </div>
+
+  <script src="problems.js"></script>
+  <script src="solutions.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
