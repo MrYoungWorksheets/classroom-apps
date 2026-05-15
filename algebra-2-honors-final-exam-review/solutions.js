@@ -10,7 +10,7 @@ window.FINAL_REVIEW_SOLUTIONS = {
   '9': 'Rewrite with base 2: 2^(4 - 4x) = 2^-3. Then 4 - 4x = -3, so x = 7/4.',
   '10': 'Isolate the power: (x - 15)^(3/5) = -8. The fifth root is -2, and (-2)^5 = -32, so x = -17.',
   '11': 'Factor x^(4/5)(1 + 3x) = 0. Then x = 0 or x = -1/3.',
-  '12': 'With x ≠ 0,1, multiply by x(x - 1): 1 = (x - 1)². The possible values are 0 and 2, but x = 0 is excluded, so x = 2.',
+  '12': 'With x ≠ 0,1, multiply by x(x - 1): 1 = x(-2x + 3). Solve 2x² - 3x + 1 = 0 to get x = 1 or x = 1/2. Since x = 1 is excluded, x = 1/2.',
   '13': 'The matching fractions cancel, leaving 0 = -1/(x - 1), which is impossible. There is no solution.',
   '14': 'Use division before subtraction: 8 - 16 ÷ 4 = 8 - 4 = 4.',
   '15': '81^(1/4) is the principal fourth root of 81, which is 3.',

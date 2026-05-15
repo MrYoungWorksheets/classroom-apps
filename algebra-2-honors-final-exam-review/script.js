@@ -171,7 +171,7 @@
 
   function renderAnswerControls(problem, container, answer) {
     if (problem.answerType === 'numeric' || problem.answerType === 'expression' || problem.answerType === 'expressionSet') {
-      const help = problem.answerType === 'expressionSet' ? 'Separate multiple answers with commas. Fractions like 3/2 are accepted.' : 'Fractions and decimals are accepted when equivalent.';
+      const help = 'Use fractions like 3/2. Separate multiple answers with commas when there is more than one solution.';
       container.innerHTML = `<label class="answer-row">Answer<input type="text" data-answer="main" value="${answer || ''}" placeholder="Type your answer"><span class="help-text">${help}</span></label>`;
       return;
     }
